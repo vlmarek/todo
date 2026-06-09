@@ -69,11 +69,12 @@ Show steps, add one or more steps, or mark a step done.
 ```sh
 todo comment website
 todo comment --add website "fixed test failure; staging deploy still running"
+todo comment --add website "unit tests passed" "staging still running"
 todo comment --edit website
 ```
 
-Shows task comments, appends a line to the latest comment, or edits all
-comments in `$EDITOR`.
+Shows task comments, creates one comment per `--add` text argument, or edits
+all comments in `$EDITOR`.
 
 The edit buffer uses bracket headers:
 

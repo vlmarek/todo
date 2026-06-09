@@ -998,9 +998,8 @@ def cmd_comment(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
-        comments = client.comments(task.get("id"))
-        current = latest_comment(comments)
         if args.edit:
+            comments = client.comments(task.get("id"))
             old_text = render_comments_edit_buffer(content_of(task), comments)
             new_text = edit_text(old_text)
             if new_text == old_text.rstrip("\n"):
@@ -1011,24 +1010,23 @@ def cmd_comment(args):
             cache.save()
             print(f"Edited comments on {content_of(task)}: {format_comment_edit_summary(counts)}.")
             return 0
-        if args.text:
-            new_text = append_comment_text(content_of(current) if current else "", args.text)
-            if current:
-                client.update_comment(current.get("id"), new_text)
-                print(f"Updated comment on: {content_of(task)}")
-            else:
-                client.add_comment(task.get("id"), new_text)
-                print(f"Added comment to: {content_of(task)}")
+        if args.texts:
+            add_task_comments(client, task.get("id"), args.texts)
             client.sync(cache)
             cache.save()
+            count = len(args.texts)
+            plural = "s" if count != 1 else ""
+            print(f"Added {count} comment{plural} to: {content_of(task)}")
             return 0
+        comments = client.comments(task.get("id"))
         print(f"Comments for: {content_of(task)}")
         print_comments(comments)
         return 0
 
 
-def append_comment_text(existing, line):
-    return line if not existing else f"{existing}\n{line}"
+def add_task_comments(client, task_id, texts):
+    for text in texts:
+        client.add_comment(task_id, text)
 
 
 def cmd_wait(args):
@@ -1252,13 +1250,13 @@ def cmd_comment_noun(args):
     values = args.values
     if mode == "show":
         require_arg_count("comment", values, 1)
-        return cmd_comment(argparse.Namespace(task=values[0], text=None, edit=False))
+        return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=False))
     if mode == "add":
-        require_arg_count("comment --add", values, 2)
-        return cmd_comment(argparse.Namespace(task=values[0], text=values[1], edit=False))
+        require_arg_count("comment --add", values, 2, 9999)
+        return cmd_comment(argparse.Namespace(task=values[0], texts=values[1:], edit=False))
     if mode == "edit":
         require_arg_count("comment --edit", values, 1)
-        return cmd_comment(argparse.Namespace(task=values[0], text=None, edit=True))
+        return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=True))
     raise TodoError(f"Unknown comment mode {mode}.")
 
 
@@ -1631,13 +1629,13 @@ modes:
     p = sub.add_parser(
         "comment",
         help="show, append, or edit task comment",
-        description="""Show task comments, append a line, or edit all comments.
+        description="""Show task comments, add comments, or edit all comments.
 
 display:
   todo comment TASK
 
 modes:
-  --add TASK TEXT
+  --add TASK TEXT [TEXT ...]
   --edit TASK
 
 --edit opens a bracket-form file with all comments. Remove an [id: ...]
@@ -1646,7 +1644,7 @@ comment, it is merged into that previous comment. Multiple [new] blocks create
 multiple comments.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--add", action="store_true", help="append a line to the latest comment")
+    p.add_argument("--add", action="store_true", help="create one comment per TEXT argument")
     p.add_argument("--edit", action="store_true", help="edit all comments in one file")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_comment_noun)

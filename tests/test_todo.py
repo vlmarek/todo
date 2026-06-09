@@ -232,10 +232,6 @@ class TodoPureTests(unittest.TestCase):
         ]
         self.assertEqual(todo.latest_comment(comments)["id"], "new")
 
-    def test_append_comment_text_adds_new_line(self):
-        self.assertEqual(todo.append_comment_text("", "new"), "new")
-        self.assertEqual(todo.append_comment_text("old", "new"), "old\nnew")
-
     def test_render_comments_edit_buffer_uses_bracket_headers(self):
         text = todo.render_comments_edit_buffer("assert.h", [{
             "id": "c1",
@@ -313,6 +309,22 @@ created two
             ("add", "task1", "created one"),
             ("add", "task1", "created two"),
             ("delete", "c3"),
+        ])
+
+    def test_add_task_comments_creates_one_comment_per_text(self):
+        class FakeClient:
+            def __init__(self):
+                self.calls = []
+
+            def add_comment(self, task_id, content):
+                self.calls.append((task_id, content))
+
+        client = FakeClient()
+        todo.add_task_comments(client, "task1", ["one", "two", "three"])
+        self.assertEqual(client.calls, [
+            ("task1", "one"),
+            ("task1", "two"),
+            ("task1", "three"),
         ])
 
     def test_bare_todo_prints_help(self):
@@ -398,9 +410,9 @@ created two
 
     def test_comment_add_flag(self):
         parser = todo.build_parser()
-        args = parser.parse_args(["comment", "--add", "deliver release", "new line"])
+        args = parser.parse_args(["comment", "--add", "deliver release", "one", "two"])
         self.assertTrue(args.add)
-        self.assertEqual(args.values, ["deliver release", "new line"])
+        self.assertEqual(args.values, ["deliver release", "one", "two"])
 
     def test_comment_edit_flag(self):
         parser = todo.build_parser()
