@@ -91,6 +91,8 @@ unchanged.
 ```sh
 todo priority website 1
 todo due website tomorrow
+todo due website 2d
+todo due website 4h
 todo due website clear
 todo move website engineering
 ```

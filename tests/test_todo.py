@@ -69,6 +69,22 @@ class TodoPureTests(unittest.TestCase):
         item = {"due": {"date": "2026-06-11T16:00:00", "timezone": None}}
         self.assertIsInstance(todo.due_when(item), dt.datetime)
 
+    def test_normalize_due_value_clear(self):
+        self.assertIsNone(todo.normalize_due_value("clear"))
+        self.assertIsNone(todo.normalize_due_value("-"))
+
+    def test_normalize_due_value_days_and_hours(self):
+        day_value = todo.normalize_due_value("2d")
+        hour_value = todo.normalize_due_value("4h")
+        self.assertIsInstance(todo.parse_iso(day_value), dt.datetime)
+        self.assertIsInstance(todo.parse_iso(hour_value), dt.datetime)
+        self.assertIn("T", day_value)
+        self.assertIn("T", hour_value)
+
+    def test_normalize_due_value_preserves_other_expressions(self):
+        self.assertEqual(todo.normalize_due_value("tomorrow"), "tomorrow")
+        self.assertEqual(todo.normalize_due_value("2026-06-12"), "2026-06-12")
+
     def test_report_skips_old_recurring_completion(self):
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
         until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)

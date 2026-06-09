@@ -987,6 +987,21 @@ def parse_date(value):
         return None
 
 
+def normalize_due_value(value):
+    stripped = value.strip()
+    lowered = stripped.lower()
+    if lowered in ("none", "clear", "-"):
+        return None
+    m = re.fullmatch(r"(\d+)\s*([dh])", lowered)
+    if not m:
+        return stripped
+    amount = int(m.group(1))
+    unit = m.group(2)
+    delta = dt.timedelta(days=amount) if unit == "d" else dt.timedelta(hours=amount)
+    target = dt.datetime.now().astimezone() + delta
+    return target.replace(microsecond=0).isoformat()
+
+
 def cmd_resume(args):
     with lock_state():
         cfg, client, cache = load_runtime()
@@ -1036,13 +1051,21 @@ def cmd_due(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
-        if args.date.lower() in ("none", "clear", "-"):
+        due_value = normalize_due_value(args.date)
+        if due_value is None:
             update_item(client, cache, task.get("id"), due=None)
             print(f"Cleared due date: {content_of(task)}")
         else:
-            update_item(client, cache, task.get("id"), due={"string": args.date})
-            print(f"Due {args.date}: {content_of(task)}")
+            update_item(client, cache, task.get("id"), due={"string": due_value})
+            print(f"Due {format_due_value_for_display(due_value)}: {content_of(task)}")
         return 0
+
+
+def format_due_value_for_display(value):
+    parsed = parse_iso(value)
+    if not parsed:
+        return value
+    return parsed.astimezone().strftime("%Y-%m-%d %H:%M")
 
 
 def cmd_move(args):
@@ -1475,10 +1498,10 @@ def build_parser():
     p = sub.add_parser(
         "due",
         help="set or clear attention date",
-        description="Set the task attention date, or clear it with `clear`, `none`, or `-`.",
+        description="Set the task attention date, or clear it with `clear`, `none`, or `-`. Compact relative values like `2d` and `4h` are supported.",
     )
     p.add_argument("task", help="task selector")
-    p.add_argument("date", help="date expression, or clear/none/-")
+    p.add_argument("date", help="date expression, relative value such as 2d/4h, or clear/none/-")
     p.set_defaults(func=cmd_due)
 
     p = sub.add_parser(
