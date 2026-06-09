@@ -708,6 +708,8 @@ def due_when(item):
     if due.get("date"):
         value = due.get("date")
         if "T" in value:
+            if value.endswith("Z"):
+                value = value[:-1] + "+00:00"
             try:
                 parsed = dt.datetime.fromisoformat(value)
             except ValueError:
@@ -1082,7 +1084,9 @@ def print_task_detail(cache, task, comments=None):
     else:
         for child in children:
             mark = "x" if child.get("checked") else " "
-            print(f"- [{mark}] {content_of(child)}")
+            due = format_due(child)
+            due_text = f" {due}" if due else ""
+            print(f"- [{mark}] {content_of(child)}{due_text}")
     print()
     print("Comments")
     notes = comments if comments is not None else notes_for(cache, task.get("id"))
@@ -1224,7 +1228,9 @@ def print_steps(cache, task):
         return
     for i, child in enumerate(children, 1):
         mark = "x" if child.get("checked") else " "
-        print(f"{i:2d}  [{mark}] {content_of(child)}")
+        due = format_due(child)
+        due_text = f" {due}" if due else ""
+        print(f"{i:2d}  [{mark}] {content_of(child)}{due_text}")
 
 
 def resolve_step(cache, task, selector):

@@ -69,6 +69,11 @@ class TodoPureTests(unittest.TestCase):
         item = {"due": {"date": "2026-06-11T16:00:00", "timezone": None}}
         self.assertIsInstance(todo.due_when(item), dt.datetime)
 
+    def test_due_when_accepts_utc_datetime_in_date_field(self):
+        item = {"due": {"date": "2026-06-15T11:50:51Z"}}
+        self.assertIsInstance(todo.due_when(item), dt.datetime)
+        self.assertNotIn("2026-06-15T11:50:51Z", todo.format_due(item))
+
     def test_normalize_due_value_clear(self):
         self.assertIsNone(todo.normalize_due_value("clear"))
         self.assertIsNone(todo.normalize_due_value("-"))
@@ -365,9 +370,10 @@ class TodoPureTests(unittest.TestCase):
     def test_show_prints_steps_and_comments(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        future_due = todo.iso_utc(todo.now_utc() + dt.timedelta(days=7))
         cache.data["items"] = [
             {"id": "task1", "project_id": "gate", "content": "Deliver release", "priority": 3},
-            {"id": "s1", "project_id": "gate", "parent_id": "task1", "content": "check dashboard"},
+            {"id": "s1", "project_id": "gate", "parent_id": "task1", "content": "check dashboard", "due": {"date": future_due}},
             {"id": "s2", "project_id": "gate", "parent_id": "task1", "content": "close build", "checked": True},
         ]
         cache.data["notes"] = [{
@@ -381,9 +387,25 @@ class TodoPureTests(unittest.TestCase):
             todo.print_task_detail(cache, cache.data["items"][0])
         text = out.getvalue()
         self.assertIn("P2  Operations  Deliver release", text)
-        self.assertIn("- [ ] check dashboard", text)
+        self.assertIn("- [ ] check dashboard due:", text)
+        self.assertNotIn(future_due, text)
         self.assertIn("- [x] close build", text)
         self.assertIn("Progress: checked table", text)
+
+    def test_print_steps_shows_due_dates(self):
+        cache = todo.Cache(todo.Cache.empty())
+        future_due = todo.iso_utc(todo.now_utc() + dt.timedelta(days=7))
+        task = {"id": "task1", "project_id": "gate", "content": "Deliver release"}
+        cache.data["items"] = [
+            task,
+            {"id": "s1", "project_id": "gate", "parent_id": "task1", "content": "check dashboard", "due": {"date": future_due}},
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_steps(cache, task)
+        text = out.getvalue()
+        self.assertIn("[ ] check dashboard due:", text)
+        self.assertNotIn(future_due, text)
 
     def test_show_accepts_direct_comments(self):
         cache = todo.Cache(todo.Cache.empty())
