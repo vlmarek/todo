@@ -308,7 +308,8 @@ class TodoPureTests(unittest.TestCase):
             },
         }
         report = todo.build_report(cache, {"gate"}, since, until, [event], context)
-        self.assertIn("Progress\nOperations\n- Prepare new cbe renamed\n  - Step done: Seed gcc16", report)
+        self.assertIn("Progress\nOperations\n- Prepare new cbe renamed\n  - Seed gcc16", report)
+        self.assertNotIn("Progress\nOperations\n- Prepare new cbe renamed\n  - Step done: Seed gcc16", report)
         self.assertNotIn("\n- Seed gcc16\n", report)
 
     def test_report_completed_step_without_open_parent_stays_finished(self):

@@ -2378,6 +2378,8 @@ def build_report(cache, project_ids, since, until, events, step_context=None):
             context = step_context[task_id]
             title, category, detail = completed_step_report_entry(cache, by_id, context, text)
             section = "Progress" if completed_step_parent_is_open(by_id, context) else "Finished"
+            if section == "Progress" and detail.startswith("Step done: "):
+                detail = detail[len("Step done: "):]
             comments = sections[section].setdefault(category, {}).setdefault(title, [])
             if detail not in comments:
                 comments.append(detail)
