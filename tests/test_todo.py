@@ -53,6 +53,20 @@ class TodoPureTests(unittest.TestCase):
         ids = sorted(obj["id"] for obj in merged)
         self.assertEqual(ids, ["2", "3"])
 
+    def test_format_duration(self):
+        delta = dt.timedelta(days=2, hours=3, minutes=4)
+        self.assertEqual(todo.format_duration(delta), "2d 3h")
+        self.assertEqual(todo.format_duration(dt.timedelta(hours=1, minutes=20)), "1h 20m")
+
+    def test_format_due_date_only(self):
+        today = todo.today_local()
+        item = {"due": {"date": today.isoformat()}}
+        self.assertEqual(todo.format_due(item), "due:today")
+
+    def test_due_when_accepts_local_datetime_in_date_field(self):
+        item = {"due": {"date": "2026-06-11T16:00:00", "timezone": None}}
+        self.assertIsInstance(todo.due_when(item), dt.datetime)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -417,6 +417,68 @@ def due_date(item):
     return due.get("date") or due.get("datetime") or due.get("string")
 
 
+def due_when(item):
+    due = item.get("due") or {}
+    if due.get("datetime"):
+        parsed = parse_iso(due.get("datetime"))
+        if parsed:
+            return parsed
+    if due.get("date"):
+        value = due.get("date")
+        if "T" in value:
+            try:
+                parsed = dt.datetime.fromisoformat(value)
+            except ValueError:
+                return None
+            if parsed.tzinfo is None:
+                parsed = parsed.astimezone()
+            return parsed.astimezone(dt.timezone.utc)
+        try:
+            return dt.date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def format_due(item):
+    when = due_when(item)
+    raw = due_date(item)
+    if when is None:
+        return f"due:{raw}" if raw else ""
+    if isinstance(when, dt.datetime):
+        delta = when - now_utc()
+        suffix = "left"
+        if delta.total_seconds() < 0:
+            delta = -delta
+            suffix = "overdue"
+        return f"due:{format_duration(delta)} {suffix}"
+    today = today_local()
+    days = (when - today).days
+    if days < 0:
+        return f"due:{abs(days)}d overdue"
+    if days == 0:
+        return "due:today"
+    if days == 1:
+        return "due:tomorrow"
+    return f"due:in {days}d"
+
+
+def format_duration(delta):
+    seconds = max(0, int(delta.total_seconds()))
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    if days:
+        if hours:
+            return f"{days}d {hours}h"
+        return f"{days}d"
+    if hours:
+        if minutes:
+            return f"{hours}h {minutes}m"
+        return f"{hours}h"
+    return f"{minutes}m"
+
+
 def item_time(item, names):
     for name in names:
         if item.get(name):
@@ -880,8 +942,8 @@ def print_task_list(cache, tasks, show_next=False):
         print("No tasks.")
         return
     for task in tasks:
-        due = due_date(task)
-        due_text = f" due:{due}" if due else ""
+        due = format_due(task)
+        due_text = f" {due}" if due else ""
         waiting = " waiting" if has_waiting(task) else ""
         print(f"P{api_priority_to_cli(task.get('priority'))}  "
               f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}{due_text}{waiting}")
