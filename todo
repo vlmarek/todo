@@ -1703,10 +1703,10 @@ def step_context_search_results(cache, active_tasks_by_id, step_context, query, 
 
 
 def search_results(cache, project_ids, query, comments_by_task=None, step_context=None):
-    comments_by_task = comments_by_task or {}
     tasks = [item for item in live_objects(cache, "items")
              if str(item.get("project_id")) in project_ids
              and not item.get("parent_id")]
+    comments_by_task = comments_by_task or cached_comments_by_task(cache, tasks)
     active_tasks_by_id = {str(task.get("id")): task for task in tasks}
     results = []
     for task in tasks:
@@ -1716,6 +1716,10 @@ def search_results(cache, project_ids, query, comments_by_task=None, step_contex
     seen_step_ids = {str(step.get("id")) for task in tasks for step in all_subtasks(cache, task.get("id"))}
     results.extend(step_context_search_results(cache, active_tasks_by_id, step_context or {}, query, seen_step_ids))
     return sorted(results, key=lambda r: search_sort_key(cache, r["task"]))
+
+
+def cached_comments_by_task(cache, tasks):
+    return {str(task.get("id")): notes_for(cache, task.get("id")) for task in tasks}
 
 
 def search_sort_key(cache, task):
@@ -1747,15 +1751,16 @@ def cmd_search(args):
     if not query:
         raise TodoUsage(SEARCH_USAGE)
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=True)
-        sync_readonly(client, cache)
+        cfg = Config.load()
+        cache = Cache.load()
+        if args.refresh:
+            client = Todoist(cfg.token)
+            sync_readonly(client, cache)
         project_ids = set(root_project_ids(cache, cfg))
         tasks = [item for item in live_objects(cache, "items")
                  if str(item.get("project_id")) in project_ids
                  and not item.get("parent_id")]
-        comments_by_task = {}
-        for task in tasks:
-            comments_by_task[str(task.get("id"))] = client.comments(task.get("id"))
+        comments_by_task = cached_comments_by_task(cache, tasks)
         print_search_results(cache, search_results(cache, project_ids, query, comments_by_task, load_step_context()))
         return 0
 
@@ -2184,6 +2189,7 @@ multiple comments.""",
         help="search tasks, steps, and comments",
         description="Search tasks, descriptions, waiting reasons, steps, and comments.",
     )
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before searching the local cache")
     p.add_argument("values", nargs="*", help="search text")
     p.set_defaults(func=cmd_search)
 

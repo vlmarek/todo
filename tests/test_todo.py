@@ -267,6 +267,25 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("comment", text)
         self.assertIn("REVIEW-123 covers config cleanup", text)
 
+    def test_search_uses_cached_notes_by_default(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "eng",
+            "content": "Task title",
+        }]
+        cache.data["notes"] = [{
+            "id": "note1",
+            "item_id": "task1",
+            "content": "REVIEW-123 cached note",
+            "posted_at": "2026-06-08T08:00:00Z",
+        }]
+        results = todo.search_results(cache, {"eng"}, "REVIEW-123")
+        self.assertEqual(len(results), 1)
+        self.assertIn("comment", results[0]["matches"][0])
+        self.assertIn("REVIEW-123 cached note", results[0]["matches"][0])
+
     def test_search_finds_waiting_reason(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
@@ -743,6 +762,12 @@ created two
         args = parser.parse_args(["comment", "--edit", "deliver release"])
         self.assertEqual(args.values, ["deliver release"])
         self.assertTrue(args.edit)
+
+    def test_search_refresh_flag(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["search", "--refresh", "REVIEW-123"])
+        self.assertTrue(args.refresh)
+        self.assertEqual(args.values, ["REVIEW-123"])
 
     def test_mapped_id_reads_todoist_temp_mapping(self):
         response = {
