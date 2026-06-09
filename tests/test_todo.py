@@ -92,6 +92,13 @@ class TodoPureTests(unittest.TestCase):
         self.assertFalse(todo.waiting_due_now({"labels": ["waiting"], "due": {"date": tomorrow.isoformat()}}))
         self.assertFalse(todo.waiting_due_now({"labels": [], "due": {"date": today.isoformat()}}))
 
+    def test_waiting_block_preserves_description(self):
+        description = "review notes"
+        updated = todo.set_waiting_block(description, "wait for review", since="2026-06-07")
+        self.assertIn("review notes", updated)
+        self.assertEqual(todo.waiting_reason({"description": updated}), "wait for review")
+        self.assertEqual(todo.remove_waiting_block(updated), "review notes")
+
     def test_report_skips_old_recurring_completion(self):
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
         until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
@@ -149,6 +156,46 @@ class TodoPureTests(unittest.TestCase):
         report = todo.build_report(cache, {"gate"}, since, until, [event])
         self.assertIn("Finished\nOperations\n- deliver release", report)
 
+    def test_build_step_context_records_parent_task(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "gate", "content": "Prepare new cbe"},
+            {"id": "step1", "project_id": "gate", "parent_id": "task1", "content": "Seed gcc16"},
+        ]
+        context = todo.build_step_context(cache, seen_at="2026-06-07T18:10:00Z")
+        self.assertEqual(context["step1"]["parent_task_id"], "task1")
+        self.assertEqual(context["step1"]["parent_title_last_seen"], "Prepare new cbe")
+        self.assertEqual(context["step1"]["category_last_seen"], "Operations")
+
+    def test_report_completed_step_uses_current_parent_from_context(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "gate", "content": "Prepare new cbe renamed"},
+        ]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        event = {
+            "event_date": "2026-06-07T18:10:05Z",
+            "event_type": "completed",
+            "extra_data": {"content": "Seed gcc16"},
+            "object_id": "step1",
+            "object_type": "item",
+            "parent_project_id": "gate",
+        }
+        context = {
+            "step1": {
+                "step_title_last_seen": "Seed gcc16",
+                "parent_task_id": "task1",
+                "parent_title_last_seen": "Prepare new cbe",
+                "category_last_seen": "Operations",
+            },
+        }
+        report = todo.build_report(cache, {"gate"}, since, until, [event], context)
+        self.assertIn("- Prepare new cbe renamed\n  - Step done: Seed gcc16", report)
+        self.assertNotIn("\n- Seed gcc16\n", report)
+
     def test_report_note_uses_completed_item_context(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
@@ -177,6 +224,23 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("- deliver release\n  - Done: delivered release", report)
         self.assertNotIn("\n- Done: delivered release\n", report)
 
+    def test_report_waiting_uses_description_reason(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "gate",
+            "content": "Review URL fix",
+            "labels": ["waiting"],
+            "due": {"date": "2026-06-04"},
+            "description": todo.set_waiting_block("", "wait for review", since="2026-06-03"),
+        }]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        report = todo.build_report(cache, {"gate"}, since, until, [])
+        self.assertIn("- Review URL fix", report)
+        self.assertIn("  - Reason: wait for review", report)
+
     def test_task_list_prints_all_open_steps(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
@@ -190,6 +254,21 @@ class TodoPureTests(unittest.TestCase):
             todo.print_task_list(cache, [cache.data["items"][0]], show_steps=True)
         self.assertIn("    - check dashboard", out.getvalue())
         self.assertIn("    - close build", out.getvalue())
+
+    def test_task_list_prints_waiting_reason(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        task = {
+            "id": "task1",
+            "project_id": "gate",
+            "content": "Review URL fix",
+            "labels": ["waiting"],
+            "description": todo.set_waiting_block("", "wait for review", since="2026-06-07"),
+        }
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_list(cache, [task])
+        self.assertIn("Reason: wait for review", out.getvalue())
 
     def test_show_prints_steps_and_comments(self):
         cache = todo.Cache(todo.Cache.empty())
@@ -394,9 +473,13 @@ created two
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
         add_args = parser.parse_args(["step", "--add", "website", "review", "publish"])
+        add_done_args = parser.parse_args(["step", "--add", "--done", "website", "tested", "delivered"])
         done_args = parser.parse_args(["step", "--done", "website", "review"])
         self.assertTrue(add_args.add)
         self.assertEqual(add_args.values, ["website", "review", "publish"])
+        self.assertTrue(add_done_args.add)
+        self.assertTrue(add_done_args.done)
+        self.assertEqual(add_done_args.values, ["website", "tested", "delivered"])
         self.assertTrue(done_args.done)
         self.assertEqual(done_args.values, ["website", "review"])
 
@@ -442,6 +525,14 @@ created two
             "content": "Deliver next release",
         }]
         self.assertEqual(todo.find_added_task_id(cache, "gate", "Deliver next release"), "task1")
+
+    def test_find_added_step_id(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "gate", "content": "Deliver next release"},
+            {"id": "step1", "project_id": "gate", "parent_id": "task1", "content": "tested"},
+        ]
+        self.assertEqual(todo.find_added_step_id(cache, "task1", "tested"), "step1")
 
 
 if __name__ == "__main__":

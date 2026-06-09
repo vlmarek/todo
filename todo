@@ -26,6 +26,7 @@ APP_DIR = os.path.expanduser("~/.todo")
 CONFIG_PATH = os.path.join(APP_DIR, "config")
 CACHE_PATH = os.path.join(APP_DIR, "cache.json")
 CURSOR_PATH = os.path.join(APP_DIR, "report-cursor")
+STEP_CONTEXT_PATH = os.path.join(APP_DIR, "step-context.json")
 LOCK_PATH = os.path.join(APP_DIR, "lock")
 
 API_BASE = "https://api.todoist.com/api/v1"
@@ -36,6 +37,7 @@ DEFAULT_SECTIONS = ["Operations", "Engineeringing", "Admin", "Someday"]
 DEFAULT_HIDDEN_FROM_NOW = ["Someday"]
 DEFAULT_WAIT_DAYS = 2
 WAITING_LABEL = "waiting"
+WAITING_BLOCK_RE = re.compile(r"(?:\n{0,2})\[todo waiting\]\n(.*?)\n\[/todo waiting\]\n?", re.DOTALL)
 
 
 class TodoError(Exception):
@@ -428,6 +430,105 @@ def content_of(obj):
     return obj.get("content") or obj.get("text") or ""
 
 
+def remove_waiting_block(description):
+    return WAITING_BLOCK_RE.sub("\n", description or "").strip()
+
+
+def set_waiting_block(description, reason, since=None):
+    since = since or today_local().isoformat()
+    base = remove_waiting_block(description)
+    block = "\n".join([
+        "[todo waiting]",
+        f"Reason: {reason}",
+        f"Since: {since}",
+        "[/todo waiting]",
+    ])
+    if base:
+        return f"{base}\n\n{block}"
+    return block
+
+
+def waiting_info(task):
+    description = task.get("description") or ""
+    match = WAITING_BLOCK_RE.search(description)
+    if not match:
+        return {}
+    info = {}
+    for line in match.group(1).splitlines():
+        key, sep, value = line.partition(":")
+        if sep:
+            info[key.strip().lower()] = value.strip()
+    return info
+
+
+def waiting_reason(task):
+    return waiting_info(task).get("reason", "")
+
+
+def load_step_context():
+    if not os.path.exists(STEP_CONTEXT_PATH):
+        return {}
+    try:
+        with open(STEP_CONTEXT_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_step_context(context):
+    atomic_write(STEP_CONTEXT_PATH, json.dumps(context, indent=2, sort_keys=True) + "\n")
+
+
+def item_by_id(cache):
+    return {str(item.get("id")): item for item in live_objects(cache, "items") if item.get("id") is not None}
+
+
+def top_level_parent(item, items_by_id):
+    current = item
+    seen = set()
+    while current.get("parent_id"):
+        parent_id = str(current.get("parent_id"))
+        if parent_id in seen:
+            break
+        seen.add(parent_id)
+        parent = items_by_id.get(parent_id)
+        if not parent:
+            break
+        current = parent
+    return current
+
+
+def build_step_context(cache, existing=None, seen_at=None):
+    context = dict(existing or {})
+    seen_at = seen_at or iso_utc()
+    items_by_id = item_by_id(cache)
+    for item in items_by_id.values():
+        direct_parent_id = str(item.get("parent_id") or "")
+        step_id = str(item.get("id") or "")
+        if not direct_parent_id or not step_id:
+            continue
+        direct_parent = items_by_id.get(direct_parent_id)
+        parent = top_level_parent(item, items_by_id)
+        project_id = str(parent.get("project_id") or item.get("project_id") or "")
+        context[step_id] = {
+            "step_id": step_id,
+            "step_title_last_seen": content_of(item),
+            "direct_parent_id": direct_parent_id,
+            "direct_parent_title_last_seen": content_of(direct_parent or {}),
+            "parent_task_id": str(parent.get("id") or ""),
+            "parent_title_last_seen": content_of(parent),
+            "project_id_last_seen": project_id,
+            "category_last_seen": project_name(cache, project_id),
+            "last_seen_at": seen_at,
+        }
+    return context
+
+
+def refresh_step_context(cache):
+    save_step_context(build_step_context(cache, load_step_context()))
+
+
 def cli_priority_to_api(value):
     value = int(value)
     if value < 1 or value > 4:
@@ -635,12 +736,14 @@ def require_project_and_category(cache, cfg, category):
 
 def sync_or_fail(client, cache):
     client.sync(cache)
+    refresh_step_context(cache)
     cache.save()
 
 
 def sync_readonly(client, cache):
     try:
         client.sync(cache)
+        refresh_step_context(cache)
         cache.save()
         return True
     except TodoError as e:
@@ -658,6 +761,7 @@ def mutate(client, cache, type_, args):
     # follow-up sync has fetched and merged those objects, otherwise the local
     # mirror can skip the command's own changes.
     client.sync(cache)
+    refresh_step_context(cache)
     cache.save()
     return response
 
@@ -775,6 +879,16 @@ def find_added_task_id(cache, project_id, content):
     return None
 
 
+def find_added_step_id(cache, task_id, content):
+    matches = [item for item in live_objects(cache, "items")
+               if str(item.get("parent_id")) == str(task_id)
+               and content_of(item) == content
+               and not item.get("checked")]
+    if len(matches) == 1:
+        return str(matches[0].get("id"))
+    return None
+
+
 def cmd_step(args):
     with lock_state():
         cfg, client, cache = load_runtime(readonly=not args.steps)
@@ -787,12 +901,19 @@ def cmd_step(args):
             print_steps(cache, task)
             return 0
         for step in args.steps:
-            mutate(client, cache, "item_add", {
+            response = mutate(client, cache, "item_add", {
                 "content": step,
                 "project_id": str(task.get("project_id")),
                 "parent_id": str(task.get("id")),
             })
-            print(f"Added step: {step}")
+            step_id = mapped_id(response) or find_added_step_id(cache, task.get("id"), step)
+            if getattr(args, "done", False):
+                if not step_id:
+                    raise TodoError(f"Added step {step!r}, but could not find its Todoist ID to mark it done.")
+                close_item(client, cache, step_id)
+                print(f"Added done step: {step}")
+            else:
+                print(f"Added step: {step}")
         return 0
 
 
@@ -1066,9 +1187,12 @@ def cmd_wait(args):
         labels = labels_of(task)
         if not any(normalize_name(label) == normalize_name(WAITING_LABEL) for label in labels):
             labels.append(WAITING_LABEL)
-        update_item(client, cache, task.get("id"), labels=labels, due={"string": follow_date})
-        add_note(client, cache, task.get("id"), f"Waiting: {args.text}")
+        update_item(client, cache, task.get("id"),
+                    labels=labels,
+                    due={"string": follow_date},
+                    description=set_waiting_block(task.get("description") or "", args.text))
         print(f"Waiting until {follow_date}: {content_of(task)}")
+        print(f"Reason: {args.text}")
         return 0
 
 
@@ -1120,8 +1244,10 @@ def cmd_resume(args):
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
         labels = [label for label in labels_of(task) if normalize_name(label) != normalize_name(WAITING_LABEL)]
-        update_item(client, cache, task.get("id"), labels=labels, due=None)
-        add_note(client, cache, task.get("id"), f"Resumed: {args.text}")
+        update_item(client, cache, task.get("id"),
+                    labels=labels,
+                    due=None,
+                    description=remove_waiting_block(task.get("description") or ""))
         print(f"Resumed: {content_of(task)}")
         return 0
 
@@ -1248,16 +1374,22 @@ def cmd_task(args):
 
 def cmd_step_noun(args):
     modes = selected_modes(args, ["add", "done"])
-    if len(modes) > 1:
+    if len(modes) > 1 and set(modes) != {"add", "done"}:
         raise TodoError("Use only one step mode at a time.")
-    mode = modes[0] if modes else "show"
+    if set(modes) == {"add", "done"}:
+        mode = "add_done"
+    else:
+        mode = modes[0] if modes else "show"
     values = args.values
     if mode == "show":
         require_arg_count("step", values, 1)
         return cmd_step(argparse.Namespace(task=values[0], steps=[]))
     if mode == "add":
         require_arg_count("step --add", values, 2, 9999)
-        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:]))
+        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=False))
+    if mode == "add_done":
+        require_arg_count("step --add --done", values, 2, 9999)
+        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=True))
     if mode == "done":
         require_arg_count("step --done", values, 2)
         return cmd_check(argparse.Namespace(task=values[0], step=values[1]))
@@ -1338,6 +1470,9 @@ def print_task_list(cache, tasks, show_steps=False):
         waiting = " waiting" if has_waiting(task) else ""
         print(f"P{api_priority_to_cli(task.get('priority'))}  "
               f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}{due_text}{waiting}")
+        reason = waiting_reason(task)
+        if reason:
+            print(f"    Reason: {reason}")
         if show_steps:
             steps = subtasks(cache, task.get("id"))
             for step in steps:
@@ -1390,7 +1525,7 @@ def cmd_report(args):
             events = client.activities(since, until, str(project.get("id")))
         except TodoError as e:
             print(f"Warning: activity lookup failed: {e}", file=sys.stderr)
-        report = build_report(cache, set(root_project_ids(cache, cfg)), since, until, events)
+        report = build_report(cache, set(root_project_ids(cache, cfg)), since, until, events, load_step_context())
         print(report)
         if args.final:
             atomic_write(CURSOR_PATH, iso_utc(until) + "\n")
@@ -1420,24 +1555,31 @@ def current_wednesday_start():
     return local_start.astimezone(dt.timezone.utc)
 
 
-def build_report(cache, project_ids, since, until, events):
+def build_report(cache, project_ids, since, until, events, step_context=None):
     by_id = {str(item.get("id")): item for item in live_objects(cache, "items")
              if str(item.get("project_id")) in project_ids}
     event_context = report_event_context(cache, events)
+    step_context = step_context or {}
     sections = {"Finished": {}, "Progress": {}, "Waiting": {}}
 
     for event in sorted(events, key=lambda e: event_time(e) or since):
         if skip_report_event(event, since, until):
             continue
         task_id = event_task_id(event)
-        task = by_id.get(task_id) or synthetic_task_from_event(event)
-        context = event_context.get(task_id, {})
-        title = context.get("title") or content_of(task) or event.get("object_name") or event.get("extra_data", {}).get("content") or task_id
-        category = context.get("category") or report_category(cache, task, event)
         text = activity_text(event)
         kind = classify_activity(event, text)
         if kind not in sections:
             continue
+        if kind == "Finished" and task_id in step_context:
+            title, category, detail = completed_step_report_entry(cache, by_id, step_context[task_id], text)
+            comments = sections[kind].setdefault(category, {}).setdefault(title, [])
+            if detail not in comments:
+                comments.append(detail)
+            continue
+        task = by_id.get(task_id) or synthetic_task_from_event(event)
+        context = event_context.get(task_id, {})
+        title = context.get("title") or content_of(task) or event.get("object_name") or event.get("extra_data", {}).get("content") or task_id
+        category = context.get("category") or report_category(cache, task, event)
         comments = sections[kind].setdefault(category, {}).setdefault(title, [])
         if text and text != title:
             comments.append(text)
@@ -1457,7 +1599,11 @@ def build_report(cache, project_ids, since, until, events):
             category = project_name(cache, task.get("project_id"))
             category_items = sections["Waiting"].setdefault(category, {})
             if title not in category_items:
-                category_items[title] = [f"Waiting follow-up due {due_day.isoformat()}"]
+                details = [f"Waiting follow-up due {due_day.isoformat()}"]
+                reason = waiting_reason(task)
+                if reason:
+                    details.append(f"Reason: {reason}")
+                category_items[title] = details
 
     lines = [f"Report {iso_utc(since)} -> {iso_utc(until)}", ""]
     for name in ("Finished", "Progress", "Waiting"):
@@ -1473,6 +1619,19 @@ def build_report(cache, project_ids, since, until, events):
                         lines.append(f"  - {comment}")
         lines.append("")
     return "\n".join(lines).rstrip()
+
+
+def completed_step_report_entry(cache, active_tasks_by_id, context, fallback_text):
+    parent_task_id = str(context.get("parent_task_id") or "")
+    parent = active_tasks_by_id.get(parent_task_id)
+    if parent:
+        title = content_of(parent)
+        category = project_name(cache, parent.get("project_id"))
+    else:
+        title = context.get("parent_title_last_seen") or parent_task_id or "Unknown task"
+        category = context.get("category_last_seen") or "Unknown"
+    step_title = context.get("step_title_last_seen") or fallback_text
+    return title, category, f"Step done: {step_title}"
 
 
 def report_event_context(cache, events):
@@ -1635,11 +1794,12 @@ display:
 
 modes:
   --add TASK STEP [STEP ...]
+  --add --done TASK STEP [STEP ...]
   --done TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--add", action="store_true", help="add one or more steps")
-    p.add_argument("--done", action="store_true", help="complete one step")
+    p.add_argument("--done", action="store_true", help="complete one existing step, or add completed steps with --add")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_step_noun)
 
