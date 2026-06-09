@@ -23,12 +23,28 @@ class TodoPureTests(unittest.TestCase):
         friday = dt.date(2026, 6, 5)
         self.assertEqual(todo.add_business_days(friday, 2), dt.date(2026, 6, 9))
 
-    def test_hidden_section_normalization(self):
+    def test_hidden_category_normalization(self):
         parser = todo.configparser.ConfigParser()
         parser.add_section("main")
         parser.set("main", "hidden_from_now", "Someday, Ideas")
         cfg = todo.Config(parser)
         self.assertEqual(cfg.hidden_from_now, ["someday", "ideas"])
+
+    def test_category_projects_are_child_projects(self):
+        cache = todo.Cache({
+            "projects": [
+                {"id": "root", "name": "Work"},
+                {"id": "eng", "name": "Engineering", "parent_id": "root"},
+                {"id": "other", "name": "Other", "parent_id": None},
+            ],
+            "sections": [],
+            "labels": [],
+            "items": [],
+            "notes": [],
+        })
+        cats = todo.category_projects(cache, "root")
+        self.assertEqual([c["name"] for c in cats], ["Engineering"])
+        self.assertEqual(todo.category_project_by_name(cache, "root", "engineering")["id"], "eng")
 
     def test_merge_deletes_objects(self):
         existing = [{"id": "1", "name": "old"}, {"id": "2", "name": "keep"}]

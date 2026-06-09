@@ -9,7 +9,7 @@ It is not created by, affiliated with, or supported by Doist.
 ## Data model
 
 - Todoist project: `Work`
-- Todoist sections under `Work`: dynamic categories
+- Todoist child projects under `Work`: dynamic categories
 - Suggested initial categories: `Operations`, `Engineering`, `Admin`, `Someday`
 - Hidden-from-now categories: configured in `~/.todo/config`, default `Someday`
 - Todoist label: `waiting`
@@ -32,7 +32,7 @@ Local files:
 todo init --token TODOIST_TOKEN
 ```
 
-This creates or validates the `Work` project, default sections, and the
+This creates or validates the `Work` project, default categories, and the
 `waiting` label.  The token can also be supplied through `TODOIST_TOKEN`.
 
 ## Commands
@@ -42,7 +42,7 @@ todo categories
 todo category add training
 ```
 
-List or add categories. Categories are Todoist sections under `Work`.
+List or add categories. Categories are Todoist child projects under `Work`.
 
 ```sh
 todo add engineering "Update website dependencies" -p 1
