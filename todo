@@ -1,0 +1,1148 @@
+#!/usr/bin/env python3
+#
+# Personal Todoist command-line helper.
+#
+# This tool intentionally keeps Todoist as the source of truth.  The local
+# cache is a command-time mirror used for matching, listing, and speed.
+
+import argparse
+import configparser
+import contextlib
+import datetime as dt
+import fcntl
+import json
+import os
+import re
+import sys
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+
+
+APP_DIR = os.path.expanduser("~/.todo")
+CONFIG_PATH = os.path.join(APP_DIR, "config")
+CACHE_PATH = os.path.join(APP_DIR, "cache.json")
+CURSOR_PATH = os.path.join(APP_DIR, "report-cursor")
+LOCK_PATH = os.path.join(APP_DIR, "lock")
+
+API_BASE = "https://api.todoist.com/api/v1"
+SYNC_URL = f"{API_BASE}/sync"
+
+DEFAULT_PROJECT = "Work"
+DEFAULT_SECTIONS = ["Operations", "Engineeringing", "Admin", "Someday"]
+DEFAULT_HIDDEN_FROM_NOW = ["Someday"]
+DEFAULT_WAIT_DAYS = 2
+WAITING_LABEL = "waiting"
+
+
+class TodoError(Exception):
+    pass
+
+
+def ensure_app_dir():
+    os.makedirs(APP_DIR, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(APP_DIR, 0o700)
+    except OSError:
+        pass
+
+
+@contextlib.contextmanager
+def lock_state():
+    ensure_app_dir()
+    with open(LOCK_PATH, "a+", encoding="utf-8") as lockf:
+        fcntl.flock(lockf, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lockf, fcntl.LOCK_UN)
+
+
+def atomic_write(path, data, mode=0o600):
+    ensure_app_dir()
+    directory = os.path.dirname(path)
+    fd, tmp_path = tempfile.mkstemp(prefix=f".{os.path.basename(path)}.", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(data)
+        os.chmod(tmp_path, mode)
+        os.replace(tmp_path, path)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
+
+
+def now_utc():
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def iso_utc(value=None):
+    value = value or now_utc()
+    return value.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def parse_iso(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return dt.datetime.fromtimestamp(value, dt.timezone.utc)
+    value = str(value)
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    try:
+        parsed = dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def today_local():
+    return dt.date.today()
+
+
+def add_business_days(start, days):
+    cur = start
+    remaining = days
+    while remaining > 0:
+        cur += dt.timedelta(days=1)
+        if cur.weekday() < 5:
+            remaining -= 1
+    return cur
+
+
+def normalize_name(value):
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def split_csv(value):
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
+class Config:
+    def __init__(self, parser):
+        self.parser = parser
+
+    @classmethod
+    def load(cls):
+        parser = configparser.ConfigParser()
+        if os.path.exists(CONFIG_PATH):
+            parser.read(CONFIG_PATH)
+        return cls(parser)
+
+    def save_default(self, token=None):
+        ensure_app_dir()
+        if not self.parser.has_section("todoist"):
+            self.parser.add_section("todoist")
+        if not self.parser.has_section("main"):
+            self.parser.add_section("main")
+        if token is not None:
+            self.parser.set("todoist", "token", token)
+        if not self.parser.has_option("main", "project"):
+            self.parser.set("main", "project", DEFAULT_PROJECT)
+        if not self.parser.has_option("main", "default_sections"):
+            self.parser.set("main", "default_sections", ",".join(DEFAULT_SECTIONS))
+        if not self.parser.has_option("main", "hidden_from_now"):
+            self.parser.set("main", "hidden_from_now", ",".join(DEFAULT_HIDDEN_FROM_NOW))
+        if not self.parser.has_option("main", "wait_days"):
+            self.parser.set("main", "wait_days", str(DEFAULT_WAIT_DAYS))
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=APP_DIR,
+                                         prefix=".config.") as f:
+            self.parser.write(f)
+            tmp = f.name
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, CONFIG_PATH)
+
+    @property
+    def token(self):
+        return os.environ.get("TODOIST_TOKEN") or self.parser.get("todoist", "token", fallback=None)
+
+    @property
+    def project(self):
+        return self.parser.get("main", "project", fallback=DEFAULT_PROJECT)
+
+    @property
+    def default_sections(self):
+        return split_csv(self.parser.get("main", "default_sections", fallback=",".join(DEFAULT_SECTIONS)))
+
+    @property
+    def hidden_from_now(self):
+        return [normalize_name(s) for s in split_csv(
+            self.parser.get("main", "hidden_from_now", fallback=",".join(DEFAULT_HIDDEN_FROM_NOW)))]
+
+    @property
+    def wait_days(self):
+        return self.parser.getint("main", "wait_days", fallback=DEFAULT_WAIT_DAYS)
+
+
+class Cache:
+    RESOURCE_KEYS = ["projects", "sections", "labels", "items", "notes"]
+
+    def __init__(self, data=None):
+        self.data = data or self.empty()
+
+    @classmethod
+    def empty(cls):
+        data = {"sync_token": "*", "synced_at": None}
+        for key in cls.RESOURCE_KEYS:
+            data[key] = []
+        return data
+
+    @classmethod
+    def load(cls):
+        if not os.path.exists(CACHE_PATH):
+            return cls()
+        with open(CACHE_PATH, "r", encoding="utf-8") as f:
+            return cls(json.load(f))
+
+    def save(self):
+        atomic_write(CACHE_PATH, json.dumps(self.data, indent=2, sort_keys=True) + "\n")
+
+    def apply_sync(self, response):
+        full = bool(response.get("full_sync"))
+        for key in self.RESOURCE_KEYS:
+            if key not in response:
+                continue
+            incoming = response.get(key) or []
+            if full:
+                self.data[key] = incoming
+            else:
+                self.data[key] = merge_resource(self.data.get(key, []), incoming)
+        if response.get("sync_token"):
+            self.data["sync_token"] = response["sync_token"]
+        self.data["synced_at"] = iso_utc()
+
+
+def merge_resource(existing, incoming):
+    by_id = {str(obj.get("id")): obj for obj in existing if obj.get("id") is not None}
+    no_id = [obj for obj in existing if obj.get("id") is None]
+    for obj in incoming:
+        oid = obj.get("id")
+        if oid is None:
+            no_id.append(obj)
+            continue
+        oid = str(oid)
+        if obj.get("is_deleted"):
+            by_id.pop(oid, None)
+        else:
+            by_id[oid] = obj
+    return no_id + list(by_id.values())
+
+
+class Todoist:
+    def __init__(self, token):
+        if not token:
+            raise TodoError(f"Todoist token not configured. Run `todo init --token TOKEN` or edit {CONFIG_PATH}.")
+        self.token = token
+
+    def request(self, method, url, data=None, form=False):
+        headers = {"Authorization": f"Bearer {self.token}"}
+        body = None
+        if data is not None:
+            if form:
+                body = urllib.parse.urlencode(data).encode("utf-8")
+            else:
+                body = json.dumps(data).encode("utf-8")
+                headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode("utf-8")
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            raise TodoError(f"Todoist API error {e.code}: {detail}") from e
+        except urllib.error.URLError as e:
+            raise TodoError(f"Todoist API connection failed: {e.reason}") from e
+
+    def sync(self, cache, resources=None):
+        resources = resources or ["projects", "sections", "labels", "items", "notes", "completed_info"]
+        response = self.request("POST", SYNC_URL, {
+            "sync_token": cache.data.get("sync_token") or "*",
+            "resource_types": json.dumps(resources),
+        }, form=True)
+        cache.apply_sync(response)
+        return response
+
+    def command(self, type_, args):
+        cmd_uuid = str(uuid.uuid4())
+        response = self.request("POST", SYNC_URL, {
+            "commands": json.dumps([{
+                "type": type_,
+                "temp_id": str(uuid.uuid4()),
+                "uuid": cmd_uuid,
+                "args": args,
+            }])
+        }, form=True)
+        status = (response.get("sync_status") or {}).get(cmd_uuid)
+        if status != "ok":
+            raise TodoError(f"Todoist command {type_} failed: {status}")
+        return response
+
+    def activities(self, since, until, project_id):
+        params = {
+            "limit": "100",
+            "parent_project_id": project_id,
+        }
+        cursor = None
+        out = []
+        while True:
+            q = dict(params)
+            if cursor:
+                q["cursor"] = cursor
+            url = f"{API_BASE}/activities?{urllib.parse.urlencode(q)}"
+            response = self.request("GET", url)
+            events = response.get("results") or response.get("events") or []
+            if not events:
+                break
+            out.extend(events)
+            oldest = min((event_time(e) for e in events if event_time(e)), default=None)
+            if oldest and oldest < since:
+                break
+            cursor = response.get("next_cursor")
+            if not cursor:
+                break
+        return [e for e in out if since <= (event_time(e) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) <= until]
+
+
+def live_objects(cache, key):
+    return [obj for obj in cache.data.get(key, []) if not obj.get("is_deleted") and not obj.get("is_archived")]
+
+
+def project_by_name(cache, name):
+    wanted = normalize_name(name)
+    for project in live_objects(cache, "projects"):
+        if normalize_name(project.get("name", "")) == wanted:
+            return project
+    return None
+
+
+def section_by_name(cache, project_id, name):
+    wanted = normalize_name(name)
+    for section in live_objects(cache, "sections"):
+        if str(section.get("project_id")) == str(project_id) and normalize_name(section.get("name", "")) == wanted:
+            return section
+    return None
+
+
+def waiting_label(cache):
+    for label in live_objects(cache, "labels"):
+        if normalize_name(label.get("name", "")) == normalize_name(WAITING_LABEL):
+            return label
+    return None
+
+
+def root_project(cache, cfg):
+    project = project_by_name(cache, cfg.project)
+    if not project:
+        raise TodoError(f"Project {cfg.project!r} not found. Run `todo init`.")
+    return project
+
+
+def root_sections(cache, project_id):
+    return [s for s in live_objects(cache, "sections") if str(s.get("project_id")) == str(project_id)]
+
+
+def section_name(cache, section_id):
+    if section_id is None:
+        return "No section"
+    for section in live_objects(cache, "sections"):
+        if str(section.get("id")) == str(section_id):
+            return section.get("name") or "No section"
+    return "No section"
+
+
+def parent_tasks(cache, project_id):
+    return [item for item in live_objects(cache, "items")
+            if str(item.get("project_id")) == str(project_id)
+            and not item.get("parent_id")
+            and not item.get("checked")]
+
+
+def subtasks(cache, task_id):
+    return [item for item in live_objects(cache, "items")
+            if str(item.get("parent_id")) == str(task_id)
+            and not item.get("checked")]
+
+
+def all_subtasks(cache, task_id):
+    return [item for item in live_objects(cache, "items")
+            if str(item.get("parent_id")) == str(task_id)]
+
+
+def notes_for(cache, task_id):
+    notes = [n for n in live_objects(cache, "notes") if str(n.get("item_id")) == str(task_id)]
+    return sorted(notes, key=lambda n: n.get("posted_at") or n.get("posted") or "")
+
+
+def content_of(obj):
+    return obj.get("content") or obj.get("text") or ""
+
+
+def cli_priority_to_api(value):
+    value = int(value)
+    if value < 1 or value > 4:
+        raise TodoError("Priority must be 1, 2, 3, or 4.")
+    return 5 - value
+
+
+def api_priority_to_cli(value):
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = 1
+    return 5 - value
+
+
+def labels_of(item):
+    labels = item.get("labels") or []
+    return [str(label) for label in labels]
+
+
+def has_waiting(item):
+    return any(normalize_name(label) == normalize_name(WAITING_LABEL) for label in labels_of(item))
+
+
+def due_date(item):
+    due = item.get("due") or {}
+    return due.get("date") or due.get("datetime") or due.get("string")
+
+
+def item_time(item, names):
+    for name in names:
+        if item.get(name):
+            parsed = parse_iso(item.get(name))
+            if parsed:
+                return parsed
+    return None
+
+
+def event_time(event):
+    return item_time(event, ["event_date", "event_date_utc", "time", "date", "created_at"])
+
+
+def is_hidden_section(cache, cfg, item):
+    name = section_name(cache, item.get("section_id"))
+    return normalize_name(name) in cfg.hidden_from_now
+
+
+def match_text(cache, task):
+    parts = [content_of(task), task.get("description") or ""]
+    for child in all_subtasks(cache, task.get("id")):
+        parts.append(content_of(child))
+    return "\n".join(parts).lower()
+
+
+def resolve_task(cache, cfg, selector, include_completed=False):
+    project = root_project(cache, cfg)
+    tasks = [item for item in live_objects(cache, "items")
+             if str(item.get("project_id")) == str(project.get("id"))
+             and not item.get("parent_id")]
+    if not include_completed:
+        tasks = [t for t in tasks if not t.get("checked")]
+    candidates = []
+    selector_norm = selector.lower()
+
+    exact_id = [t for t in tasks if str(t.get("id")) == selector]
+    if len(exact_id) == 1:
+        return exact_id[0]
+
+    for task in tasks:
+        haystack = match_text(cache, task)
+        if selector_norm in haystack:
+            candidates.append(task)
+
+    if not candidates:
+        raise TodoError(f"No task matches {selector!r}.")
+    if len(candidates) == 1:
+        return candidates[0]
+    return choose_task(cache, cfg, selector, candidates)
+
+
+def choose_task(cache, cfg, selector, candidates):
+    candidates = sorted(candidates, key=lambda t: (
+        has_waiting(t),
+        is_hidden_section(cache, cfg, t),
+        -int(t.get("priority") or 1),
+        content_of(t).lower(),
+    ))
+    if not sys.stdin.isatty():
+        print_candidates(cache, candidates, f"Multiple tasks match {selector!r}:")
+        raise TodoError("Refusing to choose a task in non-interactive mode.")
+    print_candidates(cache, candidates, f"Multiple tasks match {selector!r}:")
+    answer = input("Select task number, or Enter to cancel: ").strip()
+    if not answer:
+        raise TodoError("Cancelled.")
+    try:
+        index = int(answer)
+    except ValueError as e:
+        raise TodoError("Selection must be a number.") from e
+    if index < 1 or index > len(candidates):
+        raise TodoError("Selection out of range.")
+    return candidates[index - 1]
+
+
+def print_candidates(cache, candidates, header):
+    print(header)
+    print()
+    for i, task in enumerate(candidates, 1):
+        print(f"{i:2d}  P{api_priority_to_cli(task.get('priority'))}  "
+              f"{section_name(cache, task.get('section_id')):<12} {content_of(task)}")
+    print()
+
+
+def require_project_and_section(cache, cfg, category):
+    project = root_project(cache, cfg)
+    section = section_by_name(cache, project.get("id"), category)
+    if not section:
+        available = ", ".join(s.get("name", "") for s in root_sections(cache, project.get("id")))
+        raise TodoError(f"Category {category!r} not found under {cfg.project!r}. Available: {available}")
+    return project, section
+
+
+def sync_or_fail(client, cache):
+    client.sync(cache)
+    cache.save()
+
+
+def sync_readonly(client, cache):
+    try:
+        client.sync(cache)
+        cache.save()
+        return True
+    except TodoError as e:
+        if not os.path.exists(CACHE_PATH):
+            raise
+        print(f"Warning: {e}", file=sys.stderr)
+        print(f"Warning: showing stale cache from {cache.data.get('synced_at')}", file=sys.stderr)
+        return False
+
+
+def mutate(client, cache, type_, args):
+    response = client.command(type_, args)
+    cache.apply_sync(response)
+    client.sync(cache)
+    cache.save()
+
+
+def add_note(client, cache, task_id, content):
+    mutate(client, cache, "note_add", {"item_id": str(task_id), "content": content})
+
+
+def update_item(client, cache, task_id, **kwargs):
+    args = {"id": str(task_id)}
+    args.update(kwargs)
+    mutate(client, cache, "item_update", args)
+
+
+def close_item(client, cache, task_id):
+    mutate(client, cache, "item_close", {"id": str(task_id)})
+
+
+def reopen_item(client, cache, task_id):
+    mutate(client, cache, "item_uncomplete", {"id": str(task_id)})
+
+
+def cmd_init(args):
+    with lock_state():
+        cfg = Config.load()
+        cfg.save_default(token=args.token)
+        if not args.token and not cfg.token:
+            print(f"Wrote {CONFIG_PATH}. Add your Todoist token with `todo init --token TOKEN`.")
+            return 0
+        client = Todoist(cfg.token)
+        cache = Cache.load()
+        sync_or_fail(client, cache)
+        project = project_by_name(cache, cfg.project)
+        if not project:
+            mutate(client, cache, "project_add", {"name": cfg.project})
+            project = project_by_name(cache, cfg.project)
+        if not project:
+            raise TodoError(f"Failed to create or find project {cfg.project!r}.")
+        for name in cfg.default_sections:
+            if not section_by_name(cache, project.get("id"), name):
+                mutate(client, cache, "section_add", {"name": name, "project_id": str(project.get("id"))})
+        if not waiting_label(cache):
+            mutate(client, cache, "label_add", {"name": WAITING_LABEL})
+        print(f"Initialized Todoist project {cfg.project!r}.")
+        print(f"Config: {CONFIG_PATH}")
+        print(f"Cache:  {CACHE_PATH}")
+        return 0
+
+
+def cmd_categories(args):
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
+        project = root_project(cache, cfg)
+        for section in sorted(root_sections(cache, project.get("id")), key=lambda s: s.get("section_order") or 0):
+            marker = " (hidden from now)" if normalize_name(section.get("name", "")) in cfg.hidden_from_now else ""
+            print(f"{section.get('name')}{marker}")
+        return 0
+
+
+def cmd_category_add(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        project = root_project(cache, cfg)
+        if section_by_name(cache, project.get("id"), args.name):
+            print(f"Category {args.name!r} already exists.")
+            return 0
+        mutate(client, cache, "section_add", {"name": args.name, "project_id": str(project.get("id"))})
+        print(f"Created category {args.name}.")
+        return 0
+
+
+def cmd_add(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        project, section = require_project_and_section(cache, cfg, args.category)
+        item_args = {
+            "content": args.task,
+            "project_id": str(project.get("id")),
+            "section_id": str(section.get("id")),
+        }
+        if args.priority:
+            item_args["priority"] = cli_priority_to_api(args.priority)
+        if args.due:
+            item_args["due"] = {"string": args.due}
+        mutate(client, cache, "item_add", item_args)
+        print(f"Added: {args.task}")
+        return 0
+
+
+def cmd_step(args):
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=not args.steps)
+        if args.steps:
+            sync_or_fail(client, cache)
+        else:
+            sync_readonly(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        if not args.steps:
+            print_steps(cache, task)
+            return 0
+        for step in args.steps:
+            mutate(client, cache, "item_add", {
+                "content": step,
+                "project_id": str(task.get("project_id")),
+                "section_id": str(task.get("section_id")),
+                "parent_id": str(task.get("id")),
+            })
+            print(f"Added step: {step}")
+        return 0
+
+
+def print_steps(cache, task):
+    print(f"Task: {content_of(task)}")
+    print()
+    children = all_subtasks(cache, task.get("id"))
+    if not children:
+        print("No steps.")
+        return
+    for i, child in enumerate(children, 1):
+        mark = "x" if child.get("checked") else " "
+        print(f"{i:2d}  [{mark}] {content_of(child)}")
+
+
+def resolve_step(cache, task, selector):
+    children = all_subtasks(cache, task.get("id"))
+    if not children:
+        raise TodoError("Task has no steps.")
+    if re.fullmatch(r"\d+", selector):
+        index = int(selector)
+        if 1 <= index <= len(children):
+            return children[index - 1]
+        raise TodoError("Step number out of range.")
+    matches = [child for child in children if selector.lower() in content_of(child).lower()]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise TodoError(f"No step matches {selector!r}.")
+    if not sys.stdin.isatty():
+        raise TodoError(f"Multiple steps match {selector!r}; run `todo step TASK` and use a number.")
+    print(f"Multiple steps match {selector!r}:")
+    print()
+    for i, child in enumerate(matches, 1):
+        mark = "x" if child.get("checked") else " "
+        print(f"{i:2d}  [{mark}] {content_of(child)}")
+    print()
+    answer = input("Select step number, or Enter to cancel: ").strip()
+    if not answer:
+        raise TodoError("Cancelled.")
+    index = int(answer)
+    if index < 1 or index > len(matches):
+        raise TodoError("Selection out of range.")
+    return matches[index - 1]
+
+
+def cmd_check(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        step = resolve_step(cache, task, args.step)
+        if step.get("checked"):
+            print(f"Step already done: {content_of(step)}")
+            return 0
+        close_item(client, cache, step.get("id"))
+        print(f"Done step: {content_of(step)}")
+        return 0
+
+
+def cmd_comment(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        add_note(client, cache, task.get("id"), f"Progress: {args.text}")
+        print(f"Commented on: {content_of(task)}")
+        return 0
+
+
+def cmd_wait(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        existing_due = due_date(task)
+        if existing_due and not args.yes:
+            follow = args.due or compute_after(args.after, cfg.wait_days).isoformat()
+            answer = input(f"Existing due date is {existing_due}. Replace with waiting follow-up {follow}? [y/N] ").strip()
+            if answer.lower() not in ("y", "yes"):
+                raise TodoError("Cancelled.")
+        follow_date = args.due or compute_after(args.after, cfg.wait_days).isoformat()
+        labels = labels_of(task)
+        if not any(normalize_name(label) == normalize_name(WAITING_LABEL) for label in labels):
+            labels.append(WAITING_LABEL)
+        update_item(client, cache, task.get("id"), labels=labels, due={"string": follow_date})
+        add_note(client, cache, task.get("id"), f"Waiting: {args.text}")
+        print(f"Waiting until {follow_date}: {content_of(task)}")
+        return 0
+
+
+def compute_after(after, default_days):
+    if not after:
+        return add_business_days(today_local(), default_days)
+    value = after.strip().lower()
+    if value in ("tomorrow", "1d", "1 day"):
+        return today_local() + dt.timedelta(days=1)
+    if value in ("2 business days", "2bd", "2 business day"):
+        return add_business_days(today_local(), 2)
+    m = re.fullmatch(r"(\d+)\s*(d|day|days)", value)
+    if m:
+        return today_local() + dt.timedelta(days=int(m.group(1)))
+    m = re.fullmatch(r"(\d+)\s*(bd|business days?|businessdays?)", value)
+    if m:
+        return add_business_days(today_local(), int(m.group(1)))
+    parsed = parse_date(value)
+    if parsed:
+        return parsed
+    raise TodoError(f"Cannot parse --after value {after!r}. Use e.g. '2 business days', '5d', or YYYY-MM-DD.")
+
+
+def parse_date(value):
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def cmd_resume(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        labels = [label for label in labels_of(task) if normalize_name(label) != normalize_name(WAITING_LABEL)]
+        update_item(client, cache, task.get("id"), labels=labels, due=None)
+        add_note(client, cache, task.get("id"), f"Resumed: {args.text}")
+        print(f"Resumed: {content_of(task)}")
+        return 0
+
+
+def cmd_done(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        open_steps = subtasks(cache, task.get("id"))
+        if open_steps:
+            print("Open steps:")
+            for i, child in enumerate(open_steps, 1):
+                print(f"{i:2d}  [ ] {content_of(child)}")
+            print()
+            answer = input("Mark all open steps done and complete parent task? [y/N] ").strip()
+            if answer.lower() not in ("y", "yes"):
+                raise TodoError("Cancelled; task left open.")
+            for child in open_steps:
+                close_item(client, cache, child.get("id"))
+        add_note(client, cache, task.get("id"), f"Done: {args.text}")
+        close_item(client, cache, task.get("id"))
+        print(f"Done: {content_of(task)}")
+        return 0
+
+
+def cmd_priority(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        update_item(client, cache, task.get("id"), priority=cli_priority_to_api(args.priority))
+        print(f"P{args.priority}: {content_of(task)}")
+        return 0
+
+
+def cmd_due(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        if args.date.lower() in ("none", "clear", "-"):
+            update_item(client, cache, task.get("id"), due=None)
+            print(f"Cleared due date: {content_of(task)}")
+        else:
+            update_item(client, cache, task.get("id"), due={"string": args.date})
+            print(f"Due {args.date}: {content_of(task)}")
+        return 0
+
+
+def cmd_move(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        _, section = require_project_and_section(cache, cfg, args.category)
+        mutate(client, cache, "item_move", {"id": str(task.get("id")), "section_id": str(section.get("id"))})
+        print(f"Moved to {section.get('name')}: {content_of(task)}")
+        return 0
+
+
+def cmd_now(args):
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
+        project = root_project(cache, cfg)
+        tasks = []
+        for task in parent_tasks(cache, project.get("id")):
+            if has_waiting(task):
+                continue
+            if is_hidden_section(cache, cfg, task):
+                continue
+            if args.category and normalize_name(section_name(cache, task.get("section_id"))) != normalize_name(args.category):
+                continue
+            tasks.append(task)
+        tasks = sort_now(cache, tasks)
+        if not args.all:
+            tasks = tasks[:10]
+        print_task_list(cache, tasks, show_next=True)
+        return 0
+
+
+def sort_now(cache, tasks):
+    today = today_local().isoformat()
+
+    def key(task):
+        due = due_date(task)
+        overdue_rank = 0
+        if due:
+            due_day = due[:10]
+            if due_day < today:
+                overdue_rank = -2
+            elif due_day == today:
+                overdue_rank = -1
+        return (
+            overdue_rank,
+            -int(task.get("priority") or 1),
+            due or "9999-99-99",
+            section_name(cache, task.get("section_id")).lower(),
+            content_of(task).lower(),
+        )
+    return sorted(tasks, key=key)
+
+
+def print_task_list(cache, tasks, show_next=False):
+    if not tasks:
+        print("No tasks.")
+        return
+    for task in tasks:
+        due = due_date(task)
+        due_text = f" due:{due}" if due else ""
+        waiting = " waiting" if has_waiting(task) else ""
+        print(f"P{api_priority_to_cli(task.get('priority'))}  "
+              f"{section_name(cache, task.get('section_id')):<12} {content_of(task)}{due_text}{waiting}")
+        if show_next:
+            steps = subtasks(cache, task.get("id"))
+            if steps:
+                print(f"    next: {content_of(steps[0])}")
+
+
+def cmd_waiting(args):
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
+        project = root_project(cache, cfg)
+        today = today_local().isoformat()
+        tasks = []
+        for task in parent_tasks(cache, project.get("id")):
+            if not has_waiting(task):
+                continue
+            if not args.all:
+                due = due_date(task)
+                if not due or due[:10] > today:
+                    continue
+            tasks.append(task)
+        print_task_list(cache, sort_now(cache, tasks), show_next=True)
+        return 0
+
+
+def cmd_someday(args):
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
+        project = root_project(cache, cfg)
+        hidden = set(cfg.hidden_from_now)
+        tasks = [task for task in parent_tasks(cache, project.get("id"))
+                 if normalize_name(section_name(cache, task.get("section_id"))) in hidden]
+        print_task_list(cache, sort_now(cache, tasks), show_next=True)
+        return 0
+
+
+def cmd_report(args):
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
+        project = root_project(cache, cfg)
+        since = report_since(args)
+        until = parse_iso(args.until) if args.until else now_utc()
+        if until is None:
+            raise TodoError(f"Cannot parse --until {args.until!r}.")
+        events = []
+        try:
+            events = client.activities(since, until, str(project.get("id")))
+        except TodoError as e:
+            print(f"Warning: activity lookup failed: {e}", file=sys.stderr)
+        report = build_report(cache, project.get("id"), since, until, events)
+        print(report)
+        if args.final:
+            atomic_write(CURSOR_PATH, iso_utc(until) + "\n")
+            print(f"\nAdvanced report cursor to {iso_utc(until)}", file=sys.stderr)
+        return 0
+
+
+def report_since(args):
+    if args.since:
+        parsed = parse_iso(args.since)
+        if not parsed:
+            raise TodoError(f"Cannot parse --since {args.since!r}.")
+        return parsed
+    if os.path.exists(CURSOR_PATH):
+        with open(CURSOR_PATH, "r", encoding="utf-8") as f:
+            parsed = parse_iso(f.read().strip())
+            if parsed:
+                return parsed
+    return current_wednesday_start()
+
+
+def current_wednesday_start():
+    today = today_local()
+    days_since_wed = (today.weekday() - 2) % 7
+    wed = today - dt.timedelta(days=days_since_wed)
+    local_start = dt.datetime.combine(wed, dt.time.min).astimezone()
+    return local_start.astimezone(dt.timezone.utc)
+
+
+def build_report(cache, project_id, since, until, events):
+    by_id = {str(item.get("id")): item for item in live_objects(cache, "items")
+             if str(item.get("project_id")) == str(project_id)}
+    sections = {"Finished": {}, "Progress": {}, "Waiting": {}}
+
+    for event in sorted(events, key=lambda e: event_time(e) or since):
+        task_id = str(event.get("object_id") or event.get("item_id") or event.get("parent_item_id") or "")
+        task = by_id.get(task_id) or synthetic_task_from_event(event)
+        title = content_of(task) or event.get("object_name") or event.get("extra_data", {}).get("content") or task_id
+        text = activity_text(event)
+        kind = classify_activity(event, text)
+        if kind not in sections or not text:
+            continue
+        sections[kind].setdefault(title, []).append(text)
+
+    for task in by_id.values():
+        if not has_waiting(task):
+            continue
+        due = due_date(task)
+        if not due:
+            continue
+        try:
+            due_day = dt.date.fromisoformat(due[:10])
+        except ValueError:
+            continue
+        if since.date() <= due_day <= until.date() and due_day <= today_local():
+            title = content_of(task)
+            if title not in sections["Waiting"]:
+                sections["Waiting"][title] = [f"Waiting follow-up due {due_day.isoformat()}"]
+
+    lines = [f"Report {iso_utc(since)} -> {iso_utc(until)}", ""]
+    for name in ("Finished", "Progress", "Waiting"):
+        lines.append(name)
+        if not sections[name]:
+            lines.append("- None")
+        else:
+            for title, comments in sections[name].items():
+                lines.append(f"- {title}")
+                for comment in comments:
+                    lines.append(f"  - {comment}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+def synthetic_task_from_event(event):
+    data = event.get("extra_data") or event.get("object_data") or {}
+    return {"content": event.get("object_name") or data.get("content") or data.get("item_content") or ""}
+
+
+def activity_text(event):
+    data = event.get("extra_data") or event.get("object_data") or {}
+    for key in ("content", "note_content", "text", "item_content"):
+        if data.get(key):
+            return str(data[key])
+    if event.get("event_type") == "completed":
+        return "Completed"
+    return str(event.get("event_type") or "")
+
+
+def classify_activity(event, text):
+    event_type = str(event.get("event_type") or "")
+    object_type = str(event.get("object_type") or "")
+    if event_type == "completed":
+        return "Finished"
+    if text.startswith("Done:"):
+        return "Finished"
+    if text.startswith("Waiting:"):
+        return "Waiting"
+    if text.startswith("Progress:") or text.startswith("Resumed:"):
+        return "Progress"
+    if "note" in object_type and text:
+        return "Progress"
+    return None
+
+
+def load_runtime(readonly=False):
+    cfg = Config.load()
+    client = Todoist(cfg.token)
+    cache = Cache.load()
+    return cfg, client, cache
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog="todo")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("init")
+    p.add_argument("--token")
+    p.set_defaults(func=cmd_init)
+
+    p = sub.add_parser("categories")
+    p.set_defaults(func=cmd_categories)
+
+    p = sub.add_parser("category")
+    subcat = p.add_subparsers(dest="category_cmd", required=True)
+    p_add = subcat.add_parser("add")
+    p_add.add_argument("name")
+    p_add.set_defaults(func=cmd_category_add)
+
+    p = sub.add_parser("add")
+    p.add_argument("category")
+    p.add_argument("task")
+    p.add_argument("-p", "--priority", type=int)
+    p.add_argument("--due")
+    p.set_defaults(func=cmd_add)
+
+    p = sub.add_parser("step")
+    p.add_argument("task")
+    p.add_argument("steps", nargs="*")
+    p.set_defaults(func=cmd_step)
+
+    p = sub.add_parser("check")
+    p.add_argument("task")
+    p.add_argument("step")
+    p.set_defaults(func=cmd_check)
+
+    p = sub.add_parser("comment")
+    p.add_argument("task")
+    p.add_argument("text")
+    p.set_defaults(func=cmd_comment)
+
+    p = sub.add_parser("wait")
+    p.add_argument("task")
+    p.add_argument("text")
+    p.add_argument("--after")
+    p.add_argument("--due")
+    p.add_argument("-y", "--yes", action="store_true")
+    p.set_defaults(func=cmd_wait)
+
+    p = sub.add_parser("resume")
+    p.add_argument("task")
+    p.add_argument("text")
+    p.set_defaults(func=cmd_resume)
+
+    p = sub.add_parser("done")
+    p.add_argument("task")
+    p.add_argument("text")
+    p.set_defaults(func=cmd_done)
+
+    p = sub.add_parser("priority")
+    p.add_argument("task")
+    p.add_argument("priority", type=int)
+    p.set_defaults(func=cmd_priority)
+
+    p = sub.add_parser("due")
+    p.add_argument("task")
+    p.add_argument("date")
+    p.set_defaults(func=cmd_due)
+
+    p = sub.add_parser("move")
+    p.add_argument("task")
+    p.add_argument("category")
+    p.set_defaults(func=cmd_move)
+
+    p = sub.add_parser("now")
+    p.add_argument("--all", action="store_true")
+    p.add_argument("--category")
+    p.set_defaults(func=cmd_now)
+
+    p = sub.add_parser("waiting")
+    p.add_argument("--all", action="store_true")
+    p.set_defaults(func=cmd_waiting)
+
+    p = sub.add_parser("someday")
+    p.set_defaults(func=cmd_someday)
+
+    p = sub.add_parser("report")
+    p.add_argument("--final", action="store_true")
+    p.add_argument("--since")
+    p.add_argument("--until")
+    p.set_defaults(func=cmd_report)
+
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return args.func(args)
+    except TodoError as e:
+        print(f"todo: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("todo: interrupted", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
