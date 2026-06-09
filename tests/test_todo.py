@@ -108,6 +108,50 @@ class TodoPureTests(unittest.TestCase):
             "task1",
         )
 
+    def test_report_groups_by_category(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        event = {
+            "event_date": "2026-06-04T15:32:51Z",
+            "event_type": "completed",
+            "extra_data": {"content": "deliver release"},
+            "object_id": "task1",
+            "object_type": "item",
+            "parent_project_id": "gate",
+        }
+        report = todo.build_report(cache, {"gate"}, since, until, [event])
+        self.assertIn("Finished\nOperations\n- deliver release", report)
+
+    def test_report_note_uses_completed_item_context(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        events = [
+            {
+                "event_date": "2026-06-04T15:32:51Z",
+                "event_type": "completed",
+                "extra_data": {"content": "deliver release"},
+                "object_id": "task1",
+                "object_type": "item",
+                "parent_project_id": "gate",
+            },
+            {
+                "event_date": "2026-06-04T15:32:50Z",
+                "event_type": "added",
+                "extra_data": {"content": "Done: delivered release"},
+                "object_id": "note1",
+                "object_type": "note",
+                "parent_item_id": "task1",
+                "parent_project_id": "gate",
+            },
+        ]
+        report = todo.build_report(cache, {"gate"}, since, until, events)
+        self.assertIn("- deliver release\n  - Done: delivered release", report)
+        self.assertNotIn("\n- Done: delivered release\n", report)
+
 
 if __name__ == "__main__":
     unittest.main()
