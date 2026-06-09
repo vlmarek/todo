@@ -1235,97 +1235,184 @@ def load_runtime(readonly=False):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="todo")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    parser = argparse.ArgumentParser(
+        prog="todo",
+        description="Command-line helper for Todoist tasks.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""examples:
+  todo now
+  todo add operations "Deliver release" -p 2
+  todo step "Deliver release" "check dashboard table" "close build"
+  todo wait "REVIEW-123" "waiting for review"
+  todo report --final""",
+    )
+    sub = parser.add_subparsers(
+        dest="cmd",
+        metavar="COMMAND",
+        title="commands",
+        description="Run `todo COMMAND --help` for command-specific options.",
+    )
 
-    p = sub.add_parser("init")
-    p.add_argument("--token")
+    p = sub.add_parser(
+        "init",
+        help="initialize Todoist project, categories, label, and local config",
+        description="Initialize or validate the Todoist project, default categories, waiting label, and local config.",
+    )
+    p.add_argument("--token", help="Todoist API token to store in ~/.todo/config")
     p.set_defaults(func=cmd_init)
 
-    p = sub.add_parser("categories")
+    p = sub.add_parser(
+        "categories",
+        help="list Work categories",
+        description="List dynamic categories, implemented as Todoist child projects under Work.",
+    )
     p.set_defaults(func=cmd_categories)
 
-    p = sub.add_parser("category")
-    subcat = p.add_subparsers(dest="category_cmd", required=True)
-    p_add = subcat.add_parser("add")
-    p_add.add_argument("name")
+    p = sub.add_parser(
+        "category",
+        help="manage Work categories",
+        description="Manage categories. Categories are Todoist child projects under Work.",
+    )
+    subcat = p.add_subparsers(dest="category_cmd", required=True, metavar="ACTION")
+    p_add = subcat.add_parser("add", help="create a category", description="Create a new Work category.")
+    p_add.add_argument("name", help="category name")
     p_add.set_defaults(func=cmd_category_add)
 
-    p = sub.add_parser("add")
-    p.add_argument("category")
-    p.add_argument("task")
-    p.add_argument("-p", "--priority", type=int)
-    p.add_argument("--due")
+    p = sub.add_parser(
+        "add",
+        help="add a new task to a category",
+        description="Add a new top-level Todoist task under an Work category.",
+    )
+    p.add_argument("category", help="category name, e.g. operations, engineering, vm, someday")
+    p.add_argument("task", help="task title")
+    p.add_argument("-p", "--priority", type=int, help="Todoist priority as P1..P4, where 1 is highest")
+    p.add_argument("--due", help="attention date/time, passed to Todoist")
     p.set_defaults(func=cmd_add)
 
-    p = sub.add_parser("step")
-    p.add_argument("task")
-    p.add_argument("steps", nargs="*")
+    p = sub.add_parser(
+        "step",
+        help="list or add task steps",
+        description="List current subtasks for TASK, or add one or more steps when STEP arguments are supplied.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("steps", nargs="*", help="steps to add as subtasks")
     p.set_defaults(func=cmd_step)
 
-    p = sub.add_parser("show")
-    p.add_argument("task")
+    p = sub.add_parser(
+        "show",
+        help="show task details",
+        description="Show task category, priority, due state, description, steps, and comments.",
+    )
+    p.add_argument("task", help="task selector")
     p.set_defaults(func=cmd_show)
 
-    p = sub.add_parser("check")
-    p.add_argument("task")
-    p.add_argument("step")
+    p = sub.add_parser(
+        "check",
+        help="mark a step done",
+        description="Complete one subtask by number or unique text match.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("step", help="step number or text selector")
     p.set_defaults(func=cmd_check)
 
-    p = sub.add_parser("comment")
-    p.add_argument("task")
-    p.add_argument("text")
+    p = sub.add_parser(
+        "comment",
+        help="add a progress comment",
+        description="Add a Todoist comment prefixed with `Progress:` for report history.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("text", help="comment text, stored as `Progress: TEXT`")
     p.set_defaults(func=cmd_comment)
 
-    p = sub.add_parser("wait")
-    p.add_argument("task")
-    p.add_argument("text")
-    p.add_argument("--after")
-    p.add_argument("--due")
-    p.add_argument("-y", "--yes", action="store_true")
+    p = sub.add_parser(
+        "wait",
+        help="mark a task waiting",
+        description="Add the waiting label, set a follow-up due date, and add a `Waiting:` comment.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("text", help="waiting reason, stored as `Waiting: TEXT`")
+    p.add_argument("--after", help="follow-up interval, e.g. '2 business days' or '5d'")
+    p.add_argument("--due", help="explicit follow-up date")
+    p.add_argument("-y", "--yes", action="store_true", help="replace an existing due date without prompting")
     p.set_defaults(func=cmd_wait)
 
-    p = sub.add_parser("resume")
-    p.add_argument("task")
-    p.add_argument("text")
+    p = sub.add_parser(
+        "resume",
+        help="clear waiting state",
+        description="Remove the waiting label, clear the due date, and add a `Resumed:` comment.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("text", help="resume reason, stored as `Resumed: TEXT`")
     p.set_defaults(func=cmd_resume)
 
-    p = sub.add_parser("done")
-    p.add_argument("task")
-    p.add_argument("text")
+    p = sub.add_parser(
+        "done",
+        help="complete a task",
+        description="Add a `Done:` comment and complete the task. If open steps remain, ask before completing them too.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("text", help="completion note, stored as `Done: TEXT`")
     p.set_defaults(func=cmd_done)
 
-    p = sub.add_parser("priority")
-    p.add_argument("task")
-    p.add_argument("priority", type=int)
+    p = sub.add_parser(
+        "priority",
+        help="set task priority",
+        description="Set Todoist priority using P1..P4 numbering, where 1 is highest.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("priority", type=int, help="priority 1, 2, 3, or 4")
     p.set_defaults(func=cmd_priority)
 
-    p = sub.add_parser("due")
-    p.add_argument("task")
-    p.add_argument("date")
+    p = sub.add_parser(
+        "due",
+        help="set or clear attention date",
+        description="Set the task attention date, or clear it with `clear`, `none`, or `-`.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("date", help="date expression, or clear/none/-")
     p.set_defaults(func=cmd_due)
 
-    p = sub.add_parser("move")
-    p.add_argument("task")
-    p.add_argument("category")
+    p = sub.add_parser(
+        "move",
+        help="move a task to another category",
+        description="Move a task to another Work category.",
+    )
+    p.add_argument("task", help="task selector")
+    p.add_argument("category", help="destination category")
     p.set_defaults(func=cmd_move)
 
-    p = sub.add_parser("now")
-    p.add_argument("--all", action="store_true")
-    p.add_argument("--category")
+    p = sub.add_parser(
+        "now",
+        help="show actionable tasks",
+        description="Show open non-waiting tasks outside hidden categories, sorted by due date and priority.",
+    )
+    p.add_argument("--all", action="store_true", help="show all matching tasks instead of the first 10")
+    p.add_argument("--category", help="limit output to one category")
     p.set_defaults(func=cmd_now)
 
-    p = sub.add_parser("waiting")
-    p.add_argument("--all", action="store_true")
+    p = sub.add_parser(
+        "waiting",
+        help="show waiting tasks",
+        description="Show waiting tasks due today or overdue. Use --all to show every waiting task.",
+    )
+    p.add_argument("--all", action="store_true", help="show all waiting tasks, not only due/overdue")
     p.set_defaults(func=cmd_waiting)
 
-    p = sub.add_parser("someday")
+    p = sub.add_parser(
+        "someday",
+        help="show hidden-category tasks",
+        description="Show tasks in categories configured as hidden from `todo now`, such as Someday.",
+    )
     p.set_defaults(func=cmd_someday)
 
-    p = sub.add_parser("report")
-    p.add_argument("--final", action="store_true")
-    p.add_argument("--since")
-    p.add_argument("--until")
+    p = sub.add_parser(
+        "report",
+        help="generate weekly report draft",
+        description="Generate a plain-text report from the report cursor to now, grouped by section and category.",
+    )
+    p.add_argument("--final", action="store_true", help="print the report and advance the report cursor to now")
+    p.add_argument("--since", help="override report start timestamp")
+    p.add_argument("--until", help="override report end timestamp")
     p.set_defaults(func=cmd_report)
 
     return parser
@@ -1334,6 +1421,9 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if not hasattr(args, "func"):
+        parser.print_help()
+        return 0
     try:
         return args.func(args)
     except TodoError as e:

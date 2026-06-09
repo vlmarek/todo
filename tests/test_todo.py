@@ -203,6 +203,24 @@ class TodoPureTests(unittest.TestCase):
             }])
         self.assertIn("Web comment", out.getvalue())
 
+    def test_bare_todo_prints_help(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = todo.main([])
+        self.assertEqual(rc, 0)
+        self.assertIn("commands:", out.getvalue())
+
+    def test_help_lists_command_descriptions(self):
+        parser = todo.build_parser()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            parser.print_help()
+        text = out.getvalue()
+        self.assertIn("now", text)
+        self.assertIn("show actionable tasks", text)
+        self.assertIn("report", text)
+        self.assertIn("generate weekly report draft", text)
+
 
 if __name__ == "__main__":
     unittest.main()
