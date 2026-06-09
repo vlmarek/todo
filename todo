@@ -942,11 +942,11 @@ def cmd_init(args):
 
 def cmd_category(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=not args.add)
         if args.add:
+            cfg, client, cache = load_runtime()
             sync_or_fail(client, cache)
         else:
-            sync_readonly(client, cache)
+            cfg, cache = load_cached_runtime(args.refresh)
         project = root_project(cache, cfg)
         if args.add:
             if category_project_by_name(cache, project.get("id"), args.add):
@@ -1025,11 +1025,11 @@ def find_added_step_id(cache, task_id, content):
 
 def cmd_step(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=not args.steps)
         if args.steps:
+            cfg, client, cache = load_runtime()
             sync_or_fail(client, cache)
         else:
-            sync_readonly(client, cache)
+            cfg, cache = load_cached_runtime(args.refresh)
         task = resolve_task(cache, cfg, args.task)
         if not args.steps:
             print_steps(cache, task)
@@ -1057,10 +1057,9 @@ def cmd_step(args):
 
 def cmd_show(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=True)
-        sync_readonly(client, cache)
+        cfg, cache = load_cached_runtime(args.refresh)
         task = resolve_task(cache, cfg, args.task)
-        comments = client.comments(task.get("id"))
+        comments = notes_for(cache, task.get("id"))
         print_task_detail(cache, task, comments=comments)
         return 0
 
@@ -1280,6 +1279,12 @@ def cmd_check(args):
 
 def cmd_comment(args):
     with lock_state():
+        if not args.edit and not args.texts:
+            cfg, cache = load_cached_runtime(args.refresh)
+            task = resolve_task(cache, cfg, args.task)
+            print(f"Comments for: {content_of(task)}")
+            print_comments(notes_for(cache, task.get("id")))
+            return 0
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
@@ -1303,10 +1308,7 @@ def cmd_comment(args):
             plural = "s" if count != 1 else ""
             print(f"Added {count} comment{plural} to: {content_of(task)}")
             return 0
-        comments = client.comments(task.get("id"))
-        print(f"Comments for: {content_of(task)}")
-        print_comments(comments)
-        return 0
+        raise TodoError("Unknown comment mode.")
 
 
 def add_task_comments(client, task_id, texts):
@@ -1567,9 +1569,11 @@ def cmd_task(args):
     add_priority = getattr(args, "add_priority", None)
     if add_priority is not None and mode not in ("add", "add_done"):
         raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add`.")
+    if args.refresh and mode != "show":
+        raise TodoError("Use --refresh only with `todo task TASK`; mutation modes refresh automatically.")
     if mode == "show":
         require_arg_count("task", values, 1)
-        return cmd_show(argparse.Namespace(task=values[0]))
+        return cmd_show(argparse.Namespace(task=values[0], refresh=args.refresh))
     if mode == "add":
         require_arg_count("task --add", values, 2, 9999, usage=TASK_ADD_USAGE)
         return cmd_add(argparse.Namespace(
@@ -1630,9 +1634,11 @@ def cmd_step_noun(args):
         mode = modes[0] if modes else "show"
     values = args.values
     add_due = due_option_value(args, "step --add") if "due" in mode_set else None
+    if args.refresh and mode != "show":
+        raise TodoError("Use --refresh only with `todo step TASK`; mutation modes refresh automatically.")
     if mode == "show":
         require_arg_count("step", values, 1)
-        return cmd_step(argparse.Namespace(task=values[0], steps=[], due=None))
+        return cmd_step(argparse.Namespace(task=values[0], steps=[], due=None, refresh=args.refresh))
     if mode == "add":
         require_arg_count("step --add", values, 2, 9999)
         return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=False, due=add_due))
@@ -1654,15 +1660,17 @@ def cmd_comment_noun(args):
         raise TodoError("Use only one comment mode at a time.")
     mode = modes[0] if modes else "show"
     values = args.values
+    if args.refresh and mode != "show":
+        raise TodoError("Use --refresh only with `todo comment TASK`; mutation modes refresh automatically.")
     if mode == "show":
         require_arg_count("comment", values, 1)
-        return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=False))
+        return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=False, refresh=args.refresh))
     if mode == "add":
         require_arg_count("comment --add", values, 2, 9999)
-        return cmd_comment(argparse.Namespace(task=values[0], texts=values[1:], edit=False))
+        return cmd_comment(argparse.Namespace(task=values[0], texts=values[1:], edit=False, refresh=False))
     if mode == "edit":
         require_arg_count("comment --edit", values, 1)
-        return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=True))
+        return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=True, refresh=False))
     raise TodoError(f"Unknown comment mode {mode}.")
 
 
@@ -1809,8 +1817,7 @@ def cmd_search(args):
 
 def cmd_now(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=True)
-        sync_readonly(client, cache)
+        cfg, cache = load_cached_runtime(args.refresh)
         project = root_project(cache, cfg)
         active_project_ids = {str(p.get("id")) for p in category_projects(cache, project.get("id"))
                               if normalize_name(p.get("name", "")) not in cfg.hidden_from_now}
@@ -1874,8 +1881,7 @@ def print_task_list(cache, tasks, show_steps=False):
 
 def cmd_waiting(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=True)
-        sync_readonly(client, cache)
+        cfg, cache = load_cached_runtime(args.refresh)
         project_ids = set(root_project_ids(cache, cfg, include_root=False))
         tasks = []
         for task in [item for item in live_objects(cache, "items")
@@ -1891,8 +1897,7 @@ def cmd_waiting(args):
 
 def cmd_someday(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=True)
-        sync_readonly(client, cache)
+        cfg, cache = load_cached_runtime(args.refresh)
         project_ids = set(root_project_ids(cache, cfg, include_root=False))
         hidden = set(cfg.hidden_from_now)
         tasks = [task for task in live_objects(cache, "items")
@@ -1906,18 +1911,24 @@ def cmd_someday(args):
 
 def cmd_report(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=True)
-        sync_readonly(client, cache)
+        refresh = args.refresh or args.final
+        if refresh:
+            cfg, client, cache = load_runtime(readonly=True)
+            sync_readonly(client, cache)
+        else:
+            cfg, cache = load_cached_runtime(False)
+            client = None
         project = root_project(cache, cfg)
         since = report_since(args)
         until = parse_iso(args.until) if args.until else now_utc()
         if until is None:
             raise TodoError(f"Cannot parse --until {args.until!r}.")
         events = []
-        try:
-            events = client.activities(since, until, str(project.get("id")))
-        except TodoError as e:
-            print(f"Warning: activity lookup failed: {e}", file=sys.stderr)
+        if refresh:
+            try:
+                events = client.activities(since, until, str(project.get("id")))
+            except TodoError as e:
+                print(f"Warning: activity lookup failed: {e}", file=sys.stderr)
         report = build_report(cache, set(root_project_ids(cache, cfg)), since, until, events, load_step_context())
         print(report)
         if args.final:
@@ -2116,6 +2127,15 @@ def load_runtime(readonly=False):
     return cfg, client, cache
 
 
+def load_cached_runtime(refresh=False):
+    cfg = Config.load()
+    cache = Cache.load()
+    if refresh:
+        client = Todoist(cfg.token)
+        sync_readonly(client, cache)
+    return cfg, cache
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="todo",
@@ -2149,6 +2169,7 @@ def build_parser():
         description="List categories, or create a category with --add NAME.",
     )
     p.add_argument("--add", metavar="NAME", help="category name to create")
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before listing categories")
     p.set_defaults(func=cmd_category)
 
     p = sub.add_parser(
@@ -2182,6 +2203,7 @@ modes:
                    help="set or clear attention date, or set initial due date with --add")
     p.add_argument("--priority", action="store_true", help="set priority 1..4")
     p.add_argument("--move", action="store_true", help="move task to another category")
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before showing a task")
     p.add_argument("-p1", dest="add_priority", action="store_const", const=1, help="set priority 1 when adding a task")
     p.add_argument("-p2", dest="add_priority", action="store_const", const=2, help="set priority 2 when adding a task")
     p.add_argument("-p3", dest="add_priority", action="store_const", const=3, help="set priority 3 when adding a task")
@@ -2209,6 +2231,7 @@ modes:
                    help="complete one existing step, or add completed steps with --add")
     p.add_argument("--undone", action="store_true", help="reopen one completed step")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date with --add")
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before showing steps")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_step_noun)
 
@@ -2232,6 +2255,7 @@ multiple comments.""",
     )
     p.add_argument("--add", action="store_true", help="create one comment per TEXT argument")
     p.add_argument("--edit", action="store_true", help="edit all comments in one file")
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before showing comments")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_comment_noun)
 
@@ -2249,6 +2273,7 @@ multiple comments.""",
         help="show actionable tasks",
         description="Show open tasks outside hidden categories, including waiting tasks whose follow-up is due, sorted by due date and priority.",
     )
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before showing tasks")
     p.add_argument("--category", help="limit output to one category")
     p.set_defaults(func=cmd_now)
 
@@ -2258,6 +2283,7 @@ multiple comments.""",
         description="Show all waiting tasks.",
     )
     p.add_argument("--all", action="store_true", help="accepted for compatibility; waiting already shows all tasks")
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before showing waiting tasks")
     p.set_defaults(func=cmd_waiting)
 
     p = sub.add_parser(
@@ -2265,6 +2291,7 @@ multiple comments.""",
         help="show hidden-category tasks",
         description="Show tasks in categories configured as hidden from `todo now`, such as Someday.",
     )
+    p.add_argument("--refresh", action="store_true", help="sync Todoist before showing hidden-category tasks")
     p.set_defaults(func=cmd_someday)
 
     p = sub.add_parser(
@@ -2273,6 +2300,7 @@ multiple comments.""",
         description="Generate a plain-text report from the report cursor to now, grouped by section and category.",
     )
     p.add_argument("--final", action="store_true", help="print the report and advance the report cursor to now")
+    p.add_argument("--refresh", action="store_true", help="sync Todoist and fetch activity before generating the report")
     p.add_argument("--since", help="override report start timestamp")
     p.add_argument("--until", help="override report end timestamp")
     p.set_defaults(func=cmd_report)

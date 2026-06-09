@@ -551,9 +551,12 @@ created two
         parser = todo.build_parser()
         list_args = parser.parse_args(["category"])
         add_args = parser.parse_args(["category", "--add", "training"])
+        refresh_args = parser.parse_args(["category", "--refresh"])
         self.assertEqual(list_args.cmd, "category")
         self.assertIsNone(list_args.add)
+        self.assertFalse(list_args.refresh)
         self.assertEqual(add_args.add, "training")
+        self.assertTrue(refresh_args.refresh)
 
     def test_categories_command_removed(self):
         parser = todo.build_parser()
@@ -654,6 +657,7 @@ created two
     def test_task_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["task", "website"]).values, ["website"])
+        self.assertTrue(parser.parse_args(["task", "--refresh", "website"]).refresh)
         add_done_args = parser.parse_args(["task", "--add", "--done", "Engineering", "fixed bug", "tested"])
         new_closed_args = parser.parse_args(["task", "--new", "--closed", "Engineering", "fixed bug", "tested"])
         self.assertTrue(add_done_args.add)
@@ -677,6 +681,12 @@ created two
         with self.assertRaises(todo.TodoError) as cm:
             todo.cmd_task(parser.parse_args(["task", "-p2", "website"]))
         self.assertIn("only with `todo task --add`", str(cm.exception))
+
+    def test_task_refresh_rejected_for_mutation_modes(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_task(parser.parse_args(["task", "--refresh", "--done", "website"]))
+        self.assertIn("mutation modes refresh automatically", str(cm.exception))
 
     def test_task_priority_reports_swapped_arguments(self):
         with self.assertRaises(todo.TodoError) as cm:
@@ -833,6 +843,7 @@ created two
     def test_step_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
+        self.assertTrue(parser.parse_args(["step", "--refresh", "website"]).refresh)
         add_args = parser.parse_args(["step", "--add", "website", "review", "publish"])
         add_done_args = parser.parse_args(["step", "--add", "--done", "website", "tested", "delivered"])
         new_closed_args = parser.parse_args(["step", "--new", "--closed", "website", "tested", "delivered"])
@@ -884,6 +895,12 @@ created two
             todo.cmd_step_noun(parser.parse_args(["step", "--due", "7d", "website"]))
         self.assertIn("only with `todo step --add`", str(cm.exception))
 
+    def test_step_refresh_rejected_for_mutation_modes(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_step_noun(parser.parse_args(["step", "--refresh", "--done", "website", "review"]))
+        self.assertIn("mutation modes refresh automatically", str(cm.exception))
+
     def test_step_undone_dispatches_to_step_undone(self):
         calls = []
         old_cmd_step_undone = todo.cmd_step_undone
@@ -915,6 +932,9 @@ created two
         self.assertEqual(args.values, ["deliver release"])
         self.assertFalse(args.add)
         self.assertFalse(args.edit)
+        self.assertFalse(args.refresh)
+        args = parser.parse_args(["comment", "--refresh", "deliver release"])
+        self.assertTrue(args.refresh)
 
     def test_comment_add_flag(self):
         parser = todo.build_parser()
@@ -933,6 +953,19 @@ created two
         args = parser.parse_args(["search", "--refresh", "REVIEW-123"])
         self.assertTrue(args.refresh)
         self.assertEqual(args.values, ["REVIEW-123"])
+
+    def test_display_refresh_flags_parse(self):
+        parser = todo.build_parser()
+        self.assertTrue(parser.parse_args(["now", "--refresh"]).refresh)
+        self.assertTrue(parser.parse_args(["waiting", "--refresh"]).refresh)
+        self.assertTrue(parser.parse_args(["someday", "--refresh"]).refresh)
+        self.assertTrue(parser.parse_args(["report", "--refresh"]).refresh)
+
+    def test_comment_refresh_rejected_for_mutation_modes(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_comment_noun(parser.parse_args(["comment", "--refresh", "--add", "website", "note"]))
+        self.assertIn("mutation modes refresh automatically", str(cm.exception))
 
     def test_mapped_id_reads_todoist_temp_mapping(self):
         response = {

@@ -39,6 +39,7 @@ This creates or validates the `Work` project, default categories, and the
 
 ```sh
 todo category
+todo category --refresh
 todo category --add training
 ```
 
@@ -46,6 +47,7 @@ List or add categories. Categories are Todoist child projects under `Work`.
 
 ```sh
 todo task "website"
+todo task --refresh "website"
 todo task --add --due 7d -p1 engineering "Update website dependencies" "build/test" "review"
 todo task --add -p1 engineering "Update website dependencies" "build/test" "review"
 todo task --add engineering "Update website dependencies" "build/test" "review"
@@ -64,6 +66,7 @@ accepted as aliases for `--done`.
 
 ```sh
 todo step website
+todo step --refresh website
 todo step --add --due 7d website "build/test"
 todo step --add website "build/test" "review" "publish" "deliver"
 todo step --done website review
@@ -74,6 +77,7 @@ Step commands accept the same `--new`, `--close`, and `--closed` aliases.
 
 ```sh
 todo comment website
+todo comment --refresh website
 todo comment --add website "fixed test failure; staging deploy still running"
 todo comment --add website "unit tests passed" "staging still running"
 todo comment --edit website
@@ -98,23 +102,33 @@ comment. Multiple `[new]` blocks are allowed.
 
 ```sh
 todo now
+todo now --refresh
 todo now --category engineering
 todo waiting
+todo waiting --refresh
 todo someday
+todo someday --refresh
 ```
 
 Show the daily work queue, all waiting tasks, or hidden-from-now tasks.
 
 ```sh
 todo report
+todo report --refresh
 todo report --final
 todo report --since 2026-06-03T12:00:00Z --until 2026-06-09T12:00:00Z
 ```
 
 Generate a plain-text report from the current report cursor to now. `--final`
-prints the report and advances the cursor to now.
+prints the report and advances the cursor to now. `--refresh` syncs Todoist
+and fetches activity before generating the report; `--final` refreshes
+automatically before advancing the cursor.
 
 If no cursor exists, the report starts at the current Wednesday 00:00 UTC.
+
+Read-only display commands use the local cache by default. Use `--refresh` to
+sync Todoist first. Commands that modify Todoist always refresh before making
+the change.
 
 ## Matching
 
