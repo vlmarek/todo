@@ -1456,14 +1456,28 @@ def format_due_value_for_display(value):
     return parsed.astimezone().strftime("%Y-%m-%d %H:%M")
 
 
+def move_task_to_project(client, cache, task, category_project):
+    was_done = bool(task.get("checked"))
+    if was_done:
+        reopen_item(client, cache, task.get("id"))
+    mutate(client, cache, "item_move", {
+        "id": str(task.get("id")),
+        "project_id": str(category_project.get("id")),
+    })
+    if was_done:
+        close_item(client, cache, task.get("id"))
+    return was_done
+
+
 def cmd_move(args):
     with lock_state():
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
-        task = resolve_task(cache, cfg, args.task)
+        task = resolve_task(cache, cfg, args.task, include_completed=True)
         _, category_project = require_project_and_category(cache, cfg, args.category)
-        mutate(client, cache, "item_move", {"id": str(task.get("id")), "project_id": str(category_project.get("id"))})
-        print(f"Moved to {category_project.get('name')}: {content_of(task)}")
+        was_done = move_task_to_project(client, cache, task, category_project)
+        state = "completed task" if was_done else "task"
+        print(f"Moved {state} to {category_project.get('name')}: {content_of(task)}")
         return 0
 
 

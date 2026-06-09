@@ -577,6 +577,56 @@ created two
         self.assertEqual(rc, 0)
         self.assertEqual(calls[0].task, "virtuals2-sca")
 
+    def test_move_open_task_only_moves(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_mutate = todo.mutate
+        old_close_item = todo.close_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.mutate = lambda client, cache, type_, args: calls.append((type_, args))
+            todo.close_item = lambda client, cache, task_id: calls.append(("close", task_id))
+
+            was_done = todo.move_task_to_project(
+                None,
+                None,
+                {"id": "task1", "checked": False},
+                {"id": "vm", "name": "Admin"},
+            )
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.mutate = old_mutate
+            todo.close_item = old_close_item
+        self.assertFalse(was_done)
+        self.assertEqual(calls, [("item_move", {"id": "task1", "project_id": "vm"})])
+
+    def test_move_completed_task_reopens_moves_and_closes(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_mutate = todo.mutate
+        old_close_item = todo.close_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.mutate = lambda client, cache, type_, args: calls.append((type_, args))
+            todo.close_item = lambda client, cache, task_id: calls.append(("close", task_id))
+
+            was_done = todo.move_task_to_project(
+                None,
+                None,
+                {"id": "task1", "checked": True},
+                {"id": "vm", "name": "Admin"},
+            )
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.mutate = old_mutate
+            todo.close_item = old_close_item
+        self.assertTrue(was_done)
+        self.assertEqual(calls, [
+            ("reopen", "task1"),
+            ("item_move", {"id": "task1", "project_id": "vm"}),
+            ("close", "task1"),
+        ])
+
     def test_step_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
