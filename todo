@@ -1333,6 +1333,22 @@ def require_arg_count(command, values, minimum, maximum=None):
         raise TodoError(f"`todo {command}` expected {expected} argument(s), got {count}.")
 
 
+def parse_priority_args(values):
+    task, priority_text = values
+    if re.fullmatch(r"[1-4]", task) and not re.fullmatch(r"[1-4]", priority_text):
+        raise TodoError(
+            "`todo task --priority` expects TASK P. It looks like the priority came first; "
+            f"use `todo task --priority {priority_text} {task}`."
+        )
+    try:
+        priority = int(priority_text)
+    except ValueError as e:
+        raise TodoError("`todo task --priority` expects priority P as 1, 2, 3, or 4: "
+                        "todo task --priority TASK P.") from e
+    cli_priority_to_api(priority)
+    return task, priority
+
+
 def cmd_task(args):
     modes = selected_modes(args, ["add", "done", "wait", "resume", "due", "priority", "move"])
     if len(modes) > 1:
@@ -1365,7 +1381,8 @@ def cmd_task(args):
         return cmd_due(argparse.Namespace(task=values[0], date=values[1]))
     if mode == "priority":
         require_arg_count("task --priority", values, 2)
-        return cmd_priority(argparse.Namespace(task=values[0], priority=int(values[1])))
+        task, priority = parse_priority_args(values)
+        return cmd_priority(argparse.Namespace(task=task, priority=priority))
     if mode == "move":
         require_arg_count("task --move", values, 2)
         return cmd_move(argparse.Namespace(task=values[0], category=values[1]))

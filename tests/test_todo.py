@@ -469,6 +469,17 @@ created two
         self.assertTrue(parser.parse_args(["task", "--priority", "website", "1"]).priority)
         self.assertTrue(parser.parse_args(["task", "--move", "website", "engineering"]).move)
 
+    def test_task_priority_reports_swapped_arguments(self):
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.parse_priority_args(["2", "config cleanup"])
+        self.assertIn("priority came first", str(cm.exception))
+        self.assertIn("todo task --priority config cleanup 2", str(cm.exception))
+
+    def test_task_priority_requires_numeric_priority(self):
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.parse_priority_args(["config cleanup", "high"])
+        self.assertIn("expects priority P as 1, 2, 3, or 4", str(cm.exception))
+
     def test_step_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
