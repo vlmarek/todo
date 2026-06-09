@@ -72,8 +72,22 @@ todo comment --add website "fixed test failure; staging deploy still running"
 todo comment --edit website
 ```
 
-Shows task comments, appends a line to the latest comment, or edits the latest
-comment in `$EDITOR`.
+Shows task comments, appends a line to the latest comment, or edits all
+comments in `$EDITOR`.
+
+The edit buffer uses bracket headers:
+
+```text
+[id: COMMENT_ID posted: TIMESTAMP]
+existing comment text
+
+[new]
+new comment text
+```
+
+Removing an existing `[id: ...]` header deletes that comment. If the body is
+left in place under the previous comment, it is merged into the previous
+comment. Multiple `[new]` blocks are allowed.
 
 ```sh
 todo now

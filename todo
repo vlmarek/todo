@@ -311,11 +311,23 @@ class Todoist:
         return [e for e in out if since <= (event_time(e) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) <= until]
 
     def comments(self, task_id):
-        url = f"{API_BASE}/comments?{urllib.parse.urlencode({'task_id': str(task_id)})}"
-        response = self.request("GET", url)
-        if isinstance(response, list):
-            return response
-        return response.get("results") or response.get("comments") or []
+        params = {"task_id": str(task_id)}
+        out = []
+        cursor = None
+        while True:
+            q = dict(params)
+            if cursor:
+                q["cursor"] = cursor
+            url = f"{API_BASE}/comments?{urllib.parse.urlencode(q)}"
+            response = self.request("GET", url)
+            if isinstance(response, list):
+                out.extend(response)
+                break
+            out.extend(response.get("results") or response.get("comments") or [])
+            cursor = response.get("next_cursor")
+            if not cursor:
+                break
+        return out
 
     def add_comment(self, task_id, content):
         return self.request("POST", f"{API_BASE}/comments", {
@@ -327,6 +339,9 @@ class Todoist:
         return self.request("POST", f"{API_BASE}/comments/{comment_id}", {
             "content": content,
         })
+
+    def delete_comment(self, comment_id):
+        return self.request("DELETE", f"{API_BASE}/comments/{comment_id}")
 
 
 def live_objects(cache, key):
@@ -835,6 +850,92 @@ def edit_text(initial):
             os.unlink(path)
 
 
+COMMENT_HEADER_RE = re.compile(r"^\[id: ([^ ]+) posted: (.*)\]$")
+NEW_COMMENT_RE = re.compile(r"^\[new\]$")
+
+
+def render_comments_edit_buffer(task_title, comments):
+    lines = [
+        f"# todo comments for: {task_title}",
+        "# Edit comment bodies below.",
+        "# Delete a whole [id: ...] header to merge that block into the previous comment.",
+        "# Delete a header and its body to delete that comment.",
+        "# Add one or more [new] blocks to create new comments.",
+        "",
+    ]
+    for comment in sorted(comments, key=lambda n: n.get("posted_at") or n.get("posted") or n.get("created_at") or ""):
+        when = note_time(comment)
+        posted = format_note_time(when) if when else "unknown"
+        lines.append(f"[id: {comment.get('id')} posted: {posted}]")
+        lines.extend(content_of(comment).splitlines())
+        lines.append("")
+    lines.append("[new]")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def parse_comments_edit_buffer(text):
+    blocks = []
+    current = None
+    for line in text.splitlines():
+        header = COMMENT_HEADER_RE.match(line)
+        if header:
+            if current is not None:
+                blocks.append(current)
+            current = {"kind": "existing", "id": header.group(1), "lines": []}
+            continue
+        if NEW_COMMENT_RE.match(line):
+            if current is not None:
+                blocks.append(current)
+            current = {"kind": "new", "id": None, "lines": []}
+            continue
+        if current is None:
+            continue
+        current["lines"].append(line)
+    if current is not None:
+        blocks.append(current)
+    return [(block["kind"], block["id"], trim_comment_body(block["lines"])) for block in blocks]
+
+
+def trim_comment_body(lines):
+    end = len(lines)
+    while end > 0 and lines[end - 1] == "":
+        end -= 1
+    return "\n".join(lines[:end])
+
+
+def apply_comments_edit(client, task_id, old_comments, edited_text):
+    old_by_id = {str(comment.get("id")): content_of(comment) for comment in old_comments}
+    seen_ids = set()
+    updated = deleted = created = 0
+    for kind, comment_id, body in parse_comments_edit_buffer(edited_text):
+        if kind == "new":
+            if body.strip():
+                client.add_comment(task_id, body)
+                created += 1
+            continue
+        seen_ids.add(comment_id)
+        if not body.strip():
+            client.delete_comment(comment_id)
+            deleted += 1
+        elif old_by_id.get(comment_id) != body:
+            client.update_comment(comment_id, body)
+            updated += 1
+    for comment_id in old_by_id:
+        if comment_id not in seen_ids:
+            client.delete_comment(comment_id)
+            deleted += 1
+    return {"updated": updated, "deleted": deleted, "created": created}
+
+
+def format_comment_edit_summary(counts):
+    parts = []
+    for key in ("updated", "deleted", "created"):
+        value = counts.get(key, 0)
+        if value:
+            parts.append(f"{value} {key}")
+    return ", ".join(parts) if parts else "no changes"
+
+
 def print_steps(cache, task):
     print(f"Task: {content_of(task)}")
     print()
@@ -900,21 +1001,15 @@ def cmd_comment(args):
         comments = client.comments(task.get("id"))
         current = latest_comment(comments)
         if args.edit:
-            old_text = content_of(current) if current else ""
+            old_text = render_comments_edit_buffer(content_of(task), comments)
             new_text = edit_text(old_text)
-            if new_text == old_text:
+            if new_text == old_text.rstrip("\n"):
                 print("Comment unchanged.")
                 return 0
-            if not new_text.strip():
-                raise TodoError("Empty comment not saved.")
-            if current:
-                client.update_comment(current.get("id"), new_text)
-                print(f"Updated comment on: {content_of(task)}")
-            else:
-                client.add_comment(task.get("id"), new_text)
-                print(f"Added comment to: {content_of(task)}")
+            counts = apply_comments_edit(client, task.get("id"), comments, new_text)
             client.sync(cache)
             cache.save()
+            print(f"Edited comments on {content_of(task)}: {format_comment_edit_summary(counts)}.")
             return 0
         if args.text:
             new_text = append_comment_text(content_of(current) if current else "", args.text)
@@ -1536,18 +1631,23 @@ modes:
     p = sub.add_parser(
         "comment",
         help="show, append, or edit task comment",
-        description="""Show task comments, append a line, or edit the latest comment.
+        description="""Show task comments, append a line, or edit all comments.
 
 display:
   todo comment TASK
 
 modes:
   --add TASK TEXT
-  --edit TASK""",
+  --edit TASK
+
+--edit opens a bracket-form file with all comments. Remove an [id: ...]
+header to delete that comment; if its body remains under the previous
+comment, it is merged into that previous comment. Multiple [new] blocks create
+multiple comments.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--add", action="store_true", help="append a line to the latest comment")
-    p.add_argument("--edit", action="store_true", help="edit the latest comment, creating one if needed")
+    p.add_argument("--edit", action="store_true", help="edit all comments in one file")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_comment_noun)
 

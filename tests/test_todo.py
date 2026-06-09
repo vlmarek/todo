@@ -236,6 +236,85 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(todo.append_comment_text("", "new"), "new")
         self.assertEqual(todo.append_comment_text("old", "new"), "old\nnew")
 
+    def test_render_comments_edit_buffer_uses_bracket_headers(self):
+        text = todo.render_comments_edit_buffer("assert.h", [{
+            "id": "c1",
+            "content": "first\nline",
+            "posted_at": "2026-06-07T16:15:00Z",
+        }])
+        self.assertIn("# todo comments for: assert.h", text)
+        self.assertIn("[id: c1 posted:", text)
+        self.assertIn("first\nline", text)
+        self.assertTrue(text.rstrip().endswith("[new]"))
+
+    def test_parse_comments_edit_buffer(self):
+        text = """# ignored
+[id: c1 posted: 2026-06-07 18:15]
+first
+
+[new]
+new body
+
+[id: c2 posted: later]
+second
+"""
+        self.assertEqual(todo.parse_comments_edit_buffer(text), [
+            ("existing", "c1", "first"),
+            ("new", None, "new body"),
+            ("existing", "c2", "second"),
+        ])
+
+    def test_parse_header_delete_merges_into_previous_comment(self):
+        text = """[id: c1 posted: now]
+first
+
+second
+"""
+        self.assertEqual(todo.parse_comments_edit_buffer(text), [
+            ("existing", "c1", "first\n\nsecond"),
+        ])
+
+    def test_apply_comments_edit_updates_deletes_and_creates(self):
+        class FakeClient:
+            def __init__(self):
+                self.calls = []
+
+            def add_comment(self, task_id, content):
+                self.calls.append(("add", task_id, content))
+
+            def update_comment(self, comment_id, content):
+                self.calls.append(("update", comment_id, content))
+
+            def delete_comment(self, comment_id):
+                self.calls.append(("delete", comment_id))
+
+        client = FakeClient()
+        old = [
+            {"id": "c1", "content": "old one"},
+            {"id": "c2", "content": "old two"},
+            {"id": "c3", "content": "old three"},
+        ]
+        edited = """[id: c1 posted: now]
+new one
+
+[id: c2 posted: now]
+
+[new]
+created one
+
+[new]
+created two
+"""
+        counts = todo.apply_comments_edit(client, "task1", old, edited)
+        self.assertEqual(counts, {"updated": 1, "deleted": 2, "created": 2})
+        self.assertEqual(client.calls, [
+            ("update", "c1", "new one"),
+            ("delete", "c2"),
+            ("add", "task1", "created one"),
+            ("add", "task1", "created two"),
+            ("delete", "c3"),
+        ])
+
     def test_bare_todo_prints_help(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
