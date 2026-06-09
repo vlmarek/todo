@@ -38,8 +38,8 @@ This creates or validates the `Work` project, default categories, and the
 ## Commands
 
 ```sh
-todo categories
-todo category add training
+todo category
+todo category training
 ```
 
 List or add categories. Categories are Todoist child projects under `Work`.

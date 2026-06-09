@@ -678,27 +678,24 @@ def cmd_init(args):
         return 0
 
 
-def cmd_categories(args):
+def cmd_category(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=True)
-        sync_readonly(client, cache)
+        cfg, client, cache = load_runtime(readonly=not args.name)
+        if args.name:
+            sync_or_fail(client, cache)
+        else:
+            sync_readonly(client, cache)
         project = root_project(cache, cfg)
+        if args.name:
+            if category_project_by_name(cache, project.get("id"), args.name):
+                print(f"Category {args.name!r} already exists.")
+                return 0
+            mutate(client, cache, "project_add", {"name": args.name, "parent_id": str(project.get("id"))})
+            print(f"Created category {args.name}.")
+            return 0
         for cat in sorted(category_projects(cache, project.get("id")), key=lambda p: p.get("child_order") or 0):
             marker = " (hidden from now)" if normalize_name(cat.get("name", "")) in cfg.hidden_from_now else ""
             print(f"{cat.get('name')}{marker}")
-        return 0
-
-
-def cmd_category_add(args):
-    with lock_state():
-        cfg, client, cache = load_runtime()
-        sync_or_fail(client, cache)
-        project = root_project(cache, cfg)
-        if category_project_by_name(cache, project.get("id"), args.name):
-            print(f"Category {args.name!r} already exists.")
-            return 0
-        mutate(client, cache, "project_add", {"name": args.name, "parent_id": str(project.get("id"))})
-        print(f"Created category {args.name}.")
         return 0
 
 
@@ -1392,21 +1389,12 @@ def build_parser():
     p.set_defaults(func=cmd_init)
 
     p = sub.add_parser(
-        "categories",
-        help="list Work categories",
-        description="List dynamic categories, implemented as Todoist child projects under Work.",
-    )
-    p.set_defaults(func=cmd_categories)
-
-    p = sub.add_parser(
         "category",
-        help="manage Work categories",
-        description="Manage categories. Categories are Todoist child projects under Work.",
+        help="list or add categories",
+        description="List categories when NAME is omitted, or create NAME as a Todoist child project under Work.",
     )
-    subcat = p.add_subparsers(dest="category_cmd", required=True, metavar="ACTION")
-    p_add = subcat.add_parser("add", help="create a category", description="Create a new Work category.")
-    p_add.add_argument("name", help="category name")
-    p_add.set_defaults(func=cmd_category_add)
+    p.add_argument("name", nargs="?", help="category name to create")
+    p.set_defaults(func=cmd_category)
 
     p = sub.add_parser(
         "add",

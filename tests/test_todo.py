@@ -254,6 +254,26 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("report", text)
         self.assertIn("generate weekly report draft", text)
 
+    def test_category_command_lists_or_adds(self):
+        parser = todo.build_parser()
+        list_args = parser.parse_args(["category"])
+        add_args = parser.parse_args(["category", "training"])
+        self.assertEqual(list_args.cmd, "category")
+        self.assertIsNone(list_args.name)
+        self.assertEqual(add_args.name, "training")
+
+    def test_categories_command_removed(self):
+        parser = todo.build_parser()
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["categories"])
+
+    def test_category_add_subcommand_removed(self):
+        parser = todo.build_parser()
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["category", "add", "training"])
+
     def test_add_accepts_initial_steps(self):
         parser = todo.build_parser()
         args = parser.parse_args(["add", "operations", "Deliver next release", "check dashboard", "close build", "-p", "2"])
