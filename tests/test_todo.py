@@ -144,8 +144,44 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("T", day_value)
         self.assertIn("T", hour_value)
 
+    def test_parse_due_business_days(self):
+        now = dt.datetime(2026, 6, 9, 14, 30, tzinfo=dt.timezone.utc)
+        result = todo.parse_due_value_local("2bd", now=now)
+        self.assertIsNot(result, todo.INVALID_DUE)
+        self.assertTrue(result.value.startswith("2026-06-11T"))
+
+    def test_parse_due_weekday_excludes_today(self):
+        now = dt.datetime(2026, 6, 9, 14, 30, tzinfo=dt.timezone.utc)
+        result = todo.parse_due_value_local("tuesday", now=now)
+        self.assertIsNot(result, todo.INVALID_DUE)
+        self.assertEqual(result.value, "2026-06-16")
+
+    def test_parse_due_weekday_time(self):
+        now = dt.datetime(2026, 6, 9, 14, 30, tzinfo=dt.timezone.utc)
+        result = todo.parse_due_value_local("fri 15:30", now=now)
+        self.assertIsNot(result, todo.INVALID_DUE)
+        self.assertTrue(result.value.startswith("2026-06-12T15:30"))
+
+    def test_parse_due_iso_datetime_hour_only(self):
+        result = todo.parse_due_value_local("2026-06-16 10")
+        self.assertIsNot(result, todo.INVALID_DUE)
+        self.assertTrue(result.value.startswith("2026-06-16T10:00"))
+
+    def test_resolve_due_ask_requires_tty(self):
+        class NonTty:
+            def isatty(self):
+                return False
+
+        old_stdin = todo.sys.stdin
+        try:
+            todo.sys.stdin = NonTty()
+            with self.assertRaises(todo.TodoError):
+                todo.resolve_due_value("ask")
+        finally:
+            todo.sys.stdin = old_stdin
+
     def test_normalize_due_value_preserves_other_expressions(self):
-        self.assertEqual(todo.normalize_due_value("tomorrow"), "tomorrow")
+        self.assertEqual(todo.normalize_due_value("tomorrow"), (todo.today_local() + dt.timedelta(days=1)).isoformat())
         self.assertEqual(todo.normalize_due_value("2026-06-12"), "2026-06-12")
 
     def test_waiting_due_now(self):

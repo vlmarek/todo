@@ -69,6 +69,9 @@ todo task --wait website "waiting for review"
 todo task --resume website "review returned; addressing comments"
 todo task --priority website 1
 todo task --due website 2d
+todo task --due website 2bd
+todo task --due website monday
+todo task --due website ask
 todo task --move website engineering
 ```
 
@@ -76,11 +79,17 @@ Show, add, complete, wait/resume, prioritize, schedule, or move tasks.
 `--new` is accepted as an alias for `--add`; `--close` and `--closed` are
 accepted as aliases for `--done`.
 `--unclose` is accepted as an alias for `--undone`.
+Due dates accept Todoist text plus local shortcuts: `2d`, `4h`, `2bd`,
+weekday names such as `monday`, ISO dates/times, `clear`, and `ask`.
+`--due ask` prompts, previews the parsed due date, and accepts Enter/`y`,
+`n`, or a different due input. Weekday names mean the next occurrence,
+excluding today.
 
 ```sh
 todo step website
 todo step --refresh website
 todo step --add --due 7d website "build/test"
+todo step --add --due ask website "publish the release notes"
 todo step --add website "build/test" "review" "publish" "deliver"
 todo step --done website review
 todo step --unclose website review

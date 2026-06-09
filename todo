@@ -39,6 +39,26 @@ DEFAULT_WAIT_DAYS = 2
 WAITING_LABEL = "waiting"
 WAITING_BLOCK_RE = re.compile(r"(?:\n{0,2})\[todo waiting\]\n(.*?)\n\[/todo waiting\]\n?", re.DOTALL)
 COLOR_MODE = "auto"
+WEEKDAYS = {
+    "monday": 0,
+    "mon": 0,
+    "tuesday": 1,
+    "tue": 1,
+    "tues": 1,
+    "wednesday": 2,
+    "wed": 2,
+    "thursday": 3,
+    "thu": 3,
+    "thur": 3,
+    "thurs": 3,
+    "friday": 4,
+    "fri": 4,
+    "saturday": 5,
+    "sat": 5,
+    "sunday": 6,
+    "sun": 6,
+}
+DUE_EXAMPLES = "Examples: 2d, 4h, 2bd, monday, fri 15:30, 2026-06-16, 2026-06-16 15:00, clear"
 SOLARIZED = {
     "base01": (88, 110, 117),
     "base1": (147, 161, 161),
@@ -81,9 +101,14 @@ Create a task in CATEGORY, optionally with initial steps.
 
 examples:
   todo task --add --due 7d -p1 Engineering "fix config cleanup"
+  todo task --add --due ask Engineering "fix config cleanup"
   todo task --add -p1 Engineering "fix config cleanup"
   todo task --add Engineering "fix config cleanup"
   todo task --add Operations "deliver next release" "check dashboard" "close build"
+
+due:
+  DATE accepts Todoist text, 2d, 4h, 2bd, weekdays such as monday,
+  ISO dates/times, clear, or ask for an interactive prompt.
 """
 
 STEP_USAGE = """usage: todo step TASK
@@ -142,6 +167,8 @@ Clear waiting state and due date from TASK.
     "task --due": """usage: todo task --due TASK DATE
 
 Set TASK attention date. Use `clear` or `-` to remove the due date.
+Use ask for an interactive prompt. Weekdays mean the next occurrence,
+excluding today.
 """,
     "task --priority": """usage: todo task --priority TASK P
 
@@ -154,10 +181,16 @@ Move TASK to CATEGORY.
     "step --add": """usage: todo step --add|--new [--due DATE] TASK STEP [STEP ...]
 
 Add one or more open steps to TASK.
+
+DATE accepts Todoist text, 2d, 4h, 2bd, weekdays such as monday,
+ISO dates/times, clear, or ask for an interactive prompt.
 """,
     "step --add --done": """usage: todo step --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]
 
 Add one or more steps to TASK and immediately mark them done.
+
+DATE accepts Todoist text, 2d, 4h, 2bd, weekdays such as monday,
+ISO dates/times, clear, or ask for an interactive prompt.
 """,
     "step --done": """usage: todo step --done|--close TASK STEP
 
@@ -1067,7 +1100,7 @@ def cmd_add(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         _, category_project = require_project_and_category(cache, cfg, args.category)
-        due_value = normalize_due_value(args.due) if args.due else None
+        due_value = resolve_due_value(args.due) if args.due else None
         item_args = {
             "content": args.task,
             "project_id": str(category_project.get("id")),
@@ -1135,7 +1168,7 @@ def cmd_step(args):
         if not args.steps:
             print_steps(cache, task)
             return 0
-        due_value = normalize_due_value(args.due) if getattr(args, "due", None) else None
+        due_value = resolve_due_value(args.due) if getattr(args, "due", None) else None
         for step in args.steps:
             item_args = {
                 "content": step,
@@ -1465,19 +1498,134 @@ def parse_date(value):
         return None
 
 
-def normalize_due_value(value):
+class DueParseResult:
+    def __init__(self, value, preview):
+        self.value = value
+        self.preview = preview
+
+
+INVALID_DUE = object()
+
+
+def localize_datetime(date_value, time_value):
+    return dt.datetime.combine(date_value, time_value).astimezone().replace(microsecond=0)
+
+
+def parse_due_time(value):
+    m = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?", value.strip())
+    if not m:
+        return None
+    hour = int(m.group(1))
+    minute = int(m.group(2) or 0)
+    if hour > 23 or minute > 59:
+        return None
+    return dt.time(hour, minute)
+
+
+def due_result(value):
+    return DueParseResult(value, format_due_value_for_display(value))
+
+
+def parse_due_value_local(value, now=None):
+    now = (now or dt.datetime.now().astimezone()).astimezone()
     stripped = value.strip()
     lowered = stripped.lower()
     if lowered in ("none", "clear", "-"):
-        return None
+        return DueParseResult(None, "remove due date")
+
+    m = re.fullmatch(r"(\d+)\s*(bd|business\s*days?|businessdays?)", lowered)
+    if m:
+        target_date = add_business_days(now.date(), int(m.group(1)))
+        target = localize_datetime(target_date, now.timetz().replace(tzinfo=None))
+        return due_result(target.isoformat())
+
     m = re.fullmatch(r"(\d+)\s*([dh])", lowered)
-    if not m:
-        return stripped
-    amount = int(m.group(1))
-    unit = m.group(2)
-    delta = dt.timedelta(days=amount) if unit == "d" else dt.timedelta(hours=amount)
-    target = dt.datetime.now().astimezone() + delta
-    return target.replace(microsecond=0).isoformat()
+    if m:
+        amount = int(m.group(1))
+        unit = m.group(2)
+        if unit == "h":
+            target = now + dt.timedelta(hours=amount)
+        else:
+            target_date = now.date() + dt.timedelta(days=amount)
+            target = localize_datetime(target_date, now.timetz().replace(tzinfo=None))
+        return due_result(target.replace(microsecond=0).isoformat())
+
+    parsed_date = parse_date(stripped)
+    if parsed_date:
+        return due_result(parsed_date.isoformat())
+
+    m = re.fullmatch(r"(\d{4}-\d{2}-\d{2})[ t](\d{1,2}(?::\d{2})?)", stripped)
+    if m:
+        parsed_date = parse_date(m.group(1))
+        parsed_time = parse_due_time(m.group(2))
+        if parsed_date and parsed_time:
+            return due_result(localize_datetime(parsed_date, parsed_time).isoformat())
+        return INVALID_DUE
+
+    m = re.fullmatch(r"(today|tomorrow)(?:\s+(\d{1,2}(?::\d{2})?))?", lowered)
+    if m:
+        target_date = now.date()
+        if m.group(1) == "tomorrow":
+            target_date += dt.timedelta(days=1)
+        if not m.group(2):
+            return due_result(target_date.isoformat())
+        parsed_time = parse_due_time(m.group(2))
+        if parsed_time:
+            return due_result(localize_datetime(target_date, parsed_time).isoformat())
+        return INVALID_DUE
+
+    m = re.fullmatch(r"([a-z]+)(?:\s+(\d{1,2}(?::\d{2})?))?", lowered)
+    if m and m.group(1) in WEEKDAYS:
+        target_weekday = WEEKDAYS[m.group(1)]
+        days = (target_weekday - now.weekday()) % 7
+        if days == 0:
+            days = 7
+        target_date = now.date() + dt.timedelta(days=days)
+        if not m.group(2):
+            return due_result(target_date.isoformat())
+        parsed_time = parse_due_time(m.group(2))
+        if parsed_time:
+            return due_result(localize_datetime(target_date, parsed_time).isoformat())
+        return INVALID_DUE
+
+    return INVALID_DUE
+
+
+def normalize_due_value(value):
+    result = parse_due_value_local(value)
+    if result is INVALID_DUE:
+        return value.strip()
+    return result.value
+
+
+def ask_due_value():
+    if not sys.stdin.isatty():
+        raise TodoError("--due ask requires an interactive terminal.")
+    current = input("Due date: ").strip()
+    while True:
+        if not current:
+            print(DUE_EXAMPLES)
+            current = input("Due date: ").strip()
+            continue
+        result = parse_due_value_local(current)
+        if result is INVALID_DUE:
+            print(f"Could not parse {current!r}.")
+            print(DUE_EXAMPLES)
+            current = input("Due date: ").strip()
+            continue
+        print(f"Interpreted as: {result.preview}")
+        answer = input("Use this? [Y/n/new due] ").strip()
+        if not answer or answer.lower() in ("y", "yes"):
+            return result.value
+        if answer.lower() in ("n", "no"):
+            raise TodoError("Cancelled.")
+        current = answer
+
+
+def resolve_due_value(value):
+    if value.strip().lower() == "ask":
+        return ask_due_value()
+    return normalize_due_value(value)
 
 
 def cmd_resume(args):
@@ -1617,7 +1765,7 @@ def cmd_due(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
-        due_value = normalize_due_value(args.date)
+        due_value = resolve_due_value(args.date)
         if due_value is None:
             update_item(client, cache, task.get("id"), due=None)
             print(f"Cleared due date: {content_of(task)}")
@@ -1628,10 +1776,20 @@ def cmd_due(args):
 
 
 def format_due_value_for_display(value):
+    parsed_date = parse_date(value)
+    if parsed_date:
+        relative = format_due({"due": {"date": parsed_date.isoformat()}})
+        if relative:
+            return f"{parsed_date.isoformat()} ({relative})"
+        return parsed_date.isoformat()
     parsed = parse_iso(value)
     if not parsed:
         return value
-    return parsed.astimezone().strftime("%Y-%m-%d %H:%M")
+    local = parsed.astimezone().strftime("%Y-%m-%d %H:%M")
+    relative = format_due({"due": {"date": value}})
+    if relative:
+        return f"{local} ({relative})"
+    return local
 
 
 def move_task_to_project(client, cache, task, category_project):
