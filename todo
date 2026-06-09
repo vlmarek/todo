@@ -1040,14 +1040,18 @@ def build_report(cache, project_ids, since, until, events):
     sections = {"Finished": {}, "Progress": {}, "Waiting": {}}
 
     for event in sorted(events, key=lambda e: event_time(e) or since):
-        task_id = str(event.get("object_id") or event.get("item_id") or event.get("parent_item_id") or "")
+        if skip_report_event(event, since, until):
+            continue
+        task_id = event_task_id(event)
         task = by_id.get(task_id) or synthetic_task_from_event(event)
         title = content_of(task) or event.get("object_name") or event.get("extra_data", {}).get("content") or task_id
         text = activity_text(event)
         kind = classify_activity(event, text)
-        if kind not in sections or not text:
+        if kind not in sections:
             continue
-        sections[kind].setdefault(title, []).append(text)
+        comments = sections[kind].setdefault(title, [])
+        if text and text != title:
+            comments.append(text)
 
     for task in by_id.values():
         if not has_waiting(task):
@@ -1078,9 +1082,27 @@ def build_report(cache, project_ids, since, until, events):
     return "\n".join(lines).rstrip()
 
 
+def skip_report_event(event, since, until):
+    data = event.get("extra_data") or event.get("object_data") or {}
+    if event.get("event_type") != "completed" or not data.get("is_recurring"):
+        return False
+    completed_due = parse_iso(data.get("completed_due_date"))
+    if not completed_due:
+        completed_due = parse_iso(data.get("completed_due_date_local"))
+    if not completed_due:
+        return False
+    return not (since <= completed_due <= until)
+
+
 def synthetic_task_from_event(event):
     data = event.get("extra_data") or event.get("object_data") or {}
     return {"content": event.get("object_name") or data.get("content") or data.get("item_content") or ""}
+
+
+def event_task_id(event):
+    if event.get("object_type") == "note" and event.get("parent_item_id"):
+        return str(event.get("parent_item_id"))
+    return str(event.get("object_id") or event.get("item_id") or event.get("parent_item_id") or "")
 
 
 def activity_text(event):

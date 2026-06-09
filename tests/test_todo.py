@@ -67,6 +67,47 @@ class TodoPureTests(unittest.TestCase):
         item = {"due": {"date": "2026-06-11T16:00:00", "timezone": None}}
         self.assertIsInstance(todo.due_when(item), dt.datetime)
 
+    def test_report_skips_old_recurring_completion(self):
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        event = {
+            "event_date": "2026-06-04T15:32:51Z",
+            "event_type": "completed",
+            "extra_data": {
+                "content": "GK call",
+                "is_recurring": True,
+                "completed_due_date": "2026-04-09T14:00:00Z",
+            },
+            "object_id": "task1",
+            "object_type": "item",
+        }
+        report = todo.build_report(todo.Cache(todo.Cache.empty()), {"project"}, since, until, [event])
+        self.assertNotIn("GK call", report)
+
+    def test_report_omits_duplicate_completion_detail(self):
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        event = {
+            "event_date": "2026-06-04T15:32:51Z",
+            "event_type": "completed",
+            "extra_data": {"content": "deliver release"},
+            "object_id": "task1",
+            "object_type": "item",
+        }
+        report = todo.build_report(todo.Cache(todo.Cache.empty()), {"project"}, since, until, [event])
+        self.assertIn("- deliver release", report)
+        self.assertNotIn("  - deliver release", report)
+
+    def test_note_event_uses_parent_task_id(self):
+        self.assertEqual(
+            todo.event_task_id({
+                "object_type": "note",
+                "object_id": "note1",
+                "parent_item_id": "task1",
+            }),
+            "task1",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
