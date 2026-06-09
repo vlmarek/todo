@@ -98,7 +98,6 @@ comment. Multiple `[new]` blocks are allowed.
 
 ```sh
 todo now
-todo now --all
 todo now --category engineering
 todo waiting
 todo someday

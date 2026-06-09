@@ -1819,8 +1819,6 @@ def cmd_now(args):
                 continue
             tasks.append(task)
         tasks = sort_now(cache, tasks)
-        if not args.all:
-            tasks = tasks[:10]
         print_task_list(cache, tasks, show_steps=True)
         return 0
 
@@ -2245,7 +2243,6 @@ multiple comments.""",
         help="show actionable tasks",
         description="Show open tasks outside hidden categories, including waiting tasks whose follow-up is due, sorted by due date and priority.",
     )
-    p.add_argument("--all", action="store_true", help="show all matching tasks instead of the first 10")
     p.add_argument("--category", help="limit output to one category")
     p.set_defaults(func=cmd_now)
 
