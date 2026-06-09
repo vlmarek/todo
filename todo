@@ -89,6 +89,12 @@ Show task comments, add comments, or edit all comments.
 """
 
 
+SEARCH_USAGE = """usage: todo search TEXT
+
+Search tasks, descriptions, waiting reasons, steps, and comments.
+"""
+
+
 MODE_USAGE = {
     "task": TASK_USAGE,
     "task --add": TASK_ADD_USAGE,
@@ -151,6 +157,7 @@ Edit all comments on TASK in one editor buffer.
 """,
     "step": STEP_USAGE,
     "comment": COMMENT_USAGE,
+    "search": SEARCH_USAGE,
 }
 
 
@@ -1055,7 +1062,7 @@ def print_task_detail(cache, task, comments=None):
     due_text = due if due else "none"
     print(f"P{api_priority_to_cli(task.get('priority'))}  {project_name(cache, task.get('project_id'))}  {content_of(task)}{waiting}")
     print(f"Due: {due_text}")
-    description = task.get("description") or ""
+    description = remove_waiting_block(task.get("description") or "")
     if description:
         print()
         print("Description")
@@ -1617,6 +1624,142 @@ def cmd_comment_noun(args):
     raise TodoError(f"Unknown comment mode {mode}.")
 
 
+def compact_text(text, limit=120):
+    text = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit - 3].rstrip() + "..."
+
+
+def matching_line(text, query):
+    query_norm = query.lower()
+    for line in str(text or "").splitlines():
+        if query_norm in line.lower():
+            return compact_text(line)
+    return compact_text(text)
+
+
+def task_state(task):
+    if task.get("checked"):
+        return "done"
+    if has_waiting(task):
+        return "waiting"
+    return "open"
+
+
+def task_search_matches(cache, task, query, comments=None):
+    query_norm = query.lower()
+    matches = []
+    title = content_of(task)
+    if query_norm in title.lower():
+        matches.append("task title")
+    description = remove_waiting_block(task.get("description") or "")
+    if query_norm in description.lower():
+        matches.append(f"description: {matching_line(description, query)}")
+    reason = waiting_reason(task)
+    if reason and query_norm in reason.lower():
+        matches.append(f"waiting reason: {compact_text(reason)}")
+    for step in all_subtasks(cache, task.get("id")):
+        text = content_of(step)
+        if query_norm in text.lower():
+            state = "done" if step.get("checked") else "open"
+            matches.append(f"step {state}: {compact_text(text)}")
+    for comment in comments or []:
+        text = content_of(comment)
+        if query_norm not in text.lower():
+            continue
+        when = note_time(comment)
+        stamp = f" {format_note_time(when)}" if when else ""
+        matches.append(f"comment{stamp}: {matching_line(text, query)}")
+    return matches
+
+
+def step_context_search_results(cache, active_tasks_by_id, step_context, query, seen_step_ids):
+    query_norm = query.lower()
+    results = []
+    for step_id, context in sorted((step_context or {}).items()):
+        if step_id in seen_step_ids:
+            continue
+        step_title = context.get("step_title_last_seen") or ""
+        parent_title = context.get("parent_title_last_seen") or context.get("parent_task_id") or "Unknown task"
+        if query_norm not in step_title.lower() and query_norm not in parent_title.lower():
+            continue
+        parent_task_id = str(context.get("parent_task_id") or "")
+        task = active_tasks_by_id.get(parent_task_id) or {
+            "id": parent_task_id,
+            "content": parent_title,
+            "project_id": context.get("project_id_last_seen"),
+            "checked": True,
+            "priority": 1,
+        }
+        if query_norm in parent_title.lower():
+            matches = ["task title"]
+            if query_norm in step_title.lower():
+                matches.append(f"step done: {compact_text(step_title)}")
+        else:
+            matches = [f"step done: {compact_text(step_title)}"]
+        results.append({"task": task, "matches": matches})
+    return results
+
+
+def search_results(cache, project_ids, query, comments_by_task=None, step_context=None):
+    comments_by_task = comments_by_task or {}
+    tasks = [item for item in live_objects(cache, "items")
+             if str(item.get("project_id")) in project_ids
+             and not item.get("parent_id")]
+    active_tasks_by_id = {str(task.get("id")): task for task in tasks}
+    results = []
+    for task in tasks:
+        matches = task_search_matches(cache, task, query, comments_by_task.get(str(task.get("id")), []))
+        if matches:
+            results.append({"task": task, "matches": matches})
+    seen_step_ids = {str(step.get("id")) for task in tasks for step in all_subtasks(cache, task.get("id"))}
+    results.extend(step_context_search_results(cache, active_tasks_by_id, step_context or {}, query, seen_step_ids))
+    return sorted(results, key=lambda r: search_sort_key(cache, r["task"]))
+
+
+def search_sort_key(cache, task):
+    state_rank = {"open": 0, "waiting": 1, "done": 2}.get(task_state(task), 3)
+    due = due_date(task) or "9999-99-99"
+    return (
+        state_rank,
+        -int(task.get("priority") or 1),
+        due,
+        project_name(cache, task.get("project_id")).lower(),
+        content_of(task).lower(),
+    )
+
+
+def print_search_results(cache, results):
+    if not results:
+        print("No matches.")
+        return
+    for result in results:
+        task = result["task"]
+        print(f"P{api_priority_to_cli(task.get('priority'))}  "
+              f"{project_name(cache, task.get('project_id')):<12} {task_state(task):<7} {content_of(task)}")
+        for match in result["matches"]:
+            print(f"    {match}")
+
+
+def cmd_search(args):
+    query = " ".join(args.values).strip()
+    if not query:
+        raise TodoUsage(SEARCH_USAGE)
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
+        project_ids = set(root_project_ids(cache, cfg))
+        tasks = [item for item in live_objects(cache, "items")
+                 if str(item.get("project_id")) in project_ids
+                 and not item.get("parent_id")]
+        comments_by_task = {}
+        for task in tasks:
+            comments_by_task[str(task.get("id"))] = client.comments(task.get("id"))
+        print_search_results(cache, search_results(cache, project_ids, query, comments_by_task, load_step_context()))
+        return 0
+
+
 def cmd_now(args):
     with lock_state():
         cfg, client, cache = load_runtime(readonly=True)
@@ -2035,6 +2178,14 @@ multiple comments.""",
     p.add_argument("--edit", action="store_true", help="edit all comments in one file")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_comment_noun)
+
+    p = sub.add_parser(
+        "search",
+        help="search tasks, steps, and comments",
+        description="Search tasks, descriptions, waiting reasons, steps, and comments.",
+    )
+    p.add_argument("values", nargs="*", help="search text")
+    p.set_defaults(func=cmd_search)
 
     p = sub.add_parser(
         "now",

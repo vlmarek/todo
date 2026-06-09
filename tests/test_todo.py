@@ -241,6 +241,61 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("- Review URL fix", report)
         self.assertIn("  - Reason: wait for review", report)
 
+    def test_search_finds_task_step_description_waiting_and_comment(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [
+            {
+                "id": "task1",
+                "project_id": "eng",
+                "content": "config cleanup cleanup",
+                "description": todo.set_waiting_block("notes mention url", "wait for review", since="2026-06-08"),
+                "labels": ["waiting"],
+                "priority": 3,
+            },
+            {"id": "step1", "project_id": "eng", "parent_id": "task1", "content": "test config cleanup"},
+        ]
+        comments = {"task1": [{
+            "content": "REVIEW-123 covers config cleanup",
+            "posted_at": "2026-06-08T08:00:00Z",
+        }]}
+        results = todo.search_results(cache, {"eng"}, "config cleanup", comments)
+        self.assertEqual(len(results), 1)
+        text = "\n".join(results[0]["matches"])
+        self.assertIn("task title", text)
+        self.assertIn("step open: test config cleanup", text)
+        self.assertIn("comment", text)
+        self.assertIn("REVIEW-123 covers config cleanup", text)
+
+    def test_search_finds_waiting_reason(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "eng",
+            "content": "URL task",
+            "description": todo.set_waiting_block("", "wait for review", since="2026-06-08"),
+            "labels": ["waiting"],
+        }]
+        results = todo.search_results(cache, {"eng"}, "review")
+        self.assertEqual(results[0]["matches"], ["waiting reason: wait for review"])
+
+    def test_search_finds_step_context(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        context = {
+            "step1": {
+                "step_title_last_seen": "Seed gcc16",
+                "parent_task_id": "task1",
+                "parent_title_last_seen": "Prepare new cbe",
+                "project_id_last_seen": "gate",
+                "category_last_seen": "Operations",
+            },
+        }
+        results = todo.search_results(cache, {"gate"}, "gcc16", step_context=context)
+        self.assertEqual(len(results), 1)
+        self.assertIn("step done: Seed gcc16", results[0]["matches"])
+
     def test_task_list_prints_all_open_steps(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
@@ -473,6 +528,7 @@ created two
             (["task"], "usage: todo task TASK"),
             (["step"], "usage: todo step TASK"),
             (["comment"], "usage: todo comment TASK"),
+            (["search"], "usage: todo search TEXT"),
         ]
         for argv, usage in cases:
             with self.subTest(argv=argv):
