@@ -308,8 +308,32 @@ class TodoPureTests(unittest.TestCase):
             },
         }
         report = todo.build_report(cache, {"gate"}, since, until, [event], context)
-        self.assertIn("- Prepare new cbe renamed\n  - Step done: Seed gcc16", report)
+        self.assertIn("Progress\nOperations\n- Prepare new cbe renamed\n  - Step done: Seed gcc16", report)
         self.assertNotIn("\n- Seed gcc16\n", report)
+
+    def test_report_completed_step_without_open_parent_stays_finished(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        event = {
+            "event_date": "2026-06-07T18:10:05Z",
+            "event_type": "completed",
+            "extra_data": {"content": "Seed gcc16"},
+            "object_id": "step1",
+            "object_type": "item",
+            "parent_project_id": "gate",
+        }
+        context = {
+            "step1": {
+                "step_title_last_seen": "Seed gcc16",
+                "parent_task_id": "task1",
+                "parent_title_last_seen": "Prepare new cbe",
+                "category_last_seen": "Operations",
+            },
+        }
+        report = todo.build_report(cache, {"gate"}, since, until, [event], context)
+        self.assertIn("Finished\nOperations\n- Prepare new cbe\n  - Step done: Seed gcc16", report)
 
     def test_report_ignores_note_events(self):
         cache = todo.Cache(todo.Cache.empty())

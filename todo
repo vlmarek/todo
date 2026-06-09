@@ -2375,8 +2375,10 @@ def build_report(cache, project_ids, since, until, events, step_context=None):
         if kind not in sections:
             continue
         if kind == "Finished" and task_id in step_context:
-            title, category, detail = completed_step_report_entry(cache, by_id, step_context[task_id], text)
-            comments = sections[kind].setdefault(category, {}).setdefault(title, [])
+            context = step_context[task_id]
+            title, category, detail = completed_step_report_entry(cache, by_id, context, text)
+            section = "Progress" if completed_step_parent_is_open(by_id, context) else "Finished"
+            comments = sections[section].setdefault(category, {}).setdefault(title, [])
             if detail not in comments:
                 comments.append(detail)
             continue
@@ -2436,6 +2438,11 @@ def completed_step_report_entry(cache, active_tasks_by_id, context, fallback_tex
         category = context.get("category_last_seen") or "Unknown"
     step_title = context.get("step_title_last_seen") or fallback_text
     return title, category, f"Step done: {step_title}"
+
+
+def completed_step_parent_is_open(active_tasks_by_id, context):
+    parent_task_id = str(context.get("parent_task_id") or "")
+    return bool(parent_task_id and parent_task_id in active_tasks_by_id)
 
 
 def report_event_context(cache, events):
