@@ -2395,23 +2395,15 @@ def build_report(cache, project_ids, since, until, events, step_context=None):
     for task in by_id.values():
         if not has_waiting(task):
             continue
-        due = due_date(task)
-        if not due:
-            continue
-        try:
-            due_day = dt.date.fromisoformat(due[:10])
-        except ValueError:
-            continue
-        if since.date() <= due_day <= until.date() and due_day <= today_local():
-            title = content_of(task)
-            category = project_name(cache, task.get("project_id"))
-            category_items = sections["Waiting"].setdefault(category, {})
-            if title not in category_items:
-                details = []
-                reason = waiting_reason(task)
-                if reason:
-                    details.append(reason)
-                category_items[title] = details
+        title = content_of(task)
+        category = project_name(cache, task.get("project_id"))
+        category_items = sections["Waiting"].setdefault(category, {})
+        if title not in category_items:
+            details = []
+            reason = waiting_reason(task)
+            if reason:
+                details.append(reason)
+            category_items[title] = details
 
     lines = [f"Report {iso_utc(since)} -> {iso_utc(until)}", ""]
     for name in ("Finished", "Progress", "Waiting"):

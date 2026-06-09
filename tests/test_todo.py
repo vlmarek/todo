@@ -371,7 +371,7 @@ class TodoPureTests(unittest.TestCase):
             "project_id": "gate",
             "content": "Review URL fix",
             "labels": ["waiting"],
-            "due": {"date": "2026-06-04"},
+            "due": {"date": "2026-07-04"},
             "description": todo.set_waiting_block("", "wait for review", since="2026-06-03"),
         }]
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
@@ -379,6 +379,22 @@ class TodoPureTests(unittest.TestCase):
         report = todo.build_report(cache, {"gate"}, since, until, [])
         self.assertIn("- Review URL fix", report)
         self.assertIn("  - wait for review", report)
+
+    def test_report_waiting_includes_task_without_due_date(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "gate",
+            "content": "Waiting without date",
+            "labels": ["waiting"],
+            "description": todo.set_waiting_block("", "wait for reply", since="2026-06-03"),
+        }]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        report = todo.build_report(cache, {"gate"}, since, until, [])
+        self.assertIn("- Waiting without date", report)
+        self.assertIn("  - wait for reply", report)
 
     def test_report_command_always_refreshes(self):
         calls = []
