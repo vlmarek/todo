@@ -13,6 +13,7 @@ import fcntl
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -315,6 +316,17 @@ class Todoist:
         if isinstance(response, list):
             return response
         return response.get("results") or response.get("comments") or []
+
+    def add_comment(self, task_id, content):
+        return self.request("POST", f"{API_BASE}/comments", {
+            "task_id": str(task_id),
+            "content": content,
+        })
+
+    def update_comment(self, comment_id, content):
+        return self.request("POST", f"{API_BASE}/comments/{comment_id}", {
+            "content": content,
+        })
 
 
 def live_objects(cache, key):
@@ -783,18 +795,47 @@ def print_task_detail(cache, task, comments=None):
     print()
     print("Comments")
     notes = comments if comments is not None else notes_for(cache, task.get("id"))
-    if not notes:
-        print("- None")
-    else:
-        for note in notes:
-            when = note_time(note)
-            stamp = format_note_time(when) if when else "unknown"
-            print(f"- {stamp}  {content_of(note)}")
+    print_comments(notes)
 
 
 def format_note_time(value):
     local = value.astimezone()
     return local.strftime("%Y-%m-%d %H:%M")
+
+
+def print_comments(comments):
+    if not comments:
+        print("- None")
+        return
+    for note in sorted(comments, key=lambda n: n.get("posted_at") or n.get("posted") or n.get("created_at") or ""):
+        when = note_time(note)
+        stamp = format_note_time(when) if when else "unknown"
+        print(f"- {stamp}  {content_of(note)}")
+
+
+def latest_comment(comments):
+    if not comments:
+        return None
+    return sorted(comments, key=lambda n: n.get("posted_at") or n.get("posted") or n.get("created_at") or "")[-1]
+
+
+def edit_text(initial):
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vi"
+    ensure_app_dir()
+    fd, path = tempfile.mkstemp(prefix="comment.", suffix=".txt", dir=APP_DIR)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(initial)
+            if initial and not initial.endswith("\n"):
+                f.write("\n")
+        result = subprocess.run([editor, path])
+        if result.returncode != 0:
+            raise TodoError(f"Editor exited with status {result.returncode}.")
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().rstrip("\n")
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(path)
 
 
 def print_steps(cache, task):
@@ -859,9 +900,43 @@ def cmd_comment(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
-        add_note(client, cache, task.get("id"), f"Progress: {args.text}")
-        print(f"Commented on: {content_of(task)}")
+        comments = client.comments(task.get("id"))
+        current = latest_comment(comments)
+        if args.edit:
+            old_text = content_of(current) if current else ""
+            new_text = edit_text(old_text)
+            if new_text == old_text:
+                print("Comment unchanged.")
+                return 0
+            if not new_text.strip():
+                raise TodoError("Empty comment not saved.")
+            if current:
+                client.update_comment(current.get("id"), new_text)
+                print(f"Updated comment on: {content_of(task)}")
+            else:
+                client.add_comment(task.get("id"), new_text)
+                print(f"Added comment to: {content_of(task)}")
+            client.sync(cache)
+            cache.save()
+            return 0
+        if args.text:
+            new_text = append_comment_text(content_of(current) if current else "", args.text)
+            if current:
+                client.update_comment(current.get("id"), new_text)
+                print(f"Updated comment on: {content_of(task)}")
+            else:
+                client.add_comment(task.get("id"), new_text)
+                print(f"Added comment to: {content_of(task)}")
+            client.sync(cache)
+            cache.save()
+            return 0
+        print(f"Comments for: {content_of(task)}")
+        print_comments(comments)
         return 0
+
+
+def append_comment_text(existing, line):
+    return line if not existing else f"{existing}\n{line}"
 
 
 def cmd_wait(args):
@@ -1350,11 +1425,12 @@ def build_parser():
 
     p = sub.add_parser(
         "comment",
-        help="add a progress comment",
-        description="Add a Todoist comment prefixed with `Progress:` for report history.",
+        help="show, append, or edit task comment",
+        description="Show task comments, append a line to the latest comment, or edit the latest comment in $EDITOR.",
     )
     p.add_argument("task", help="task selector")
-    p.add_argument("text", help="comment text, stored as `Progress: TEXT`")
+    p.add_argument("text", nargs="?", help="line to append to the latest comment")
+    p.add_argument("--edit", action="store_true", help="edit the latest comment, creating one if needed")
     p.set_defaults(func=cmd_comment)
 
     p = sub.add_parser(

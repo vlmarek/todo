@@ -61,10 +61,13 @@ todo check website review
 Show steps, add one or more steps, or mark a step done.
 
 ```sh
+todo comment website
 todo comment website "fixed test failure; staging deploy still running"
+todo comment --edit website
 ```
 
-Adds a Todoist comment with the `Progress:` prefix.
+Shows task comments, appends a line to the latest comment, or edits the latest
+comment in `$EDITOR`.
 
 ```sh
 todo wait website "waiting for review"

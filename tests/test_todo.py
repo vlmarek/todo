@@ -203,6 +203,23 @@ class TodoPureTests(unittest.TestCase):
             }])
         self.assertIn("Web comment", out.getvalue())
 
+    def test_print_comments_shows_none(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_comments([])
+        self.assertEqual(out.getvalue().strip(), "- None")
+
+    def test_latest_comment_uses_newest_posted_time(self):
+        comments = [
+            {"id": "old", "content": "old", "posted_at": "2026-06-07T10:00:00Z"},
+            {"id": "new", "content": "new", "posted_at": "2026-06-07T11:00:00Z"},
+        ]
+        self.assertEqual(todo.latest_comment(comments)["id"], "new")
+
+    def test_append_comment_text_adds_new_line(self):
+        self.assertEqual(todo.append_comment_text("", "new"), "new")
+        self.assertEqual(todo.append_comment_text("old", "new"), "old\nnew")
+
     def test_bare_todo_prints_help(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
@@ -228,6 +245,19 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(args.task, "Deliver next release")
         self.assertEqual(args.steps, ["check dashboard", "close build"])
         self.assertEqual(args.priority, 2)
+
+    def test_comment_text_is_optional(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["comment", "deliver release"])
+        self.assertEqual(args.task, "deliver release")
+        self.assertIsNone(args.text)
+        self.assertFalse(args.edit)
+
+    def test_comment_edit_flag(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["comment", "--edit", "deliver release"])
+        self.assertEqual(args.task, "deliver release")
+        self.assertTrue(args.edit)
 
     def test_mapped_id_reads_todoist_temp_mapping(self):
         response = {
