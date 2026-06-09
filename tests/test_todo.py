@@ -727,7 +727,7 @@ created two
         cases = [
             (["task", "--done"], "usage: todo task --done|--close TASK [TEXT]"),
             (["task", "--add", "--done"], "usage: todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
-            (["task", "--undone"], "usage: todo task --undone TASK"),
+            (["task", "--undone"], "usage: todo task --undone|--unclose TASK"),
             (["task", "--delete"], "usage: todo task --delete [--yes] TASK"),
             (["task", "--wait"], "usage: todo task --wait TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
@@ -738,7 +738,7 @@ created two
             (["step", "--add", "--done"], "usage: todo step --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]"),
             (["step", "--done"], "usage: todo step --done|--close TASK STEP"),
             (["step", "--delete"], "usage: todo step --delete [--yes] TASK STEP"),
-            (["step", "--undone"], "usage: todo step --undone TASK STEP"),
+            (["step", "--undone"], "usage: todo step --undone|--unclose TASK STEP"),
             (["comment", "--add"], "usage: todo comment --add TASK TEXT [TEXT ...]"),
             (["comment", "--edit"], "usage: todo comment --edit TASK"),
         ]
@@ -774,6 +774,7 @@ created two
         self.assertTrue(parser.parse_args(["task", "--close", "website", "integrated"]).done)
         self.assertTrue(parser.parse_args(["task", "--closed", "website", "integrated"]).done)
         self.assertTrue(parser.parse_args(["task", "--undone", "website"]).undone)
+        self.assertTrue(parser.parse_args(["task", "--unclose", "website"]).undone)
         delete_args = parser.parse_args(["task", "--delete", "--yes", "website"])
         self.assertTrue(delete_args.delete)
         self.assertTrue(delete_args.yes)
@@ -1002,6 +1003,7 @@ created two
         done_args = parser.parse_args(["step", "--done", "website", "review"])
         close_args = parser.parse_args(["step", "--close", "website", "review"])
         undone_args = parser.parse_args(["step", "--undone", "website", "review"])
+        unclose_args = parser.parse_args(["step", "--unclose", "website", "review"])
         delete_args = parser.parse_args(["step", "--delete", "--yes", "website", "review"])
         self.assertTrue(add_args.add)
         self.assertEqual(add_args.values, ["website", "review", "publish"])
@@ -1021,6 +1023,8 @@ created two
         self.assertEqual(close_args.values, ["website", "review"])
         self.assertTrue(undone_args.undone)
         self.assertEqual(undone_args.values, ["website", "review"])
+        self.assertTrue(unclose_args.undone)
+        self.assertEqual(unclose_args.values, ["website", "review"])
         self.assertTrue(delete_args.delete)
         self.assertTrue(delete_args.yes)
         self.assertEqual(delete_args.values, ["website", "review"])
