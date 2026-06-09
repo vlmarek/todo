@@ -522,8 +522,11 @@ def sync_readonly(client, cache):
 
 
 def mutate(client, cache, type_, args):
-    response = client.command(type_, args)
-    cache.apply_sync(response)
+    client.command(type_, args)
+    # Command responses carry sync_status and may carry a new sync_token without
+    # carrying the changed resource objects.  Keep the old token until the
+    # follow-up sync has fetched and merged those objects, otherwise the local
+    # mirror can skip the command's own changes.
     client.sync(cache)
     cache.save()
 
