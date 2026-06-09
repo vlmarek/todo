@@ -2312,24 +2312,18 @@ def cmd_someday(args):
 
 def cmd_report(args):
     with lock_state():
-        refresh = args.refresh or args.final
-        if refresh:
-            cfg, client, cache = load_runtime(readonly=True)
-            sync_readonly(client, cache)
-        else:
-            cfg, cache = load_cached_runtime(False)
-            client = None
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
         project = root_project(cache, cfg)
         since = report_since(args)
         until = parse_iso(args.until) if args.until else now_utc()
         if until is None:
             raise TodoError(f"Cannot parse --until {args.until!r}.")
         events = []
-        if refresh:
-            try:
-                events = client.activities(since, until, str(project.get("id")))
-            except TodoError as e:
-                print(f"Warning: activity lookup failed: {e}", file=sys.stderr)
+        try:
+            events = client.activities(since, until, str(project.get("id")))
+        except TodoError as e:
+            print(f"Warning: activity lookup failed: {e}", file=sys.stderr)
         report = build_report(cache, set(root_project_ids(cache, cfg)), since, until, events, load_step_context())
         print(report)
         if args.final:
@@ -2709,7 +2703,6 @@ multiple comments.""",
         description="Generate a plain-text report from the report cursor to now, grouped by section and category.",
     )
     p.add_argument("--final", action="store_true", help="print the report and advance the report cursor to now")
-    p.add_argument("--refresh", action="store_true", help="sync Todoist and fetch activity before generating the report")
     p.add_argument("--since", help="override report start timestamp")
     p.add_argument("--until", help="override report end timestamp")
     p.set_defaults(func=cmd_report)

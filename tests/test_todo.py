@@ -356,6 +356,45 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("- Review URL fix", report)
         self.assertIn("  - Reason: wait for review", report)
 
+    def test_report_command_always_refreshes(self):
+        calls = []
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "root", "name": "Work"}]
+
+        class Cfg:
+            project = "Work"
+
+        class Client:
+            def activities(self, since, until, project_id):
+                calls.append(("activities", project_id))
+                return []
+
+        old_load_runtime = todo.load_runtime
+        old_sync_readonly = todo.sync_readonly
+        old_lock_state = todo.lock_state
+        old_load_step_context = todo.load_step_context
+        try:
+            def fake_load_runtime(readonly=False):
+                calls.append(("load_runtime", readonly))
+                return Cfg(), Client(), cache
+
+            todo.load_runtime = fake_load_runtime
+            todo.sync_readonly = lambda client, cache_arg: calls.append(("sync", cache_arg is cache))
+            todo.lock_state = contextlib.nullcontext
+            todo.load_step_context = lambda: {}
+            out = io.StringIO()
+            args = todo.argparse.Namespace(final=False, since="2026-06-03T00:00:00Z",
+                                           until="2026-06-04T00:00:00Z")
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(todo.cmd_report(args), 0)
+        finally:
+            todo.load_runtime = old_load_runtime
+            todo.sync_readonly = old_sync_readonly
+            todo.lock_state = old_lock_state
+            todo.load_step_context = old_load_step_context
+        self.assertEqual(calls, [("load_runtime", True), ("sync", True), ("activities", "root")])
+        self.assertIn("Report 2026-06-03T00:00:00Z -> 2026-06-04T00:00:00Z", out.getvalue())
+
     def test_search_finds_task_step_description_waiting_and_comment(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
@@ -1265,7 +1304,12 @@ created two
         self.assertTrue(parser.parse_args(["now", "--refresh"]).refresh)
         self.assertTrue(parser.parse_args(["waiting", "--refresh"]).refresh)
         self.assertTrue(parser.parse_args(["someday", "--refresh"]).refresh)
-        self.assertTrue(parser.parse_args(["report", "--refresh"]).refresh)
+
+    def test_report_refresh_flag_removed(self):
+        parser = todo.build_parser()
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["report", "--refresh"])
 
     def test_comment_refresh_rejected_for_mutation_modes(self):
         parser = todo.build_parser()

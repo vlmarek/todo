@@ -145,15 +145,13 @@ Recurring due dates display Todoist's recurrence string after `↻`. A
 
 ```sh
 todo report
-todo report --refresh
 todo report --final
 todo report --since 2026-06-03T12:00:00Z --until 2026-06-09T12:00:00Z
 ```
 
 Generate a plain-text report from the current report cursor to now. `--final`
-prints the report and advances the cursor to now. `--refresh` syncs Todoist
-and fetches activity before generating the report; `--final` refreshes
-automatically before advancing the cursor.
+prints the report and advances the cursor to now. Reports always sync Todoist
+and fetch activity before generating the report.
 
 If no cursor exists, the report starts at the current Wednesday 00:00 UTC.
 
