@@ -52,6 +52,7 @@ TASK_USAGE = """usage: todo task TASK
        todo task --add CATEGORY TASK [STEP ...]
        todo task --add --done CATEGORY TASK [STEP ...]
        todo task --done TASK [TEXT]
+       todo task --undone TASK
        todo task --wait TASK REASON
        todo task --resume TASK TEXT
        todo task --due TASK DATE
@@ -100,6 +101,10 @@ are created as completed steps before the task is completed.
 
 Complete TASK. Optional TEXT is stored as a completion comment.
 """,
+    "task --undone": """usage: todo task --undone TASK
+
+Reopen a completed TASK.
+""",
     "task --wait": """usage: todo task --wait TASK REASON
 
 Mark TASK waiting and store REASON in the task description.
@@ -131,6 +136,10 @@ Add one or more steps to TASK and immediately mark them done.
     "step --done": """usage: todo step --done TASK STEP
 
 Mark an existing STEP done under TASK.
+""",
+    "step --undone": """usage: todo step --undone TASK STEP
+
+Reopen a completed STEP under TASK.
 """,
     "comment --add": """usage: todo comment --add TASK TEXT [TEXT ...]
 
@@ -1388,6 +1397,33 @@ def cmd_done(args):
         return 0
 
 
+def cmd_undone(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task, include_completed=True)
+        if not task.get("checked"):
+            print(f"Already open: {content_of(task)}")
+            return 0
+        reopen_item(client, cache, task.get("id"))
+        print(f"Reopened: {content_of(task)}")
+        return 0
+
+
+def cmd_step_undone(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task, include_completed=True)
+        step = resolve_step(cache, task, args.step)
+        if not step.get("checked"):
+            print(f"Step already open: {content_of(step)}")
+            return 0
+        reopen_item(client, cache, step.get("id"))
+        print(f"Reopened step: {content_of(step)}")
+        return 0
+
+
 def cmd_priority(args):
     with lock_state():
         cfg, client, cache = load_runtime()
@@ -1466,7 +1502,7 @@ def parse_priority_args(values):
 
 
 def cmd_task(args):
-    modes = selected_modes(args, ["add", "done", "wait", "resume", "due", "priority", "move"])
+    modes = selected_modes(args, ["add", "done", "undone", "wait", "resume", "due", "priority", "move"])
     if len(modes) > 1 and set(modes) != {"add", "done"}:
         raise TodoError("Use only one task mode at a time.")
     if set(modes) == {"add", "done"}:
@@ -1500,6 +1536,9 @@ def cmd_task(args):
     if mode == "done":
         require_arg_count("task --done", values, 1, 2)
         return cmd_done(argparse.Namespace(task=values[0], text=values[1] if len(values) == 2 else None))
+    if mode == "undone":
+        require_arg_count("task --undone", values, 1)
+        return cmd_undone(argparse.Namespace(task=values[0]))
     if mode == "wait":
         require_arg_count("task --wait", values, 2)
         return cmd_wait(argparse.Namespace(task=values[0], text=values[1], after=None, due=None, yes=False))
@@ -1520,7 +1559,7 @@ def cmd_task(args):
 
 
 def cmd_step_noun(args):
-    modes = selected_modes(args, ["add", "done"])
+    modes = selected_modes(args, ["add", "done", "undone"])
     if len(modes) > 1 and set(modes) != {"add", "done"}:
         raise TodoError("Use only one step mode at a time.")
     if set(modes) == {"add", "done"}:
@@ -1540,6 +1579,9 @@ def cmd_step_noun(args):
     if mode == "done":
         require_arg_count("step --done", values, 2)
         return cmd_check(argparse.Namespace(task=values[0], step=values[1]))
+    if mode == "undone":
+        require_arg_count("step --undone", values, 2)
+        return cmd_step_undone(argparse.Namespace(task=values[0], step=values[1]))
     raise TodoError(f"Unknown step mode {mode}.")
 
 
@@ -1917,6 +1959,7 @@ modes:
   --add CATEGORY TASK [STEP ...]
   --add --done CATEGORY TASK [STEP ...]
   --done TASK [TEXT]
+  --undone TASK
   --wait TASK TEXT
   --resume TASK TEXT
   --due TASK DATE
@@ -1926,6 +1969,7 @@ modes:
     )
     p.add_argument("--add", action="store_true", help="create a task, optionally with initial steps")
     p.add_argument("--done", action="store_true", help="complete a task, or add a completed task with --add")
+    p.add_argument("--undone", action="store_true", help="reopen a completed task")
     p.add_argument("--wait", action="store_true", help="mark a task waiting")
     p.add_argument("--resume", action="store_true", help="clear waiting state")
     p.add_argument("--due", action="store_true", help="set or clear attention date")
@@ -1945,11 +1989,13 @@ display:
 modes:
   --add TASK STEP [STEP ...]
   --add --done TASK STEP [STEP ...]
-  --done TASK STEP""",
+  --done TASK STEP
+  --undone TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--add", action="store_true", help="add one or more steps")
     p.add_argument("--done", action="store_true", help="complete one existing step, or add completed steps with --add")
+    p.add_argument("--undone", action="store_true", help="reopen one completed step")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_step_noun)
 

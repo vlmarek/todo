@@ -487,6 +487,7 @@ created two
         cases = [
             (["task", "--done"], "usage: todo task --done TASK [TEXT]"),
             (["task", "--add", "--done"], "usage: todo task --add --done CATEGORY TASK [STEP ...]"),
+            (["task", "--undone"], "usage: todo task --undone TASK"),
             (["task", "--wait"], "usage: todo task --wait TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
@@ -495,6 +496,7 @@ created two
             (["step", "--add"], "usage: todo step --add TASK STEP [STEP ...]"),
             (["step", "--add", "--done"], "usage: todo step --add --done TASK STEP [STEP ...]"),
             (["step", "--done"], "usage: todo step --done TASK STEP"),
+            (["step", "--undone"], "usage: todo step --undone TASK STEP"),
             (["comment", "--add"], "usage: todo comment --add TASK TEXT [TEXT ...]"),
             (["comment", "--edit"], "usage: todo comment --edit TASK"),
         ]
@@ -522,6 +524,7 @@ created two
         self.assertTrue(add_done_args.done)
         self.assertEqual(add_done_args.values, ["Engineering", "fixed bug", "tested"])
         self.assertTrue(parser.parse_args(["task", "--done", "website", "integrated"]).done)
+        self.assertTrue(parser.parse_args(["task", "--undone", "website"]).undone)
         self.assertTrue(parser.parse_args(["task", "--wait", "website", "waiting"]).wait)
         self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
         self.assertTrue(parser.parse_args(["task", "--due", "website", "2d"]).due)
@@ -558,12 +561,29 @@ created two
         self.assertEqual(calls[0].steps, ["tested"])
         self.assertTrue(calls[0].done)
 
+    def test_task_undone_dispatches_to_undone(self):
+        calls = []
+        old_cmd_undone = todo.cmd_undone
+        try:
+            def fake_cmd_undone(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_undone = fake_cmd_undone
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--undone", "virtuals2-sca"]))
+        finally:
+            todo.cmd_undone = old_cmd_undone
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "virtuals2-sca")
+
     def test_step_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
         add_args = parser.parse_args(["step", "--add", "website", "review", "publish"])
         add_done_args = parser.parse_args(["step", "--add", "--done", "website", "tested", "delivered"])
         done_args = parser.parse_args(["step", "--done", "website", "review"])
+        undone_args = parser.parse_args(["step", "--undone", "website", "review"])
         self.assertTrue(add_args.add)
         self.assertEqual(add_args.values, ["website", "review", "publish"])
         self.assertTrue(add_done_args.add)
@@ -571,6 +591,25 @@ created two
         self.assertEqual(add_done_args.values, ["website", "tested", "delivered"])
         self.assertTrue(done_args.done)
         self.assertEqual(done_args.values, ["website", "review"])
+        self.assertTrue(undone_args.undone)
+        self.assertEqual(undone_args.values, ["website", "review"])
+
+    def test_step_undone_dispatches_to_step_undone(self):
+        calls = []
+        old_cmd_step_undone = todo.cmd_step_undone
+        try:
+            def fake_cmd_step_undone(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_step_undone = fake_cmd_step_undone
+            parser = todo.build_parser()
+            rc = todo.cmd_step_noun(parser.parse_args(["step", "--undone", "website", "review"]))
+        finally:
+            todo.cmd_step_undone = old_cmd_step_undone
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].step, "review")
 
     def test_old_verb_commands_removed(self):
         parser = todo.build_parser()
