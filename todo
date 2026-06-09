@@ -457,6 +457,28 @@ def due_date(item):
     return due.get("date") or due.get("datetime") or due.get("string")
 
 
+def due_day(item):
+    due = due_when(item)
+    if isinstance(due, dt.datetime):
+        return due.astimezone().date()
+    if isinstance(due, dt.date):
+        return due
+    raw = due_date(item)
+    if raw:
+        try:
+            return dt.date.fromisoformat(raw[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def waiting_due_now(item):
+    if not has_waiting(item):
+        return False
+    day = due_day(item)
+    return bool(day and day <= today_local())
+
+
 def due_when(item):
     due = item.get("due") or {}
     if due.get("datetime"):
@@ -1272,7 +1294,7 @@ def cmd_now(args):
                      if str(item.get("project_id")) in active_project_ids
                      and not item.get("parent_id")
                      and not item.get("checked")]:
-            if has_waiting(task):
+            if has_waiting(task) and not waiting_due_now(task):
                 continue
             if args.category and normalize_name(project_name(cache, task.get("project_id"))) != normalize_name(args.category):
                 continue
@@ -1327,7 +1349,6 @@ def cmd_waiting(args):
         cfg, client, cache = load_runtime(readonly=True)
         sync_readonly(client, cache)
         project_ids = set(root_project_ids(cache, cfg, include_root=False))
-        today = today_local().isoformat()
         tasks = []
         for task in [item for item in live_objects(cache, "items")
                      if str(item.get("project_id")) in project_ids
@@ -1335,10 +1356,6 @@ def cmd_waiting(args):
                      and not item.get("checked")]:
             if not has_waiting(task):
                 continue
-            if not args.all:
-                due = due_date(task)
-                if not due or due[:10] > today:
-                    continue
             tasks.append(task)
         print_task_list(cache, sort_now(cache, tasks), show_steps=True)
         return 0
@@ -1652,7 +1669,7 @@ multiple comments.""",
     p = sub.add_parser(
         "now",
         help="show actionable tasks",
-        description="Show open non-waiting tasks outside hidden categories, sorted by due date and priority.",
+        description="Show open tasks outside hidden categories, including waiting tasks whose follow-up is due, sorted by due date and priority.",
     )
     p.add_argument("--all", action="store_true", help="show all matching tasks instead of the first 10")
     p.add_argument("--category", help="limit output to one category")
@@ -1661,9 +1678,9 @@ multiple comments.""",
     p = sub.add_parser(
         "waiting",
         help="show waiting tasks",
-        description="Show waiting tasks due today or overdue. Use --all to show every waiting task.",
+        description="Show all waiting tasks.",
     )
-    p.add_argument("--all", action="store_true", help="show all waiting tasks, not only due/overdue")
+    p.add_argument("--all", action="store_true", help="accepted for compatibility; waiting already shows all tasks")
     p.set_defaults(func=cmd_waiting)
 
     p = sub.add_parser(

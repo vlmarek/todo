@@ -95,11 +95,10 @@ todo now
 todo now --all
 todo now --category engineering
 todo waiting
-todo waiting --all
 todo someday
 ```
 
-Show active tasks, waiting tasks, or hidden-from-now tasks.
+Show the daily work queue, all waiting tasks, or hidden-from-now tasks.
 
 ```sh
 todo report

@@ -85,6 +85,13 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(todo.normalize_due_value("tomorrow"), "tomorrow")
         self.assertEqual(todo.normalize_due_value("2026-06-12"), "2026-06-12")
 
+    def test_waiting_due_now(self):
+        today = todo.today_local()
+        tomorrow = today + dt.timedelta(days=1)
+        self.assertTrue(todo.waiting_due_now({"labels": ["waiting"], "due": {"date": today.isoformat()}}))
+        self.assertFalse(todo.waiting_due_now({"labels": ["waiting"], "due": {"date": tomorrow.isoformat()}}))
+        self.assertFalse(todo.waiting_due_now({"labels": [], "due": {"date": today.isoformat()}}))
+
     def test_report_skips_old_recurring_completion(self):
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
         until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
