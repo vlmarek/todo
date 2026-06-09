@@ -49,8 +49,8 @@ class TodoUsage(TodoError):
 
 
 TASK_USAGE = """usage: todo task TASK
-       todo task --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-       todo task --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo task --done TASK [TEXT]
        todo task --undone TASK
        todo task --wait TASK REASON
@@ -63,19 +63,20 @@ Show a task, or perform one task operation.
 """
 
 
-TASK_ADD_USAGE = """usage: todo task --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+TASK_ADD_USAGE = """usage: todo task --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY, optionally with initial steps.
 
 examples:
+  todo task --add --due 7d -p1 Engineering "fix config cleanup"
   todo task --add -p1 Engineering "fix config cleanup"
   todo task --add Engineering "fix config cleanup"
   todo task --add Operations "deliver next release" "check dashboard" "close build"
 """
 
 STEP_USAGE = """usage: todo step TASK
-       todo step --add TASK STEP [STEP ...]
-       todo step --add --done TASK STEP [STEP ...]
+       todo step --add [--due DATE] TASK STEP [STEP ...]
+       todo step --add --done [--due DATE] TASK STEP [STEP ...]
        todo step --done TASK STEP
 
 Show task steps, add steps, or mark one step done.
@@ -99,7 +100,7 @@ Search tasks, descriptions, waiting reasons, steps, and comments.
 MODE_USAGE = {
     "task": TASK_USAGE,
     "task --add": TASK_ADD_USAGE,
-    "task --add --done": """usage: todo task --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+    "task --add --done": """usage: todo task --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY and immediately mark it done. Optional STEP values
 are created as completed steps before the task is completed.
@@ -132,11 +133,11 @@ Set TASK priority. P must be 1, 2, 3, or 4.
 
 Move TASK to CATEGORY.
 """,
-    "step --add": """usage: todo step --add TASK STEP [STEP ...]
+    "step --add": """usage: todo step --add [--due DATE] TASK STEP [STEP ...]
 
 Add one or more open steps to TASK.
 """,
-    "step --add --done": """usage: todo step --add --done TASK STEP [STEP ...]
+    "step --add --done": """usage: todo step --add --done [--due DATE] TASK STEP [STEP ...]
 
 Add one or more steps to TASK and immediately mark them done.
 """,
@@ -963,14 +964,15 @@ def cmd_add(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         _, category_project = require_project_and_category(cache, cfg, args.category)
+        due_value = normalize_due_value(args.due) if args.due else None
         item_args = {
             "content": args.task,
             "project_id": str(category_project.get("id")),
         }
         if args.priority:
             item_args["priority"] = cli_priority_to_api(args.priority)
-        if args.due:
-            item_args["due"] = {"string": args.due}
+        if due_value:
+            item_args["due"] = {"string": due_value}
         response = mutate(client, cache, "item_add", item_args)
         task_id = mapped_id(response) or find_added_task_id(cache, category_project.get("id"), args.task)
         if (args.steps or getattr(args, "done", False)) and not task_id:
@@ -1030,12 +1032,16 @@ def cmd_step(args):
         if not args.steps:
             print_steps(cache, task)
             return 0
+        due_value = normalize_due_value(args.due) if getattr(args, "due", None) else None
         for step in args.steps:
-            response = mutate(client, cache, "item_add", {
+            item_args = {
                 "content": step,
                 "project_id": str(task.get("project_id")),
                 "parent_id": str(task.get("id")),
-            })
+            }
+            if due_value:
+                item_args["due"] = {"string": due_value}
+            response = mutate(client, cache, "item_add", item_args)
             step_id = mapped_id(response) or find_added_step_id(cache, task.get("id"), step)
             if getattr(args, "done", False):
                 if not step_id:
@@ -1523,15 +1529,35 @@ def parse_priority_args(values):
     return task, priority
 
 
+def due_option_value(args, command):
+    due = getattr(args, "due", None)
+    if due is True:
+        raise TodoError(f"`todo {command}` expects DATE after --due.")
+    return due
+
+
+def task_due_mode_values(args):
+    values = []
+    if args.due is not True:
+        values.append(args.due)
+    values.extend(args.values)
+    require_arg_count("task --due", values, 2)
+    return values[0], values[1]
+
+
 def cmd_task(args):
     modes = selected_modes(args, ["add", "done", "undone", "wait", "resume", "due", "priority", "move"])
-    if len(modes) > 1 and set(modes) != {"add", "done"}:
+    mode_set = set(modes)
+    if "add" in mode_set:
+        if not mode_set <= {"add", "done", "due"}:
+            raise TodoError("Use only one task mode at a time.")
+        mode = "add_done" if "done" in mode_set else "add"
+    elif len(modes) > 1:
         raise TodoError("Use only one task mode at a time.")
-    if set(modes) == {"add", "done"}:
-        mode = "add_done"
     else:
         mode = modes[0] if modes else "show"
     values = args.values
+    add_due = due_option_value(args, "task --add") if "add" in mode_set and "due" in mode_set else None
     add_priority = getattr(args, "add_priority", None)
     if add_priority is not None and mode not in ("add", "add_done"):
         raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add`.")
@@ -1545,7 +1571,7 @@ def cmd_task(args):
             task=values[1],
             steps=values[2:],
             priority=add_priority,
-            due=None,
+            due=add_due,
             done=False,
         ))
     if mode == "add_done":
@@ -1555,7 +1581,7 @@ def cmd_task(args):
             task=values[1],
             steps=values[2:],
             priority=add_priority,
-            due=None,
+            due=add_due,
             done=True,
         ))
     if mode == "done":
@@ -1571,8 +1597,8 @@ def cmd_task(args):
         require_arg_count("task --resume", values, 2)
         return cmd_resume(argparse.Namespace(task=values[0], text=values[1]))
     if mode == "due":
-        require_arg_count("task --due", values, 2)
-        return cmd_due(argparse.Namespace(task=values[0], date=values[1]))
+        task, date = task_due_mode_values(args)
+        return cmd_due(argparse.Namespace(task=task, date=date))
     if mode == "priority":
         require_arg_count("task --priority", values, 2)
         task, priority = parse_priority_args(values)
@@ -1584,23 +1610,29 @@ def cmd_task(args):
 
 
 def cmd_step_noun(args):
-    modes = selected_modes(args, ["add", "done", "undone"])
-    if len(modes) > 1 and set(modes) != {"add", "done"}:
+    modes = selected_modes(args, ["add", "done", "undone", "due"])
+    mode_set = set(modes)
+    if "due" in mode_set and "add" not in mode_set:
+        raise TodoError("Use --due only with `todo step --add`.")
+    if "add" in mode_set:
+        if not mode_set <= {"add", "done", "due"}:
+            raise TodoError("Use only one step mode at a time.")
+        mode = "add_done" if "done" in mode_set else "add"
+    elif len(modes) > 1:
         raise TodoError("Use only one step mode at a time.")
-    if set(modes) == {"add", "done"}:
-        mode = "add_done"
     else:
         mode = modes[0] if modes else "show"
     values = args.values
+    add_due = due_option_value(args, "step --add") if "due" in mode_set else None
     if mode == "show":
         require_arg_count("step", values, 1)
-        return cmd_step(argparse.Namespace(task=values[0], steps=[]))
+        return cmd_step(argparse.Namespace(task=values[0], steps=[], due=None))
     if mode == "add":
         require_arg_count("step --add", values, 2, 9999)
-        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=False))
+        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=False, due=add_due))
     if mode == "add_done":
         require_arg_count("step --add --done", values, 2, 9999)
-        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=True))
+        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=True, due=add_due))
     if mode == "done":
         require_arg_count("step --done", values, 2)
         return cmd_check(argparse.Namespace(task=values[0], step=values[1]))
@@ -2122,8 +2154,8 @@ display:
   todo task TASK
 
 modes:
-  --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-  --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --done TASK [TEXT]
   --undone TASK
   --wait TASK TEXT
@@ -2138,7 +2170,8 @@ modes:
     p.add_argument("--undone", action="store_true", help="reopen a completed task")
     p.add_argument("--wait", action="store_true", help="mark a task waiting")
     p.add_argument("--resume", action="store_true", help="clear waiting state")
-    p.add_argument("--due", action="store_true", help="set or clear attention date")
+    p.add_argument("--due", nargs="?", const=True, metavar="DATE",
+                   help="set or clear attention date, or set initial due date with --add")
     p.add_argument("--priority", action="store_true", help="set priority 1..4")
     p.add_argument("--move", action="store_true", help="move task to another category")
     p.add_argument("-p1", dest="add_priority", action="store_const", const=1, help="set priority 1 when adding a task")
@@ -2157,8 +2190,8 @@ display:
   todo step TASK
 
 modes:
-  --add TASK STEP [STEP ...]
-  --add --done TASK STEP [STEP ...]
+  --add [--due DATE] TASK STEP [STEP ...]
+  --add --done [--due DATE] TASK STEP [STEP ...]
   --done TASK STEP
   --undone TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -2166,6 +2199,7 @@ modes:
     p.add_argument("--add", action="store_true", help="add one or more steps")
     p.add_argument("--done", action="store_true", help="complete one existing step, or add completed steps with --add")
     p.add_argument("--undone", action="store_true", help="reopen one completed step")
+    p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date with --add")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_step_noun)
 

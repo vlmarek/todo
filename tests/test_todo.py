@@ -543,12 +543,22 @@ created two
         self.assertEqual(args.add_priority, 4)
         self.assertEqual(args.values, ["operations", "Deliver next release"])
 
+    def test_task_add_accepts_due_option(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["task", "--add", "--due", "7d", "operations", "Deliver next release"])
+        self.assertTrue(args.add)
+        self.assertEqual(args.due, "7d")
+        self.assertEqual(args.values, ["operations", "Deliver next release"])
+        args = parser.parse_args(["task", "--add", "operations", "Deliver next release", "--due", "7d"])
+        self.assertEqual(args.due, "7d")
+        self.assertEqual(args.values, ["operations", "Deliver next release"])
+
     def test_task_add_without_args_prints_mode_help(self):
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             rc = todo.main(["task", "--add"])
         self.assertEqual(rc, 1)
-        self.assertIn("usage: todo task --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]", err.getvalue())
+        self.assertIn("usage: todo task --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]", err.getvalue())
         self.assertIn("Create a task in CATEGORY", err.getvalue())
         self.assertNotIn("expected 2-9999", err.getvalue())
 
@@ -571,15 +581,15 @@ created two
     def test_empty_mode_flags_print_mode_help(self):
         cases = [
             (["task", "--done"], "usage: todo task --done TASK [TEXT]"),
-            (["task", "--add", "--done"], "usage: todo task --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
+            (["task", "--add", "--done"], "usage: todo task --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
             (["task", "--undone"], "usage: todo task --undone TASK"),
             (["task", "--wait"], "usage: todo task --wait TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
             (["task", "--priority"], "usage: todo task --priority TASK P"),
             (["task", "--move"], "usage: todo task --move TASK CATEGORY"),
-            (["step", "--add"], "usage: todo step --add TASK STEP [STEP ...]"),
-            (["step", "--add", "--done"], "usage: todo step --add --done TASK STEP [STEP ...]"),
+            (["step", "--add"], "usage: todo step --add [--due DATE] TASK STEP [STEP ...]"),
+            (["step", "--add", "--done"], "usage: todo step --add --done [--due DATE] TASK STEP [STEP ...]"),
             (["step", "--done"], "usage: todo step --done TASK STEP"),
             (["step", "--undone"], "usage: todo step --undone TASK STEP"),
             (["comment", "--add"], "usage: todo comment --add TASK TEXT [TEXT ...]"),
@@ -673,6 +683,41 @@ created two
         self.assertEqual(calls[0].priority, 1)
         self.assertFalse(calls[0].done)
 
+    def test_task_add_due_dispatches_to_add(self):
+        calls = []
+        old_cmd_add = todo.cmd_add
+        try:
+            def fake_cmd_add(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_add = fake_cmd_add
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--add", "--due", "7d", "Engineering", "fixed bug"]))
+        finally:
+            todo.cmd_add = old_cmd_add
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].category, "Engineering")
+        self.assertEqual(calls[0].task, "fixed bug")
+        self.assertEqual(calls[0].due, "7d")
+
+    def test_task_due_dispatch_still_accepts_legacy_order(self):
+        calls = []
+        old_cmd_due = todo.cmd_due
+        try:
+            def fake_cmd_due(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_due = fake_cmd_due
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--due", "website", "2d"]))
+        finally:
+            todo.cmd_due = old_cmd_due
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].date, "2d")
+
     def test_task_undone_dispatches_to_undone(self):
         calls = []
         old_cmd_undone = todo.cmd_undone
@@ -744,6 +789,8 @@ created two
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
         add_args = parser.parse_args(["step", "--add", "website", "review", "publish"])
         add_done_args = parser.parse_args(["step", "--add", "--done", "website", "tested", "delivered"])
+        add_due_args = parser.parse_args(["step", "--add", "--due", "7d", "website", "review"])
+        add_due_after_args = parser.parse_args(["step", "--add", "website", "review", "--due", "7d"])
         done_args = parser.parse_args(["step", "--done", "website", "review"])
         undone_args = parser.parse_args(["step", "--undone", "website", "review"])
         self.assertTrue(add_args.add)
@@ -751,10 +798,38 @@ created two
         self.assertTrue(add_done_args.add)
         self.assertTrue(add_done_args.done)
         self.assertEqual(add_done_args.values, ["website", "tested", "delivered"])
+        self.assertEqual(add_due_args.due, "7d")
+        self.assertEqual(add_due_args.values, ["website", "review"])
+        self.assertEqual(add_due_after_args.due, "7d")
+        self.assertEqual(add_due_after_args.values, ["website", "review"])
         self.assertTrue(done_args.done)
         self.assertEqual(done_args.values, ["website", "review"])
         self.assertTrue(undone_args.undone)
         self.assertEqual(undone_args.values, ["website", "review"])
+
+    def test_step_add_due_dispatches_to_step(self):
+        calls = []
+        old_cmd_step = todo.cmd_step
+        try:
+            def fake_cmd_step(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_step = fake_cmd_step
+            parser = todo.build_parser()
+            rc = todo.cmd_step_noun(parser.parse_args(["step", "--add", "--due", "7d", "website", "review"]))
+        finally:
+            todo.cmd_step = old_cmd_step
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].steps, ["review"])
+        self.assertEqual(calls[0].due, "7d")
+
+    def test_step_due_requires_add_mode(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_step_noun(parser.parse_args(["step", "--due", "7d", "website"]))
+        self.assertIn("only with `todo step --add`", str(cm.exception))
 
     def test_step_undone_dispatches_to_step_undone(self):
         calls = []

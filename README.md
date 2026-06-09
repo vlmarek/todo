@@ -46,6 +46,7 @@ List or add categories. Categories are Todoist child projects under `Work`.
 
 ```sh
 todo task "website"
+todo task --add --due 7d -p1 engineering "Update website dependencies" "build/test" "review"
 todo task --add -p1 engineering "Update website dependencies" "build/test" "review"
 todo task --add engineering "Update website dependencies" "build/test" "review"
 todo task --add operations "Deliver 224" "check dashboard table" "close build"
@@ -61,6 +62,7 @@ Show, add, complete, wait/resume, prioritize, schedule, or move tasks.
 
 ```sh
 todo step website
+todo step --add --due 7d website "build/test"
 todo step --add website "build/test" "review" "publish" "deliver"
 todo step --done website review
 ```
