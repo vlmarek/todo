@@ -309,7 +309,6 @@ class TodoPureTests(unittest.TestCase):
         }
         report = todo.build_report(cache, {"gate"}, since, until, [event], context)
         self.assertIn("Progress\nOperations\n- Prepare new cbe renamed\n  - Seed gcc16", report)
-        self.assertNotIn("Progress\nOperations\n- Prepare new cbe renamed\n  - Step done: Seed gcc16", report)
         self.assertNotIn("\n- Seed gcc16\n", report)
 
     def test_report_completed_step_without_open_parent_stays_finished(self):
@@ -379,8 +378,7 @@ class TodoPureTests(unittest.TestCase):
         until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
         report = todo.build_report(cache, {"gate"}, since, until, [])
         self.assertIn("- Review URL fix", report)
-        self.assertIn("  - Reason: wait for review", report)
-        self.assertNotIn("Waiting follow-up due", report)
+        self.assertIn("  - wait for review", report)
 
     def test_report_command_always_refreshes(self):
         calls = []

@@ -2410,7 +2410,7 @@ def build_report(cache, project_ids, since, until, events, step_context=None):
                 details = []
                 reason = waiting_reason(task)
                 if reason:
-                    details.append(f"Reason: {reason}")
+                    details.append(reason)
                 category_items[title] = details
 
     lines = [f"Report {iso_utc(since)} -> {iso_utc(until)}", ""]
