@@ -168,6 +168,41 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("    - check dashboard", out.getvalue())
         self.assertIn("    - close build", out.getvalue())
 
+    def test_show_prints_steps_and_comments(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "gate", "content": "Deliver release", "priority": 3},
+            {"id": "s1", "project_id": "gate", "parent_id": "task1", "content": "check dashboard"},
+            {"id": "s2", "project_id": "gate", "parent_id": "task1", "content": "close build", "checked": True},
+        ]
+        cache.data["notes"] = [{
+            "id": "n1",
+            "item_id": "task1",
+            "content": "Progress: checked table",
+            "posted_at": "2026-06-07T14:00:00Z",
+        }]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_detail(cache, cache.data["items"][0])
+        text = out.getvalue()
+        self.assertIn("P2  Operations  Deliver release", text)
+        self.assertIn("- [ ] check dashboard", text)
+        self.assertIn("- [x] close build", text)
+        self.assertIn("Progress: checked table", text)
+
+    def test_show_accepts_direct_comments(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        task = {"id": "task1", "project_id": "gate", "content": "Deliver release", "priority": 3}
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_detail(cache, task, comments=[{
+                "content": "Web comment",
+                "posted_at": "2026-06-07T14:00:00Z",
+            }])
+        self.assertIn("Web comment", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

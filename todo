@@ -307,6 +307,13 @@ class Todoist:
                 break
         return [e for e in out if since <= (event_time(e) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) <= until]
 
+    def comments(self, task_id):
+        url = f"{API_BASE}/comments?{urllib.parse.urlencode({'task_id': str(task_id)})}"
+        response = self.request("GET", url)
+        if isinstance(response, list):
+            return response
+        return response.get("results") or response.get("comments") or []
+
 
 def live_objects(cache, key):
     return [obj for obj in cache.data.get(key, []) if not obj.get("is_deleted") and not obj.get("is_archived")]
@@ -382,6 +389,10 @@ def all_subtasks(cache, task_id):
 def notes_for(cache, task_id):
     notes = [n for n in live_objects(cache, "notes") if str(n.get("item_id")) == str(task_id)]
     return sorted(notes, key=lambda n: n.get("posted_at") or n.get("posted") or "")
+
+
+def note_time(note):
+    return item_time(note, ["posted_at", "posted", "created_at", "updated_at"])
 
 
 def content_of(obj):
@@ -705,6 +716,53 @@ def cmd_step(args):
             })
             print(f"Added step: {step}")
         return 0
+
+
+def cmd_show(args):
+    with lock_state():
+        cfg, client, cache = load_runtime(readonly=True)
+        sync_readonly(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        comments = client.comments(task.get("id"))
+        print_task_detail(cache, task, comments=comments)
+        return 0
+
+
+def print_task_detail(cache, task, comments=None):
+    waiting = " waiting" if has_waiting(task) else ""
+    due = format_due(task)
+    due_text = due if due else "none"
+    print(f"P{api_priority_to_cli(task.get('priority'))}  {project_name(cache, task.get('project_id'))}  {content_of(task)}{waiting}")
+    print(f"Due: {due_text}")
+    description = task.get("description") or ""
+    if description:
+        print()
+        print("Description")
+        print(description)
+    print()
+    print("Steps")
+    children = all_subtasks(cache, task.get("id"))
+    if not children:
+        print("- None")
+    else:
+        for child in children:
+            mark = "x" if child.get("checked") else " "
+            print(f"- [{mark}] {content_of(child)}")
+    print()
+    print("Comments")
+    notes = comments if comments is not None else notes_for(cache, task.get("id"))
+    if not notes:
+        print("- None")
+    else:
+        for note in notes:
+            when = note_time(note)
+            stamp = format_note_time(when) if when else "unknown"
+            print(f"- {stamp}  {content_of(note)}")
+
+
+def format_note_time(value):
+    local = value.astimezone()
+    return local.strftime("%Y-%m-%d %H:%M")
 
 
 def print_steps(cache, task):
@@ -1204,6 +1262,10 @@ def build_parser():
     p.add_argument("task")
     p.add_argument("steps", nargs="*")
     p.set_defaults(func=cmd_step)
+
+    p = sub.add_parser("show")
+    p.add_argument("task")
+    p.set_defaults(func=cmd_show)
 
     p = sub.add_parser("check")
     p.add_argument("task")
