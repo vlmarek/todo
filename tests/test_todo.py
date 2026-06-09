@@ -196,7 +196,7 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("- Prepare new cbe renamed\n  - Step done: Seed gcc16", report)
         self.assertNotIn("\n- Seed gcc16\n", report)
 
-    def test_report_note_uses_completed_item_context(self):
+    def test_report_ignores_note_events(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
@@ -221,8 +221,8 @@ class TodoPureTests(unittest.TestCase):
             },
         ]
         report = todo.build_report(cache, {"gate"}, since, until, events)
-        self.assertIn("- deliver release\n  - Done: delivered release", report)
-        self.assertNotIn("\n- Done: delivered release\n", report)
+        self.assertIn("- deliver release", report)
+        self.assertNotIn("Done: delivered release", report)
 
     def test_report_waiting_uses_description_reason(self):
         cache = todo.Cache(todo.Cache.empty())

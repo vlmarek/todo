@@ -1565,6 +1565,8 @@ def build_report(cache, project_ids, since, until, events, step_context=None):
     for event in sorted(events, key=lambda e: event_time(e) or since):
         if skip_report_event(event, since, until):
             continue
+        if event.get("object_type") == "note":
+            continue
         task_id = event_task_id(event)
         text = activity_text(event)
         kind = classify_activity(event, text)
