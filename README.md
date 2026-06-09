@@ -38,6 +38,15 @@ This creates or validates the `Work` project, default categories, and the
 ## Commands
 
 ```sh
+todo --color=auto now
+todo --color=always task website
+todo --color=never now
+```
+
+Color defaults to `auto`: enabled for terminals, disabled for redirected
+output, `NO_COLOR`, and `TERM=dumb`. The palette uses Solarized Dark colors.
+
+```sh
 todo category
 todo category --refresh
 todo category --add training

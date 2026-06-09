@@ -60,6 +60,64 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(todo.format_duration(delta), "2d 3h")
         self.assertEqual(todo.format_duration(dt.timedelta(hours=1, minutes=20)), "1h 20m")
 
+    def test_color_parser_flag(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["--color", "always", "now"])
+        self.assertEqual(args.color, "always")
+        args = parser.parse_args(["--color=never", "task", "website"])
+        self.assertEqual(args.color, "never")
+
+    def test_color_auto_is_plain_when_redirected(self):
+        old_mode = todo.COLOR_MODE
+        try:
+            todo.set_color_mode("auto")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                print(todo.format_priority({"priority": 4}))
+            self.assertNotIn("\033[", out.getvalue())
+        finally:
+            todo.set_color_mode(old_mode)
+
+    def test_color_always_colors_task_list(self):
+        old_mode = todo.COLOR_MODE
+        try:
+            todo.set_color_mode("always")
+            cache = todo.Cache(todo.Cache.empty())
+            cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+            cache.data["items"] = [{
+                "id": "task1",
+                "project_id": "eng",
+                "content": "Urgent task",
+                "priority": 4,
+                "due": {"date": todo.today_local().isoformat()},
+            }]
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                todo.print_task_list(cache, [cache.data["items"][0]])
+            self.assertIn("\033[", out.getvalue())
+            self.assertIn("P1", out.getvalue())
+            self.assertIn("due:today", out.getvalue())
+        finally:
+            todo.set_color_mode(old_mode)
+
+    def test_no_color_disables_auto(self):
+        class Tty:
+            def isatty(self):
+                return True
+
+        old_mode = todo.COLOR_MODE
+        old_no_color = todo.os.environ.get("NO_COLOR")
+        try:
+            todo.set_color_mode("auto")
+            todo.os.environ["NO_COLOR"] = "1"
+            self.assertFalse(todo.color_enabled(Tty()))
+        finally:
+            todo.set_color_mode(old_mode)
+            if old_no_color is None:
+                todo.os.environ.pop("NO_COLOR", None)
+            else:
+                todo.os.environ["NO_COLOR"] = old_no_color
+
     def test_format_due_date_only(self):
         today = todo.today_local()
         item = {"due": {"date": today.isoformat()}}

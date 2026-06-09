@@ -38,6 +38,17 @@ DEFAULT_HIDDEN_FROM_NOW = ["Someday"]
 DEFAULT_WAIT_DAYS = 2
 WAITING_LABEL = "waiting"
 WAITING_BLOCK_RE = re.compile(r"(?:\n{0,2})\[todo waiting\]\n(.*?)\n\[/todo waiting\]\n?", re.DOTALL)
+COLOR_MODE = "auto"
+SOLARIZED = {
+    "base01": (88, 110, 117),
+    "base1": (147, 161, 161),
+    "red": (220, 50, 47),
+    "green": (133, 153, 0),
+    "yellow": (181, 137, 0),
+    "blue": (38, 139, 210),
+    "magenta": (211, 54, 130),
+    "cyan": (42, 161, 152),
+}
 
 
 class TodoError(Exception):
@@ -673,6 +684,81 @@ def api_priority_to_cli(value):
     return 5 - value
 
 
+def set_color_mode(mode):
+    global COLOR_MODE
+    COLOR_MODE = mode
+
+
+def color_enabled(stream=None):
+    stream = stream or sys.stdout
+    if COLOR_MODE == "never":
+        return False
+    if COLOR_MODE == "always":
+        return True
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    if os.environ.get("TERM") == "dumb":
+        return False
+    return hasattr(stream, "isatty") and stream.isatty()
+
+
+def colorize(text, color, bold=False, dim=False):
+    text = str(text)
+    if not color_enabled():
+        return text
+    r, g, b = SOLARIZED[color]
+    attrs = []
+    if bold:
+        attrs.append("1")
+    if dim:
+        attrs.append("2")
+    attrs.append(f"38;2;{r};{g};{b}")
+    return f"\033[{';'.join(attrs)}m{text}\033[0m"
+
+
+def format_priority(item):
+    priority = api_priority_to_cli(item.get("priority"))
+    text = f"P{priority}"
+    if priority == 1:
+        return colorize(text, "red", bold=True)
+    if priority == 2:
+        return colorize(text, "yellow")
+    if priority == 3:
+        return colorize(text, "blue")
+    return colorize(text, "base01", dim=True)
+
+
+def format_due_display(due):
+    if not due:
+        return ""
+    if "overdue" in due:
+        return colorize(due, "red", bold=True)
+    if due == "due:today":
+        return colorize(due, "yellow", bold=True)
+    if due == "due:tomorrow":
+        return colorize(due, "base1")
+    if " left" in due or due.startswith("due:in "):
+        return colorize(due, "cyan")
+    return due
+
+
+def format_waiting_marker(text="waiting"):
+    return colorize(text, "magenta")
+
+
+def format_step_mark(checked):
+    return colorize("[x]", "green") if checked else colorize("[ ]", "base01", dim=True)
+
+
+def format_task_state_display(state):
+    normalized = str(state).strip()
+    if normalized == "waiting":
+        return colorize(state, "magenta")
+    if normalized == "done":
+        return colorize(state, "green")
+    return state
+
+
 def labels_of(item):
     labels = item.get("labels") or []
     return [str(label) for label in labels]
@@ -851,7 +937,7 @@ def print_candidates(cache, candidates, header):
     print(header)
     print()
     for i, task in enumerate(candidates, 1):
-        print(f"{i:2d}  P{api_priority_to_cli(task.get('priority'))}  "
+        print(f"{i:2d}  {format_priority(task)}  "
               f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}")
     print()
 
@@ -1079,10 +1165,10 @@ def cmd_show(args):
 
 
 def print_task_detail(cache, task, comments=None):
-    waiting = " waiting" if has_waiting(task) else ""
+    waiting = f" {format_waiting_marker()}" if has_waiting(task) else ""
     due = format_due(task)
-    due_text = due if due else "none"
-    print(f"P{api_priority_to_cli(task.get('priority'))}  {project_name(cache, task.get('project_id'))}  {content_of(task)}{waiting}")
+    due_text = format_due_display(due) if due else colorize("none", "base01", dim=True)
+    print(f"{format_priority(task)}  {project_name(cache, task.get('project_id'))}  {content_of(task)}{waiting}")
     print(f"Due: {due_text}")
     description = remove_waiting_block(task.get("description") or "")
     if description:
@@ -1096,10 +1182,9 @@ def print_task_detail(cache, task, comments=None):
         print("- None")
     else:
         for child in children:
-            mark = "x" if child.get("checked") else " "
             due = format_due(child)
-            due_text = f" {due}" if due else ""
-            print(f"- [{mark}] {content_of(child)}{due_text}")
+            due_text = f" {format_due_display(due)}" if due else ""
+            print(f"- {format_step_mark(child.get('checked'))} {content_of(child)}{due_text}")
     print()
     print("Comments")
     notes = comments if comments is not None else notes_for(cache, task.get("id"))
@@ -1240,10 +1325,9 @@ def print_steps(cache, task):
         print("No steps.")
         return
     for i, child in enumerate(children, 1):
-        mark = "x" if child.get("checked") else " "
         due = format_due(child)
-        due_text = f" {due}" if due else ""
-        print(f"{i:2d}  [{mark}] {content_of(child)}{due_text}")
+        due_text = f" {format_due_display(due)}" if due else ""
+        print(f"{i:2d}  {format_step_mark(child.get('checked'))} {content_of(child)}{due_text}")
 
 
 def resolve_step(cache, task, selector):
@@ -1265,8 +1349,7 @@ def resolve_step(cache, task, selector):
     print(f"Multiple steps match {selector!r}:")
     print()
     for i, child in enumerate(matches, 1):
-        mark = "x" if child.get("checked") else " "
-        print(f"{i:2d}  [{mark}] {content_of(child)}")
+        print(f"{i:2d}  {format_step_mark(child.get('checked'))} {content_of(child)}")
     print()
     answer = input("Select step number, or Enter to cancel: ").strip()
     if not answer:
@@ -1419,7 +1502,7 @@ def cmd_done(args):
         if open_steps:
             print("Open steps:")
             for i, child in enumerate(open_steps, 1):
-                print(f"{i:2d}  [ ] {content_of(child)}")
+                print(f"{i:2d}  {format_step_mark(False)} {content_of(child)}")
             print()
             answer = input("Mark all open steps done and complete parent task? [y/N] ").strip()
             if answer.lower() not in ("y", "yes"):
@@ -1872,8 +1955,10 @@ def print_search_results(cache, results):
         return
     for result in results:
         task = result["task"]
-        print(f"P{api_priority_to_cli(task.get('priority'))}  "
-              f"{project_name(cache, task.get('project_id')):<12} {task_state(task):<7} {content_of(task)}")
+        state = task_state(task)
+        state_text = format_task_state_display(f"{state:<7}")
+        print(f"{format_priority(task)}  "
+              f"{project_name(cache, task.get('project_id')):<12} {state_text} {content_of(task)}")
         for match in result["matches"]:
             print(f"    {match}")
 
@@ -1958,18 +2043,18 @@ def print_task_list(cache, tasks, show_steps=False):
         return
     for task in tasks:
         due = format_due(task)
-        due_text = f" {due}" if due else ""
-        waiting = " waiting" if has_waiting(task) else ""
-        print(f"P{api_priority_to_cli(task.get('priority'))}  "
+        due_text = f" {format_due_display(due)}" if due else ""
+        waiting = f" {format_waiting_marker()}" if has_waiting(task) else ""
+        print(f"{format_priority(task)}  "
               f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}{due_text}{waiting}")
         reason = waiting_reason(task)
         if reason:
-            print(f"    Reason: {reason}")
+            print(f"    {colorize('Reason:', 'magenta')} {reason}")
         if show_steps:
             steps = subtasks(cache, task.get("id"))
             for step in steps:
                 step_due = format_due(step)
-                step_due_text = f" {step_due}" if step_due else ""
+                step_due_text = f" {format_due_display(step_due)}" if step_due else ""
                 print(f"    - {content_of(step)}{step_due_text}")
 
 
@@ -2242,6 +2327,8 @@ def build_parser():
   todo task --wait "REVIEW-123" "waiting for review"
   todo report --final""",
     )
+    parser.add_argument("--color", choices=("auto", "always", "never"), default="auto",
+                        help="color output: auto, always, or never")
     sub = parser.add_subparsers(
         dest="cmd",
         metavar="COMMAND",
@@ -2411,6 +2498,7 @@ multiple comments.""",
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    set_color_mode(args.color)
     if not hasattr(args, "func"):
         parser.print_help()
         return 0
