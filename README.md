@@ -137,6 +137,8 @@ todo someday --refresh
 ```
 
 Show the daily work queue, all waiting tasks, or hidden-from-now tasks.
+Recurring due dates display Todoist's recurrence string after `↻`. A
+`starting ...` tail is hidden because the next due date is already shown.
 
 ```sh
 todo report

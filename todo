@@ -767,9 +767,9 @@ def format_due_display(due):
         return ""
     if "overdue" in due:
         return colorize(due, "red", bold=True)
-    if due == "due:today":
+    if due.startswith("due:today"):
         return colorize(due, "yellow", bold=True)
-    if due == "due:tomorrow":
+    if due.startswith("due:tomorrow"):
         return colorize(due, "base1")
     if " left" in due or due.startswith("due:in "):
         return colorize(due, "cyan")
@@ -854,27 +854,39 @@ def due_when(item):
     return None
 
 
+def recurrence_suffix(item):
+    due = item.get("due") or {}
+    if not due.get("is_recurring"):
+        return ""
+    value = (due.get("string") or "").strip()
+    if not value:
+        return " ↻"
+    value = re.sub(r"\s+starting(?:\s+from)?\s+.+$", "", value, flags=re.IGNORECASE).strip()
+    return f" ↻ {value}" if value else " ↻"
+
+
 def format_due(item):
     when = due_when(item)
     raw = due_date(item)
+    recurring = recurrence_suffix(item)
     if when is None:
-        return f"due:{raw}" if raw else ""
+        return f"due:{raw}{recurring}" if raw else recurring.strip()
     if isinstance(when, dt.datetime):
         delta = when - now_utc()
         suffix = "left"
         if delta.total_seconds() < 0:
             delta = -delta
             suffix = "overdue"
-        return f"due:{format_duration(delta)} {suffix}"
+        return f"due:{format_duration(delta)} {suffix}{recurring}"
     today = today_local()
     days = (when - today).days
     if days < 0:
-        return f"due:{abs(days)}d overdue"
+        return f"due:{abs(days)}d overdue{recurring}"
     if days == 0:
-        return "due:today"
+        return f"due:today{recurring}"
     if days == 1:
-        return "due:tomorrow"
-    return f"due:in {days}d"
+        return f"due:tomorrow{recurring}"
+    return f"due:in {days}d{recurring}"
 
 
 def format_duration(delta):

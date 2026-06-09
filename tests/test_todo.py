@@ -123,6 +123,22 @@ class TodoPureTests(unittest.TestCase):
         item = {"due": {"date": today.isoformat()}}
         self.assertEqual(todo.format_due(item), "due:today")
 
+    def test_format_due_recurring_shows_raw_string(self):
+        today = todo.today_local()
+        item = {"due": {"date": today.isoformat(), "is_recurring": True, "string": "every 14 days 11:00"}}
+        self.assertEqual(todo.format_due(item), "due:today ↻ every 14 days 11:00")
+
+    def test_format_due_recurring_drops_starting_suffix(self):
+        today = todo.today_local()
+        item = {
+            "due": {
+                "date": today.isoformat(),
+                "is_recurring": True,
+                "string": "every 14 days 11:00 starting 23 Jun 2026",
+            },
+        }
+        self.assertEqual(todo.format_due(item), "due:today ↻ every 14 days 11:00")
+
     def test_due_when_accepts_local_datetime_in_date_field(self):
         item = {"due": {"date": "2026-06-11T16:00:00", "timezone": None}}
         self.assertIsInstance(todo.due_when(item), dt.datetime)
