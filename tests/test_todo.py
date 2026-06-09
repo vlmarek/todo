@@ -468,6 +468,21 @@ created two
         self.assertIn("Create a task in CATEGORY", err.getvalue())
         self.assertNotIn("expected 2-9999", err.getvalue())
 
+    def test_empty_noun_commands_print_command_help(self):
+        cases = [
+            (["task"], "usage: todo task TASK"),
+            (["step"], "usage: todo step TASK"),
+            (["comment"], "usage: todo comment TASK"),
+        ]
+        for argv, usage in cases:
+            with self.subTest(argv=argv):
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    rc = todo.main(argv)
+                self.assertEqual(rc, 1)
+                self.assertIn(usage, err.getvalue())
+                self.assertNotIn("todo:", err.getvalue())
+
     def test_empty_mode_flags_print_mode_help(self):
         cases = [
             (["task", "--done"], "usage: todo task --done TASK [TEXT]"),

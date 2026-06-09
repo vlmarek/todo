@@ -48,6 +48,19 @@ class TodoUsage(TodoError):
     pass
 
 
+TASK_USAGE = """usage: todo task TASK
+       todo task --add CATEGORY TASK [STEP ...]
+       todo task --done TASK [TEXT]
+       todo task --wait TASK REASON
+       todo task --resume TASK TEXT
+       todo task --due TASK DATE
+       todo task --priority TASK P
+       todo task --move TASK CATEGORY
+
+Show a task, or perform one task operation.
+"""
+
+
 TASK_ADD_USAGE = """usage: todo task --add CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY, optionally with initial steps.
@@ -57,7 +70,25 @@ examples:
   todo task --add Operations "deliver next release" "check dashboard" "close build"
 """
 
+STEP_USAGE = """usage: todo step TASK
+       todo step --add TASK STEP [STEP ...]
+       todo step --add --done TASK STEP [STEP ...]
+       todo step --done TASK STEP
+
+Show task steps, add steps, or mark one step done.
+"""
+
+
+COMMENT_USAGE = """usage: todo comment TASK
+       todo comment --add TASK TEXT [TEXT ...]
+       todo comment --edit TASK
+
+Show task comments, add comments, or edit all comments.
+"""
+
+
 MODE_USAGE = {
+    "task": TASK_USAGE,
     "task --add": TASK_ADD_USAGE,
     "task --done": """usage: todo task --done TASK [TEXT]
 
@@ -103,6 +134,8 @@ Add one or more comments to TASK. Each TEXT becomes a separate comment.
 
 Edit all comments on TASK in one editor buffer.
 """,
+    "step": STEP_USAGE,
+    "comment": COMMENT_USAGE,
 }
 
 
