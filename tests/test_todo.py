@@ -221,6 +221,30 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("report", text)
         self.assertIn("generate weekly report draft", text)
 
+    def test_add_accepts_initial_steps(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["add", "operations", "Deliver next release", "check dashboard", "close build", "-p", "2"])
+        self.assertEqual(args.category, "operations")
+        self.assertEqual(args.task, "Deliver next release")
+        self.assertEqual(args.steps, ["check dashboard", "close build"])
+        self.assertEqual(args.priority, 2)
+
+    def test_mapped_id_reads_todoist_temp_mapping(self):
+        response = {
+            "_todo_temp_id": "tmp1",
+            "temp_id_mapping": {"tmp1": "real1"},
+        }
+        self.assertEqual(todo.mapped_id(response), "real1")
+
+    def test_find_added_task_id(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "gate",
+            "content": "Deliver next release",
+        }]
+        self.assertEqual(todo.find_added_task_id(cache, "gate", "Deliver next release"), "task1")
+
 
 if __name__ == "__main__":
     unittest.main()

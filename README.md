@@ -46,11 +46,11 @@ List or add categories. Categories are Todoist child projects under `Work`.
 
 ```sh
 todo add engineering "Update website dependencies" -p 1
-todo add operations "Deliver 224" --due 2026-06-09 -p 1
+todo add operations "Deliver 224" "check dashboard table" "close build" --due 2026-06-09 -p 1
 todo add someday "Create wiki for AI setup"
 ```
 
-Add a top-level work item.
+Add a top-level work item, optionally with initial steps.
 
 ```sh
 todo step website

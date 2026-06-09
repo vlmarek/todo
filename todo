@@ -269,10 +269,11 @@ class Todoist:
 
     def command(self, type_, args):
         cmd_uuid = str(uuid.uuid4())
+        temp_id = str(uuid.uuid4())
         response = self.request("POST", SYNC_URL, {
             "commands": json.dumps([{
                 "type": type_,
-                "temp_id": str(uuid.uuid4()),
+                "temp_id": temp_id,
                 "uuid": cmd_uuid,
                 "args": args,
             }])
@@ -280,6 +281,7 @@ class Todoist:
         status = (response.get("sync_status") or {}).get(cmd_uuid)
         if status != "ok":
             raise TodoError(f"Todoist command {type_} failed: {status}")
+        response["_todo_temp_id"] = temp_id
         return response
 
     def activities(self, since, until, project_id):
@@ -601,13 +603,22 @@ def sync_readonly(client, cache):
 
 
 def mutate(client, cache, type_, args):
-    client.command(type_, args)
+    response = client.command(type_, args)
     # Command responses carry sync_status and may carry a new sync_token without
     # carrying the changed resource objects.  Keep the old token until the
     # follow-up sync has fetched and merged those objects, otherwise the local
     # mirror can skip the command's own changes.
     client.sync(cache)
     cache.save()
+    return response
+
+
+def mapped_id(response):
+    temp_id = response.get("_todo_temp_id")
+    if not temp_id:
+        return None
+    mapping = response.get("temp_id_mapping") or {}
+    return mapping.get(temp_id)
 
 
 def add_note(client, cache, task_id, content):
@@ -692,9 +703,30 @@ def cmd_add(args):
             item_args["priority"] = cli_priority_to_api(args.priority)
         if args.due:
             item_args["due"] = {"string": args.due}
-        mutate(client, cache, "item_add", item_args)
+        response = mutate(client, cache, "item_add", item_args)
+        task_id = mapped_id(response) or find_added_task_id(cache, category_project.get("id"), args.task)
+        if args.steps and not task_id:
+            raise TodoError("Added task, but could not find its Todoist ID to add steps.")
         print(f"Added: {args.task}")
+        for step in args.steps:
+            mutate(client, cache, "item_add", {
+                "content": step,
+                "project_id": str(category_project.get("id")),
+                "parent_id": str(task_id),
+            })
+            print(f"Added step: {step}")
         return 0
+
+
+def find_added_task_id(cache, project_id, content):
+    matches = [item for item in live_objects(cache, "items")
+               if str(item.get("project_id")) == str(project_id)
+               and not item.get("parent_id")
+               and content_of(item) == content
+               and not item.get("checked")]
+    if len(matches) == 1:
+        return str(matches[0].get("id"))
+    return None
 
 
 def cmd_step(args):
@@ -1281,10 +1313,11 @@ def build_parser():
     p = sub.add_parser(
         "add",
         help="add a new task to a category",
-        description="Add a new top-level Todoist task under an Work category.",
+        description="Add a new top-level Todoist task under an Work category, optionally with initial steps.",
     )
     p.add_argument("category", help="category name, e.g. operations, engineering, vm, someday")
     p.add_argument("task", help="task title")
+    p.add_argument("steps", nargs="*", help="initial steps to add as subtasks")
     p.add_argument("-p", "--priority", type=int, help="Todoist priority as P1..P4, where 1 is highest")
     p.add_argument("--due", help="attention date/time, passed to Todoist")
     p.set_defaults(func=cmd_add)
