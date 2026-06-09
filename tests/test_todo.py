@@ -60,6 +60,13 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(todo.format_duration(delta), "2d 3h")
         self.assertEqual(todo.format_duration(dt.timedelta(hours=1, minutes=20)), "1h 20m")
 
+    def test_waiting_age_uses_since_date(self):
+        task = {
+            "description": todo.set_waiting_block("", "wait for review", since="2026-06-07"),
+        }
+        self.assertEqual(todo.waiting_age(task, today=dt.date(2026, 6, 10)), "3d")
+        self.assertEqual(todo.waiting_age(task, today=dt.date(2026, 6, 7)), "today")
+
     def test_color_parser_flag(self):
         parser = todo.build_parser()
         args = parser.parse_args(["--color", "always", "now"])
@@ -366,35 +373,37 @@ class TodoPureTests(unittest.TestCase):
     def test_report_waiting_uses_description_reason(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        since_date = (todo.today_local() - dt.timedelta(days=3)).isoformat()
         cache.data["items"] = [{
             "id": "task1",
             "project_id": "gate",
             "content": "Review URL fix",
             "labels": ["waiting"],
             "due": {"date": "2026-07-04"},
-            "description": todo.set_waiting_block("", "wait for review", since="2026-06-03"),
+            "description": todo.set_waiting_block("", "wait for review", since=since_date),
         }]
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
         until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
         report = todo.build_report(cache, {"gate"}, since, until, [])
         self.assertIn("- Review URL fix", report)
-        self.assertIn("  - wait for review", report)
+        self.assertIn("  - wait for review (3d)", report)
 
     def test_report_waiting_includes_task_without_due_date(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        since_date = (todo.today_local() - dt.timedelta(days=3)).isoformat()
         cache.data["items"] = [{
             "id": "task1",
             "project_id": "gate",
             "content": "Waiting without date",
             "labels": ["waiting"],
-            "description": todo.set_waiting_block("", "wait for reply", since="2026-06-03"),
+            "description": todo.set_waiting_block("", "wait for reply", since=since_date),
         }]
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
         until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
         report = todo.build_report(cache, {"gate"}, since, until, [])
         self.assertIn("- Waiting without date", report)
-        self.assertIn("  - wait for reply", report)
+        self.assertIn("  - wait for reply (3d)", report)
 
     def test_report_command_always_refreshes(self):
         calls = []
@@ -588,17 +597,18 @@ class TodoPureTests(unittest.TestCase):
     def test_task_list_prints_waiting_reason(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        since_date = (todo.today_local() - dt.timedelta(days=3)).isoformat()
         task = {
             "id": "task1",
             "project_id": "gate",
             "content": "Review URL fix",
             "labels": ["waiting"],
-            "description": todo.set_waiting_block("", "wait for review", since="2026-06-07"),
+            "description": todo.set_waiting_block("", "wait for review", since=since_date),
         }
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             todo.print_task_list(cache, [task])
-        self.assertIn("Reason: wait for review", out.getvalue())
+        self.assertIn("wait for review (3d)", out.getvalue())
 
     def test_show_prints_steps_and_comments(self):
         cache = todo.Cache(todo.Cache.empty())

@@ -677,6 +677,31 @@ def waiting_reason(task):
     return waiting_info(task).get("reason", "")
 
 
+def waiting_age(task, today=None):
+    since = waiting_info(task).get("since", "")
+    if not since:
+        return ""
+    since_date = parse_date(since[:10])
+    if since_date is None:
+        return ""
+    days = ((today or today_local()) - since_date).days
+    if days < 0:
+        return ""
+    if days == 0:
+        return "today"
+    return format_duration(dt.timedelta(days=days))
+
+
+def waiting_reason_display(task):
+    reason = waiting_reason(task)
+    if not reason:
+        return ""
+    age = waiting_age(task)
+    if age:
+        return f"{reason} ({age})"
+    return reason
+
+
 def load_step_context():
     if not os.path.exists(STEP_CONTEXT_PATH):
         return {}
@@ -2272,9 +2297,9 @@ def print_task_list(cache, tasks, show_steps=False):
         waiting = f" {format_waiting_marker()}" if has_waiting(task) else ""
         print(f"{format_priority(task)}  "
               f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}{due_text}{waiting}")
-        reason = waiting_reason(task)
+        reason = waiting_reason_display(task)
         if reason:
-            print(f"    {colorize('Reason:', 'magenta')} {reason}")
+            print(f"    {reason}")
         if show_steps:
             steps = subtasks(cache, task.get("id"))
             for step in steps:
@@ -2400,7 +2425,7 @@ def build_report(cache, project_ids, since, until, events, step_context=None):
         category_items = sections["Waiting"].setdefault(category, {})
         if title not in category_items:
             details = []
-            reason = waiting_reason(task)
+            reason = waiting_reason_display(task)
             if reason:
                 details.append(reason)
             category_items[title] = details
