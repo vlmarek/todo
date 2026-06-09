@@ -39,65 +39,41 @@ This creates or validates the `Work` project, default categories, and the
 
 ```sh
 todo category
-todo category training
+todo category --add training
 ```
 
 List or add categories. Categories are Todoist child projects under `Work`.
 
 ```sh
-todo add engineering "Update website dependencies" -p 1
-todo add operations "Deliver 224" "check dashboard table" "close build" --due 2026-06-09 -p 1
-todo add someday "Create wiki for AI setup"
+todo task "website"
+todo task --add engineering "Update website dependencies" "build/test" "review"
+todo task --add operations "Deliver 224" "check dashboard table" "close build"
+todo task --done website "deployed"
+todo task --wait website "waiting for review"
+todo task --resume website "review returned; addressing comments"
+todo task --priority website 1
+todo task --due website 2d
+todo task --move website engineering
 ```
 
-Add a top-level work item, optionally with initial steps.
+Show, add, complete, wait/resume, prioritize, schedule, or move tasks.
 
 ```sh
 todo step website
-todo step website "build/test" "review" "publish" "deliver"
-todo check website review
+todo step --add website "build/test" "review" "publish" "deliver"
+todo step --done website review
 ```
 
 Show steps, add one or more steps, or mark a step done.
 
 ```sh
 todo comment website
-todo comment website "fixed test failure; staging deploy still running"
+todo comment --add website "fixed test failure; staging deploy still running"
 todo comment --edit website
 ```
 
 Shows task comments, appends a line to the latest comment, or edits the latest
 comment in `$EDITOR`.
-
-```sh
-todo wait website "waiting for review"
-todo wait website "waiting for BA approval" --due 2026-06-15
-todo resume website "review returned; addressing comments"
-```
-
-`wait` adds the `waiting` label, sets the due date to a follow-up date, and
-adds a `Waiting:` comment. The default follow-up is two business days.
-
-`resume` removes `waiting`, clears the due date, and adds a `Resumed:` comment.
-
-```sh
-todo done website "integrated; publish accepted"
-```
-
-If open subtasks exist, the command prints them and asks whether to mark all
-steps done before completing the parent task. Answering no leaves everything
-unchanged.
-
-```sh
-todo priority website 1
-todo due website tomorrow
-todo due website 2d
-todo due website 4h
-todo due website clear
-todo move website engineering
-```
-
-Adjust priority, attention date, or category.
 
 ```sh
 todo now
@@ -127,7 +103,7 @@ Task selectors are free-form text matched against active task titles,
 descriptions, and subtasks:
 
 ```sh
-todo comment website "fixed tests"
+todo task website
 ```
 
 If multiple tasks match, `todo` prints choices and asks for a number. The

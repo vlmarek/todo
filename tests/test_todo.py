@@ -251,16 +251,18 @@ class TodoPureTests(unittest.TestCase):
         text = out.getvalue()
         self.assertIn("now", text)
         self.assertIn("show actionable tasks", text)
+        self.assertIn("task", text)
+        self.assertIn("show or change tasks", text)
         self.assertIn("report", text)
         self.assertIn("generate weekly report draft", text)
 
     def test_category_command_lists_or_adds(self):
         parser = todo.build_parser()
         list_args = parser.parse_args(["category"])
-        add_args = parser.parse_args(["category", "training"])
+        add_args = parser.parse_args(["category", "--add", "training"])
         self.assertEqual(list_args.cmd, "category")
-        self.assertIsNone(list_args.name)
-        self.assertEqual(add_args.name, "training")
+        self.assertIsNone(list_args.add)
+        self.assertEqual(add_args.add, "training")
 
     def test_categories_command_removed(self):
         parser = todo.build_parser()
@@ -274,25 +276,57 @@ class TodoPureTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 parser.parse_args(["category", "add", "training"])
 
-    def test_add_accepts_initial_steps(self):
+    def test_task_add_accepts_initial_steps(self):
         parser = todo.build_parser()
-        args = parser.parse_args(["add", "operations", "Deliver next release", "check dashboard", "close build", "-p", "2"])
-        self.assertEqual(args.category, "operations")
-        self.assertEqual(args.task, "Deliver next release")
-        self.assertEqual(args.steps, ["check dashboard", "close build"])
-        self.assertEqual(args.priority, 2)
+        args = parser.parse_args(["task", "--add", "operations", "Deliver next release", "check dashboard", "close build"])
+        self.assertTrue(args.add)
+        self.assertEqual(args.values, ["operations", "Deliver next release", "check dashboard", "close build"])
 
-    def test_comment_text_is_optional(self):
+    def test_task_modes_parse(self):
+        parser = todo.build_parser()
+        self.assertEqual(parser.parse_args(["task", "website"]).values, ["website"])
+        self.assertTrue(parser.parse_args(["task", "--done", "website", "integrated"]).done)
+        self.assertTrue(parser.parse_args(["task", "--wait", "website", "waiting"]).wait)
+        self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
+        self.assertTrue(parser.parse_args(["task", "--due", "website", "2d"]).due)
+        self.assertTrue(parser.parse_args(["task", "--priority", "website", "1"]).priority)
+        self.assertTrue(parser.parse_args(["task", "--move", "website", "engineering"]).move)
+
+    def test_step_modes_parse(self):
+        parser = todo.build_parser()
+        self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
+        add_args = parser.parse_args(["step", "--add", "website", "review", "publish"])
+        done_args = parser.parse_args(["step", "--done", "website", "review"])
+        self.assertTrue(add_args.add)
+        self.assertEqual(add_args.values, ["website", "review", "publish"])
+        self.assertTrue(done_args.done)
+        self.assertEqual(done_args.values, ["website", "review"])
+
+    def test_old_verb_commands_removed(self):
+        parser = todo.build_parser()
+        for command in ("add", "show", "check", "wait", "resume", "done", "priority", "due", "move"):
+            with self.subTest(command=command):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit):
+                        parser.parse_args([command])
+
+    def test_comment_display_has_no_mode(self):
         parser = todo.build_parser()
         args = parser.parse_args(["comment", "deliver release"])
-        self.assertEqual(args.task, "deliver release")
-        self.assertIsNone(args.text)
+        self.assertEqual(args.values, ["deliver release"])
+        self.assertFalse(args.add)
         self.assertFalse(args.edit)
+
+    def test_comment_add_flag(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["comment", "--add", "deliver release", "new line"])
+        self.assertTrue(args.add)
+        self.assertEqual(args.values, ["deliver release", "new line"])
 
     def test_comment_edit_flag(self):
         parser = todo.build_parser()
         args = parser.parse_args(["comment", "--edit", "deliver release"])
-        self.assertEqual(args.task, "deliver release")
+        self.assertEqual(args.values, ["deliver release"])
         self.assertTrue(args.edit)
 
     def test_mapped_id_reads_todoist_temp_mapping(self):

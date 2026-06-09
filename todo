@@ -680,18 +680,18 @@ def cmd_init(args):
 
 def cmd_category(args):
     with lock_state():
-        cfg, client, cache = load_runtime(readonly=not args.name)
-        if args.name:
+        cfg, client, cache = load_runtime(readonly=not args.add)
+        if args.add:
             sync_or_fail(client, cache)
         else:
             sync_readonly(client, cache)
         project = root_project(cache, cfg)
-        if args.name:
-            if category_project_by_name(cache, project.get("id"), args.name):
-                print(f"Category {args.name!r} already exists.")
+        if args.add:
+            if category_project_by_name(cache, project.get("id"), args.add):
+                print(f"Category {args.add!r} already exists.")
                 return 0
-            mutate(client, cache, "project_add", {"name": args.name, "parent_id": str(project.get("id"))})
-            print(f"Created category {args.name}.")
+            mutate(client, cache, "project_add", {"name": args.add, "parent_id": str(project.get("id"))})
+            print(f"Created category {args.add}.")
             return 0
         for cat in sorted(category_projects(cache, project.get("id")), key=lambda p: p.get("child_order") or 0):
             marker = " (hidden from now)" if normalize_name(cat.get("name", "")) in cfg.hidden_from_now else ""
@@ -1027,7 +1027,8 @@ def cmd_done(args):
                 raise TodoError("Cancelled; task left open.")
             for child in open_steps:
                 close_item(client, cache, child.get("id"))
-        add_note(client, cache, task.get("id"), f"Done: {args.text}")
+        if args.text:
+            add_note(client, cache, task.get("id"), f"Done: {args.text}")
         close_item(client, cache, task.get("id"))
         print(f"Done: {content_of(task)}")
         return 0
@@ -1074,6 +1075,96 @@ def cmd_move(args):
         mutate(client, cache, "item_move", {"id": str(task.get("id")), "project_id": str(category_project.get("id"))})
         print(f"Moved to {category_project.get('name')}: {content_of(task)}")
         return 0
+
+
+def selected_modes(args, names):
+    return [name for name in names if getattr(args, name)]
+
+
+def require_arg_count(command, values, minimum, maximum=None):
+    maximum = minimum if maximum is None else maximum
+    count = len(values)
+    if count < minimum or count > maximum:
+        if minimum == maximum:
+            expected = str(minimum)
+        else:
+            expected = f"{minimum}-{maximum}"
+        raise TodoError(f"`todo {command}` expected {expected} argument(s), got {count}.")
+
+
+def cmd_task(args):
+    modes = selected_modes(args, ["add", "done", "wait", "resume", "due", "priority", "move"])
+    if len(modes) > 1:
+        raise TodoError("Use only one task mode at a time.")
+    mode = modes[0] if modes else "show"
+    values = args.values
+    if mode == "show":
+        require_arg_count("task", values, 1)
+        return cmd_show(argparse.Namespace(task=values[0]))
+    if mode == "add":
+        require_arg_count("task --add", values, 2, 9999)
+        return cmd_add(argparse.Namespace(
+            category=values[0],
+            task=values[1],
+            steps=values[2:],
+            priority=None,
+            due=None,
+        ))
+    if mode == "done":
+        require_arg_count("task --done", values, 1, 2)
+        return cmd_done(argparse.Namespace(task=values[0], text=values[1] if len(values) == 2 else None))
+    if mode == "wait":
+        require_arg_count("task --wait", values, 2)
+        return cmd_wait(argparse.Namespace(task=values[0], text=values[1], after=None, due=None, yes=False))
+    if mode == "resume":
+        require_arg_count("task --resume", values, 2)
+        return cmd_resume(argparse.Namespace(task=values[0], text=values[1]))
+    if mode == "due":
+        require_arg_count("task --due", values, 2)
+        return cmd_due(argparse.Namespace(task=values[0], date=values[1]))
+    if mode == "priority":
+        require_arg_count("task --priority", values, 2)
+        return cmd_priority(argparse.Namespace(task=values[0], priority=int(values[1])))
+    if mode == "move":
+        require_arg_count("task --move", values, 2)
+        return cmd_move(argparse.Namespace(task=values[0], category=values[1]))
+    raise TodoError(f"Unknown task mode {mode}.")
+
+
+def cmd_step_noun(args):
+    modes = selected_modes(args, ["add", "done"])
+    if len(modes) > 1:
+        raise TodoError("Use only one step mode at a time.")
+    mode = modes[0] if modes else "show"
+    values = args.values
+    if mode == "show":
+        require_arg_count("step", values, 1)
+        return cmd_step(argparse.Namespace(task=values[0], steps=[]))
+    if mode == "add":
+        require_arg_count("step --add", values, 2, 9999)
+        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:]))
+    if mode == "done":
+        require_arg_count("step --done", values, 2)
+        return cmd_check(argparse.Namespace(task=values[0], step=values[1]))
+    raise TodoError(f"Unknown step mode {mode}.")
+
+
+def cmd_comment_noun(args):
+    modes = selected_modes(args, ["add", "edit"])
+    if len(modes) > 1:
+        raise TodoError("Use only one comment mode at a time.")
+    mode = modes[0] if modes else "show"
+    values = args.values
+    if mode == "show":
+        require_arg_count("comment", values, 1)
+        return cmd_comment(argparse.Namespace(task=values[0], text=None, edit=False))
+    if mode == "add":
+        require_arg_count("comment --add", values, 2)
+        return cmd_comment(argparse.Namespace(task=values[0], text=values[1], edit=False))
+    if mode == "edit":
+        require_arg_count("comment --edit", values, 1)
+        return cmd_comment(argparse.Namespace(task=values[0], text=None, edit=True))
+    raise TodoError(f"Unknown comment mode {mode}.")
 
 
 def cmd_now(args):
@@ -1368,9 +1459,9 @@ def build_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""examples:
   todo now
-  todo add operations "Deliver release" -p 2
-  todo step "Deliver release" "check dashboard table" "close build"
-  todo wait "REVIEW-123" "waiting for review"
+  todo task --add operations "Deliver release" "check dashboard table" "close build"
+  todo step --done "Deliver release" "check dashboard table"
+  todo task --wait "REVIEW-123" "waiting for review"
   todo report --final""",
     )
     sub = parser.add_subparsers(
@@ -1391,115 +1482,74 @@ def build_parser():
     p = sub.add_parser(
         "category",
         help="list or add categories",
-        description="List categories when NAME is omitted, or create NAME as a Todoist child project under Work.",
+        description="List categories, or create a category with --add NAME.",
     )
-    p.add_argument("name", nargs="?", help="category name to create")
+    p.add_argument("--add", metavar="NAME", help="category name to create")
     p.set_defaults(func=cmd_category)
 
     p = sub.add_parser(
-        "add",
-        help="add a new task to a category",
-        description="Add a new top-level Todoist task under an Work category, optionally with initial steps.",
+        "task",
+        help="show or change tasks",
+        description="""Show a task, or perform one task operation.
+
+display:
+  todo task TASK
+
+modes:
+  --add CATEGORY TASK [STEP ...]
+  --done TASK [TEXT]
+  --wait TASK TEXT
+  --resume TASK TEXT
+  --due TASK DATE
+  --priority TASK P
+  --move TASK CATEGORY""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("category", help="category name, e.g. operations, engineering, vm, someday")
-    p.add_argument("task", help="task title")
-    p.add_argument("steps", nargs="*", help="initial steps to add as subtasks")
-    p.add_argument("-p", "--priority", type=int, help="Todoist priority as P1..P4, where 1 is highest")
-    p.add_argument("--due", help="attention date/time, passed to Todoist")
-    p.set_defaults(func=cmd_add)
+    p.add_argument("--add", action="store_true", help="create a task, optionally with initial steps")
+    p.add_argument("--done", action="store_true", help="complete a task")
+    p.add_argument("--wait", action="store_true", help="mark a task waiting")
+    p.add_argument("--resume", action="store_true", help="clear waiting state")
+    p.add_argument("--due", action="store_true", help="set or clear attention date")
+    p.add_argument("--priority", action="store_true", help="set priority 1..4")
+    p.add_argument("--move", action="store_true", help="move task to another category")
+    p.add_argument("values", nargs="*", help="arguments for the selected mode")
+    p.set_defaults(func=cmd_task)
 
     p = sub.add_parser(
         "step",
-        help="list or add task steps",
-        description="List current subtasks for TASK, or add one or more steps when STEP arguments are supplied.",
-    )
-    p.add_argument("task", help="task selector")
-    p.add_argument("steps", nargs="*", help="steps to add as subtasks")
-    p.set_defaults(func=cmd_step)
+        help="show or change task steps",
+        description="""Show task steps, add steps, or mark one step done.
 
-    p = sub.add_parser(
-        "show",
-        help="show task details",
-        description="Show task category, priority, due state, description, steps, and comments.",
-    )
-    p.add_argument("task", help="task selector")
-    p.set_defaults(func=cmd_show)
+display:
+  todo step TASK
 
-    p = sub.add_parser(
-        "check",
-        help="mark a step done",
-        description="Complete one subtask by number or unique text match.",
+modes:
+  --add TASK STEP [STEP ...]
+  --done TASK STEP""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("task", help="task selector")
-    p.add_argument("step", help="step number or text selector")
-    p.set_defaults(func=cmd_check)
+    p.add_argument("--add", action="store_true", help="add one or more steps")
+    p.add_argument("--done", action="store_true", help="complete one step")
+    p.add_argument("values", nargs="*", help="arguments for the selected mode")
+    p.set_defaults(func=cmd_step_noun)
 
     p = sub.add_parser(
         "comment",
         help="show, append, or edit task comment",
-        description="Show task comments, append a line to the latest comment, or edit the latest comment in $EDITOR.",
+        description="""Show task comments, append a line, or edit the latest comment.
+
+display:
+  todo comment TASK
+
+modes:
+  --add TASK TEXT
+  --edit TASK""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("task", help="task selector")
-    p.add_argument("text", nargs="?", help="line to append to the latest comment")
+    p.add_argument("--add", action="store_true", help="append a line to the latest comment")
     p.add_argument("--edit", action="store_true", help="edit the latest comment, creating one if needed")
-    p.set_defaults(func=cmd_comment)
-
-    p = sub.add_parser(
-        "wait",
-        help="mark a task waiting",
-        description="Add the waiting label, set a follow-up due date, and add a `Waiting:` comment.",
-    )
-    p.add_argument("task", help="task selector")
-    p.add_argument("text", help="waiting reason, stored as `Waiting: TEXT`")
-    p.add_argument("--after", help="follow-up interval, e.g. '2 business days' or '5d'")
-    p.add_argument("--due", help="explicit follow-up date")
-    p.add_argument("-y", "--yes", action="store_true", help="replace an existing due date without prompting")
-    p.set_defaults(func=cmd_wait)
-
-    p = sub.add_parser(
-        "resume",
-        help="clear waiting state",
-        description="Remove the waiting label, clear the due date, and add a `Resumed:` comment.",
-    )
-    p.add_argument("task", help="task selector")
-    p.add_argument("text", help="resume reason, stored as `Resumed: TEXT`")
-    p.set_defaults(func=cmd_resume)
-
-    p = sub.add_parser(
-        "done",
-        help="complete a task",
-        description="Add a `Done:` comment and complete the task. If open steps remain, ask before completing them too.",
-    )
-    p.add_argument("task", help="task selector")
-    p.add_argument("text", help="completion note, stored as `Done: TEXT`")
-    p.set_defaults(func=cmd_done)
-
-    p = sub.add_parser(
-        "priority",
-        help="set task priority",
-        description="Set Todoist priority using P1..P4 numbering, where 1 is highest.",
-    )
-    p.add_argument("task", help="task selector")
-    p.add_argument("priority", type=int, help="priority 1, 2, 3, or 4")
-    p.set_defaults(func=cmd_priority)
-
-    p = sub.add_parser(
-        "due",
-        help="set or clear attention date",
-        description="Set the task attention date, or clear it with `clear`, `none`, or `-`. Compact relative values like `2d` and `4h` are supported.",
-    )
-    p.add_argument("task", help="task selector")
-    p.add_argument("date", help="date expression, relative value such as 2d/4h, or clear/none/-")
-    p.set_defaults(func=cmd_due)
-
-    p = sub.add_parser(
-        "move",
-        help="move a task to another category",
-        description="Move a task to another Work category.",
-    )
-    p.add_argument("task", help="task selector")
-    p.add_argument("category", help="destination category")
-    p.set_defaults(func=cmd_move)
+    p.add_argument("values", nargs="*", help="arguments for the selected mode")
+    p.set_defaults(func=cmd_comment_noun)
 
     p = sub.add_parser(
         "now",
