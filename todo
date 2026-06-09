@@ -44,6 +44,20 @@ class TodoError(Exception):
     pass
 
 
+class TodoUsage(TodoError):
+    pass
+
+
+TASK_ADD_USAGE = """usage: todo task --add CATEGORY TASK [STEP ...]
+
+Create a task in CATEGORY, optionally with initial steps.
+
+examples:
+  todo task --add Engineering "fix config cleanup"
+  todo task --add Operations "deliver next release" "check dashboard" "close build"
+"""
+
+
 def ensure_app_dir():
     os.makedirs(APP_DIR, mode=0o700, exist_ok=True)
     try:
@@ -1322,10 +1336,12 @@ def selected_modes(args, names):
     return [name for name in names if getattr(args, name)]
 
 
-def require_arg_count(command, values, minimum, maximum=None):
+def require_arg_count(command, values, minimum, maximum=None, usage=None):
     maximum = minimum if maximum is None else maximum
     count = len(values)
     if count < minimum or count > maximum:
+        if count == 0 and usage:
+            raise TodoUsage(usage)
         if minimum == maximum:
             expected = str(minimum)
         else:
@@ -1359,7 +1375,7 @@ def cmd_task(args):
         require_arg_count("task", values, 1)
         return cmd_show(argparse.Namespace(task=values[0]))
     if mode == "add":
-        require_arg_count("task --add", values, 2, 9999)
+        require_arg_count("task --add", values, 2, 9999, usage=TASK_ADD_USAGE)
         return cmd_add(argparse.Namespace(
             category=values[0],
             task=values[1],
@@ -1890,6 +1906,9 @@ def main(argv=None):
         return 0
     try:
         return args.func(args)
+    except TodoUsage as e:
+        print(str(e).rstrip(), file=sys.stderr)
+        return 1
     except TodoError as e:
         print(f"todo: {e}", file=sys.stderr)
         return 1

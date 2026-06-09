@@ -459,6 +459,22 @@ created two
         self.assertTrue(args.add)
         self.assertEqual(args.values, ["operations", "Deliver next release", "check dashboard", "close build"])
 
+    def test_task_add_without_args_prints_mode_help(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = todo.main(["task", "--add"])
+        self.assertEqual(rc, 1)
+        self.assertIn("usage: todo task --add CATEGORY TASK [STEP ...]", err.getvalue())
+        self.assertIn("Create a task in CATEGORY", err.getvalue())
+        self.assertNotIn("expected 2-9999", err.getvalue())
+
+    def test_task_add_partial_args_keeps_precise_error(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["task", "--add", "Engineering"])
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_task(args)
+        self.assertIn("expected 2-9999 argument(s), got 1", str(cm.exception))
+
     def test_task_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["task", "website"]).values, ["website"])
