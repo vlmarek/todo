@@ -849,6 +849,8 @@ def format_step_mark(checked):
 
 def format_task_state_display(state):
     normalized = str(state).strip()
+    if normalized == "open":
+        return colorize(state, "blue")
     if normalized == "waiting":
         return colorize(state, "magenta")
     if normalized == "done":

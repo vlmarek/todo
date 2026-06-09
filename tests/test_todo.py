@@ -107,6 +107,17 @@ class TodoPureTests(unittest.TestCase):
         finally:
             todo.set_color_mode(old_mode)
 
+    def test_open_task_state_is_blue(self):
+        old_mode = todo.COLOR_MODE
+        try:
+            todo.set_color_mode("always")
+            text = todo.format_task_state_display("open   ")
+            self.assertIn("\033[", text)
+            self.assertIn("38;2;38;139;210", text)
+            self.assertIn("open", text)
+        finally:
+            todo.set_color_mode(old_mode)
+
     def test_no_color_disables_auto(self):
         class Tty:
             def isatty(self):
