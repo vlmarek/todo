@@ -911,7 +911,7 @@ def cmd_now(args):
         tasks = sort_now(cache, tasks)
         if not args.all:
             tasks = tasks[:10]
-        print_task_list(cache, tasks, show_next=True)
+        print_task_list(cache, tasks, show_steps=True)
         return 0
 
 
@@ -937,7 +937,7 @@ def sort_now(cache, tasks):
     return sorted(tasks, key=key)
 
 
-def print_task_list(cache, tasks, show_next=False):
+def print_task_list(cache, tasks, show_steps=False):
     if not tasks:
         print("No tasks.")
         return
@@ -947,10 +947,10 @@ def print_task_list(cache, tasks, show_next=False):
         waiting = " waiting" if has_waiting(task) else ""
         print(f"P{api_priority_to_cli(task.get('priority'))}  "
               f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}{due_text}{waiting}")
-        if show_next:
+        if show_steps:
             steps = subtasks(cache, task.get("id"))
-            if steps:
-                print(f"    next: {content_of(steps[0])}")
+            for step in steps:
+                print(f"    - {content_of(step)}")
 
 
 def cmd_waiting(args):
@@ -971,7 +971,7 @@ def cmd_waiting(args):
                 if not due or due[:10] > today:
                     continue
             tasks.append(task)
-        print_task_list(cache, sort_now(cache, tasks), show_next=True)
+        print_task_list(cache, sort_now(cache, tasks), show_steps=True)
         return 0
 
 
@@ -986,7 +986,7 @@ def cmd_someday(args):
                  and not task.get("parent_id")
                  and not task.get("checked")
                  and normalize_name(project_name(cache, task.get("project_id"))) in hidden]
-        print_task_list(cache, sort_now(cache, tasks), show_next=True)
+        print_task_list(cache, sort_now(cache, tasks), show_steps=True)
         return 0
 
 

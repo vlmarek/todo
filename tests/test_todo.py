@@ -1,7 +1,9 @@
 import datetime as dt
 import importlib.util
 import importlib.machinery
+import io
 import pathlib
+import contextlib
 import unittest
 
 
@@ -151,6 +153,20 @@ class TodoPureTests(unittest.TestCase):
         report = todo.build_report(cache, {"gate"}, since, until, events)
         self.assertIn("- deliver release\n  - Done: delivered release", report)
         self.assertNotIn("\n- Done: delivered release\n", report)
+
+    def test_task_list_prints_all_open_steps(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "gate", "content": "Deliver release", "priority": 1},
+            {"id": "s1", "project_id": "gate", "parent_id": "task1", "content": "check dashboard"},
+            {"id": "s2", "project_id": "gate", "parent_id": "task1", "content": "close build"},
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_list(cache, [cache.data["items"][0]], show_steps=True)
+        self.assertIn("    - check dashboard", out.getvalue())
+        self.assertIn("    - close build", out.getvalue())
 
 
 if __name__ == "__main__":
