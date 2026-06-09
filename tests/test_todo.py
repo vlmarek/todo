@@ -380,6 +380,7 @@ class TodoPureTests(unittest.TestCase):
         report = todo.build_report(cache, {"gate"}, since, until, [])
         self.assertIn("- Review URL fix", report)
         self.assertIn("  - Reason: wait for review", report)
+        self.assertNotIn("Waiting follow-up due", report)
 
     def test_report_command_always_refreshes(self):
         calls = []

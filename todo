@@ -2407,7 +2407,7 @@ def build_report(cache, project_ids, since, until, events, step_context=None):
             category = project_name(cache, task.get("project_id"))
             category_items = sections["Waiting"].setdefault(category, {})
             if title not in category_items:
-                details = [f"Waiting follow-up due {due_day.isoformat()}"]
+                details = []
                 reason = waiting_reason(task)
                 if reason:
                     details.append(f"Reason: {reason}")
