@@ -159,7 +159,8 @@ Read-only display commands use the local cache by default. Use `--refresh` to
 sync Todoist first. Commands that modify Todoist always refresh before making
 the change.
 Transient Todoist API failures are retried for safe reads and Sync API
-requests. Each retry prints a warning to stderr.
+requests. Each retry prints a warning to stderr. Task and comment mutations
+use Sync API commands.
 
 ## Matching
 

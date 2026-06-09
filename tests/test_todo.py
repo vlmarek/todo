@@ -1380,6 +1380,27 @@ created two
             todo.urllib.request.urlopen = old_urlopen
             todo.time.sleep = old_sleep
 
+    def test_todoist_comment_methods_use_sync_commands(self):
+        client = todo.Todoist("token")
+        calls = []
+        old_command = client.command
+        try:
+            def fake_command(type_, args):
+                calls.append((type_, args))
+                return {"sync_status": "ok"}
+
+            client.command = fake_command
+            client.add_comment("task1", "new comment")
+            client.update_comment("note1", "updated comment")
+            client.delete_comment("note2")
+        finally:
+            client.command = old_command
+        self.assertEqual(calls, [
+            ("note_add", {"item_id": "task1", "content": "new comment"}),
+            ("note_update", {"id": "note1", "content": "updated comment"}),
+            ("note_delete", {"id": "note2"}),
+        ])
+
     def test_find_added_task_id(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["items"] = [{

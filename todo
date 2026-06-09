@@ -541,18 +541,21 @@ class Todoist:
         return out
 
     def add_comment(self, task_id, content):
-        return self.request("POST", f"{API_BASE}/comments", {
-            "task_id": str(task_id),
+        return self.command("note_add", {
+            "item_id": str(task_id),
             "content": content,
         })
 
     def update_comment(self, comment_id, content):
-        return self.request("POST", f"{API_BASE}/comments/{comment_id}", {
+        return self.command("note_update", {
+            "id": str(comment_id),
             "content": content,
         })
 
     def delete_comment(self, comment_id):
-        return self.request("DELETE", f"{API_BASE}/comments/{comment_id}")
+        return self.command("note_delete", {
+            "id": str(comment_id),
+        })
 
 
 def live_objects(cache, key):
