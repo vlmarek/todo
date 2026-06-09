@@ -576,7 +576,7 @@ created two
         with contextlib.redirect_stderr(err):
             rc = todo.main(["task", "--add"])
         self.assertEqual(rc, 1)
-        self.assertIn("usage: todo task --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]", err.getvalue())
+        self.assertIn("usage: todo task --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]", err.getvalue())
         self.assertIn("Create a task in CATEGORY", err.getvalue())
         self.assertNotIn("expected 2-9999", err.getvalue())
 
@@ -598,17 +598,17 @@ created two
 
     def test_empty_mode_flags_print_mode_help(self):
         cases = [
-            (["task", "--done"], "usage: todo task --done TASK [TEXT]"),
-            (["task", "--add", "--done"], "usage: todo task --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
+            (["task", "--done"], "usage: todo task --done|--close TASK [TEXT]"),
+            (["task", "--add", "--done"], "usage: todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
             (["task", "--undone"], "usage: todo task --undone TASK"),
             (["task", "--wait"], "usage: todo task --wait TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
             (["task", "--priority"], "usage: todo task --priority TASK P"),
             (["task", "--move"], "usage: todo task --move TASK CATEGORY"),
-            (["step", "--add"], "usage: todo step --add [--due DATE] TASK STEP [STEP ...]"),
-            (["step", "--add", "--done"], "usage: todo step --add --done [--due DATE] TASK STEP [STEP ...]"),
-            (["step", "--done"], "usage: todo step --done TASK STEP"),
+            (["step", "--add"], "usage: todo step --add|--new [--due DATE] TASK STEP [STEP ...]"),
+            (["step", "--add", "--done"], "usage: todo step --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]"),
+            (["step", "--done"], "usage: todo step --done|--close TASK STEP"),
             (["step", "--undone"], "usage: todo step --undone TASK STEP"),
             (["comment", "--add"], "usage: todo comment --add TASK TEXT [TEXT ...]"),
             (["comment", "--edit"], "usage: todo comment --edit TASK"),
@@ -633,10 +633,16 @@ created two
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["task", "website"]).values, ["website"])
         add_done_args = parser.parse_args(["task", "--add", "--done", "Engineering", "fixed bug", "tested"])
+        new_closed_args = parser.parse_args(["task", "--new", "--closed", "Engineering", "fixed bug", "tested"])
         self.assertTrue(add_done_args.add)
         self.assertTrue(add_done_args.done)
         self.assertEqual(add_done_args.values, ["Engineering", "fixed bug", "tested"])
+        self.assertTrue(new_closed_args.add)
+        self.assertTrue(new_closed_args.done)
+        self.assertEqual(new_closed_args.values, ["Engineering", "fixed bug", "tested"])
         self.assertTrue(parser.parse_args(["task", "--done", "website", "integrated"]).done)
+        self.assertTrue(parser.parse_args(["task", "--close", "website", "integrated"]).done)
+        self.assertTrue(parser.parse_args(["task", "--closed", "website", "integrated"]).done)
         self.assertTrue(parser.parse_args(["task", "--undone", "website"]).undone)
         self.assertTrue(parser.parse_args(["task", "--wait", "website", "waiting"]).wait)
         self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
@@ -807,21 +813,28 @@ created two
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
         add_args = parser.parse_args(["step", "--add", "website", "review", "publish"])
         add_done_args = parser.parse_args(["step", "--add", "--done", "website", "tested", "delivered"])
+        new_closed_args = parser.parse_args(["step", "--new", "--closed", "website", "tested", "delivered"])
         add_due_args = parser.parse_args(["step", "--add", "--due", "7d", "website", "review"])
         add_due_after_args = parser.parse_args(["step", "--add", "website", "review", "--due", "7d"])
         done_args = parser.parse_args(["step", "--done", "website", "review"])
+        close_args = parser.parse_args(["step", "--close", "website", "review"])
         undone_args = parser.parse_args(["step", "--undone", "website", "review"])
         self.assertTrue(add_args.add)
         self.assertEqual(add_args.values, ["website", "review", "publish"])
         self.assertTrue(add_done_args.add)
         self.assertTrue(add_done_args.done)
         self.assertEqual(add_done_args.values, ["website", "tested", "delivered"])
+        self.assertTrue(new_closed_args.add)
+        self.assertTrue(new_closed_args.done)
+        self.assertEqual(new_closed_args.values, ["website", "tested", "delivered"])
         self.assertEqual(add_due_args.due, "7d")
         self.assertEqual(add_due_args.values, ["website", "review"])
         self.assertEqual(add_due_after_args.due, "7d")
         self.assertEqual(add_due_after_args.values, ["website", "review"])
         self.assertTrue(done_args.done)
         self.assertEqual(done_args.values, ["website", "review"])
+        self.assertTrue(close_args.done)
+        self.assertEqual(close_args.values, ["website", "review"])
         self.assertTrue(undone_args.undone)
         self.assertEqual(undone_args.values, ["website", "review"])
 

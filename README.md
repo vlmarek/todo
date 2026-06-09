@@ -59,6 +59,8 @@ todo task --move website engineering
 ```
 
 Show, add, complete, wait/resume, prioritize, schedule, or move tasks.
+`--new` is accepted as an alias for `--add`; `--close` and `--closed` are
+accepted as aliases for `--done`.
 
 ```sh
 todo step website
@@ -68,6 +70,7 @@ todo step --done website review
 ```
 
 Show steps, add one or more steps, or mark a step done.
+Step commands accept the same `--new`, `--close`, and `--closed` aliases.
 
 ```sh
 todo comment website

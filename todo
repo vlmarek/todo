@@ -49,9 +49,9 @@ class TodoUsage(TodoError):
 
 
 TASK_USAGE = """usage: todo task TASK
-       todo task --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-       todo task --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-       todo task --done TASK [TEXT]
+       todo task --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --done|--close TASK [TEXT]
        todo task --undone TASK
        todo task --wait TASK REASON
        todo task --resume TASK TEXT
@@ -63,7 +63,7 @@ Show a task, or perform one task operation.
 """
 
 
-TASK_ADD_USAGE = """usage: todo task --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+TASK_ADD_USAGE = """usage: todo task --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY, optionally with initial steps.
 
@@ -100,12 +100,12 @@ Search tasks, descriptions, waiting reasons, steps, and comments.
 MODE_USAGE = {
     "task": TASK_USAGE,
     "task --add": TASK_ADD_USAGE,
-    "task --add --done": """usage: todo task --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+    "task --add --done": """usage: todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY and immediately mark it done. Optional STEP values
 are created as completed steps before the task is completed.
 """,
-    "task --done": """usage: todo task --done TASK [TEXT]
+    "task --done": """usage: todo task --done|--close TASK [TEXT]
 
 Complete TASK. Optional TEXT is stored as a completion comment.
 """,
@@ -133,15 +133,15 @@ Set TASK priority. P must be 1, 2, 3, or 4.
 
 Move TASK to CATEGORY.
 """,
-    "step --add": """usage: todo step --add [--due DATE] TASK STEP [STEP ...]
+    "step --add": """usage: todo step --add|--new [--due DATE] TASK STEP [STEP ...]
 
 Add one or more open steps to TASK.
 """,
-    "step --add --done": """usage: todo step --add --done [--due DATE] TASK STEP [STEP ...]
+    "step --add --done": """usage: todo step --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]
 
 Add one or more steps to TASK and immediately mark them done.
 """,
-    "step --done": """usage: todo step --done TASK STEP
+    "step --done": """usage: todo step --done|--close TASK STEP
 
 Mark an existing STEP done under TASK.
 """,
@@ -2156,9 +2156,9 @@ display:
   todo task TASK
 
 modes:
-  --add [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-  --add --done [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-  --done TASK [TEXT]
+  --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --done|--close TASK [TEXT]
   --undone TASK
   --wait TASK TEXT
   --resume TASK TEXT
@@ -2167,8 +2167,10 @@ modes:
   --move TASK CATEGORY""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--add", action="store_true", help="create a task, optionally with initial steps")
-    p.add_argument("--done", action="store_true", help="complete a task, or add a completed task with --add")
+    p.add_argument("--add", "--new", dest="add", action="store_true",
+                   help="create a task, optionally with initial steps")
+    p.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
+                   help="complete a task, or add a completed task with --add")
     p.add_argument("--undone", action="store_true", help="reopen a completed task")
     p.add_argument("--wait", action="store_true", help="mark a task waiting")
     p.add_argument("--resume", action="store_true", help="clear waiting state")
@@ -2192,14 +2194,15 @@ display:
   todo step TASK
 
 modes:
-  --add [--due DATE] TASK STEP [STEP ...]
-  --add --done [--due DATE] TASK STEP [STEP ...]
-  --done TASK STEP
+  --add|--new [--due DATE] TASK STEP [STEP ...]
+  --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]
+  --done|--close TASK STEP
   --undone TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--add", action="store_true", help="add one or more steps")
-    p.add_argument("--done", action="store_true", help="complete one existing step, or add completed steps with --add")
+    p.add_argument("--add", "--new", dest="add", action="store_true", help="add one or more steps")
+    p.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
+                   help="complete one existing step, or add completed steps with --add")
     p.add_argument("--undone", action="store_true", help="reopen one completed step")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date with --add")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
