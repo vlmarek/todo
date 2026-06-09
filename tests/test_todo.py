@@ -1236,6 +1236,62 @@ created two
         }
         self.assertEqual(todo.mapped_id(response), "real1")
 
+    def test_todoist_get_retries_transient_connection_failure(self):
+        client = todo.Todoist("token")
+        calls = []
+        sleeps = []
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'{"ok": true}'
+
+        def fake_urlopen(req, timeout):
+            calls.append((req, timeout))
+            if len(calls) == 1:
+                raise todo.urllib.error.URLError("temporary outage")
+            return Response()
+
+        old_urlopen = todo.urllib.request.urlopen
+        old_sleep = todo.time.sleep
+        try:
+            todo.urllib.request.urlopen = fake_urlopen
+            todo.time.sleep = lambda seconds: sleeps.append(seconds)
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(client.request("GET", f"{todo.API_BASE}/comments"), {"ok": True})
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(sleeps, [1])
+            self.assertIn("todo: warning: Todoist API connection failed: temporary outage", err.getvalue())
+        finally:
+            todo.urllib.request.urlopen = old_urlopen
+            todo.time.sleep = old_sleep
+
+    def test_todoist_unsafe_post_does_not_retry_connection_failure(self):
+        client = todo.Todoist("token")
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append((req, timeout))
+            raise todo.urllib.error.URLError("maybe processed")
+
+        old_urlopen = todo.urllib.request.urlopen
+        old_sleep = todo.time.sleep
+        try:
+            todo.urllib.request.urlopen = fake_urlopen
+            todo.time.sleep = lambda seconds: self.fail("unsafe POST should not sleep for retry")
+            with self.assertRaises(todo.TodoError):
+                client.request("POST", f"{todo.API_BASE}/comments", {"content": "note"})
+            self.assertEqual(len(calls), 1)
+        finally:
+            todo.urllib.request.urlopen = old_urlopen
+            todo.time.sleep = old_sleep
+
     def test_find_added_task_id(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["items"] = [{
