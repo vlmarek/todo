@@ -1872,7 +1872,7 @@ def require_arg_count(command, values, minimum, maximum=None, usage=None):
     maximum = minimum if maximum is None else maximum
     count = len(values)
     if count < minimum or count > maximum:
-        if count == 0 and usage:
+        if count < minimum and usage:
             raise TodoUsage(usage)
         if minimum == maximum:
             expected = str(minimum)

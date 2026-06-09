@@ -759,6 +759,15 @@ created two
         self.assertIn("Create a task in CATEGORY", err.getvalue())
         self.assertNotIn("expected 2-9999", err.getvalue())
 
+    def test_task_wait_missing_reason_prints_mode_help(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = todo.main(["task", "--wait", "Eric"])
+        self.assertEqual(rc, 1)
+        self.assertIn("usage: todo task --wait TASK REASON", err.getvalue())
+        self.assertIn("Mark TASK waiting", err.getvalue())
+        self.assertNotIn("expected 2 argument", err.getvalue())
+
     def test_empty_noun_commands_print_command_help(self):
         cases = [
             (["task"], "usage: todo task TASK"),
@@ -803,12 +812,14 @@ created two
                 self.assertIn(usage, err.getvalue())
                 self.assertNotIn("todo:", err.getvalue())
 
-    def test_task_add_partial_args_keeps_precise_error(self):
+    def test_task_add_partial_args_prints_mode_help(self):
         parser = todo.build_parser()
         args = parser.parse_args(["task", "--add", "Engineering"])
-        with self.assertRaises(todo.TodoError) as cm:
+        with self.assertRaises(todo.TodoUsage) as cm:
             todo.cmd_task(args)
-        self.assertIn("expected 2-9999 argument(s), got 1", str(cm.exception))
+        self.assertIn("usage: todo task --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]",
+                      str(cm.exception))
+        self.assertNotIn("expected 2-9999 argument", str(cm.exception))
 
     def test_task_modes_parse(self):
         parser = todo.build_parser()
