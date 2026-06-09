@@ -53,6 +53,7 @@ TASK_USAGE = """usage: todo task TASK
        todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo task --done|--close TASK [TEXT]
        todo task --undone TASK
+       todo task --delete [--yes] TASK
        todo task --wait TASK REASON
        todo task --resume TASK TEXT
        todo task --due TASK DATE
@@ -78,6 +79,7 @@ STEP_USAGE = """usage: todo step TASK
        todo step --add [--due DATE] TASK STEP [STEP ...]
        todo step --add --done [--due DATE] TASK STEP [STEP ...]
        todo step --done TASK STEP
+       todo step --delete [--yes] TASK STEP
 
 Show task steps, add steps, or mark one step done.
 """
@@ -112,6 +114,10 @@ Complete TASK. Optional TEXT is stored as a completion comment.
     "task --undone": """usage: todo task --undone TASK
 
 Reopen a completed TASK.
+""",
+    "task --delete": """usage: todo task --delete [--yes] TASK
+
+Delete TASK. Completed tasks are reopened before deletion.
 """,
     "task --wait": """usage: todo task --wait TASK REASON
 
@@ -148,6 +154,10 @@ Mark an existing STEP done under TASK.
     "step --undone": """usage: todo step --undone TASK STEP
 
 Reopen a completed STEP under TASK.
+""",
+    "step --delete": """usage: todo step --delete [--yes] TASK STEP
+
+Delete STEP under TASK. Completed steps are reopened before deletion.
 """,
     "comment --add": """usage: todo comment --add TASK TEXT [TEXT ...]
 
@@ -913,6 +923,10 @@ def reopen_item(client, cache, task_id):
     mutate(client, cache, "item_uncomplete", {"id": str(task_id)})
 
 
+def delete_item(client, cache, task_id):
+    mutate(client, cache, "item_delete", {"id": str(task_id)})
+
+
 def cmd_init(args):
     with lock_state():
         cfg = Config.load()
@@ -1446,6 +1460,64 @@ def cmd_step_undone(args):
         return 0
 
 
+def confirm_delete(kind, title, yes=False):
+    if yes:
+        return
+    if not sys.stdin.isatty():
+        raise TodoError("Use --yes to delete non-interactively.")
+    answer = input(f"Delete {kind}: {title}? [y/N] ").strip().lower()
+    if answer not in ("y", "yes"):
+        raise TodoError("Cancelled; nothing deleted.")
+
+
+def delete_task_item(client, cache, task):
+    was_done = bool(task.get("checked"))
+    if was_done:
+        reopen_item(client, cache, task.get("id"))
+    delete_item(client, cache, task.get("id"))
+    return was_done
+
+
+def cmd_delete_task(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task, include_completed=True)
+        confirm_delete("task", content_of(task), args.yes)
+        was_done = delete_task_item(client, cache, task)
+        state = "completed task" if was_done else "task"
+        print(f"Deleted {state}: {content_of(task)}")
+        return 0
+
+
+def delete_step_item(client, cache, task, step):
+    parent_was_done = bool(task.get("checked"))
+    step_was_done = bool(step.get("checked"))
+    if parent_was_done:
+        reopen_item(client, cache, task.get("id"))
+    if step_was_done:
+        reopen_item(client, cache, step.get("id"))
+    delete_item(client, cache, step.get("id"))
+    if parent_was_done:
+        close_item(client, cache, task.get("id"))
+    return parent_was_done, step_was_done
+
+
+def cmd_delete_step(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task, include_completed=True)
+        step = resolve_step(cache, task, args.step)
+        confirm_delete("step", f"{content_of(task)} / {content_of(step)}", args.yes)
+        parent_was_done, step_was_done = delete_step_item(client, cache, task, step)
+        state = "completed step" if step_was_done else "step"
+        if parent_was_done:
+            state = f"{state} from completed task"
+        print(f"Deleted {state}: {content_of(step)}")
+        return 0
+
+
 def cmd_priority(args):
     with lock_state():
         cfg, client, cache = load_runtime()
@@ -1554,7 +1626,7 @@ def task_due_mode_values(args):
 
 
 def cmd_task(args):
-    modes = selected_modes(args, ["add", "done", "undone", "wait", "resume", "due", "priority", "move"])
+    modes = selected_modes(args, ["add", "done", "undone", "delete", "wait", "resume", "due", "priority", "move"])
     mode_set = set(modes)
     if "add" in mode_set:
         if not mode_set <= {"add", "done", "due"}:
@@ -1569,6 +1641,8 @@ def cmd_task(args):
     add_priority = getattr(args, "add_priority", None)
     if add_priority is not None and mode not in ("add", "add_done"):
         raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add`.")
+    if args.yes and mode != "delete":
+        raise TodoError("Use --yes only with `todo task --delete`.")
     if args.refresh and mode != "show":
         raise TodoError("Use --refresh only with `todo task TASK`; mutation modes refresh automatically.")
     if mode == "show":
@@ -1600,6 +1674,9 @@ def cmd_task(args):
     if mode == "undone":
         require_arg_count("task --undone", values, 1)
         return cmd_undone(argparse.Namespace(task=values[0]))
+    if mode == "delete":
+        require_arg_count("task --delete", values, 1)
+        return cmd_delete_task(argparse.Namespace(task=values[0], yes=args.yes))
     if mode == "wait":
         require_arg_count("task --wait", values, 2)
         return cmd_wait(argparse.Namespace(task=values[0], text=values[1], after=None, due=None, yes=False))
@@ -1620,7 +1697,7 @@ def cmd_task(args):
 
 
 def cmd_step_noun(args):
-    modes = selected_modes(args, ["add", "done", "undone", "due"])
+    modes = selected_modes(args, ["add", "done", "undone", "delete", "due"])
     mode_set = set(modes)
     if "due" in mode_set and "add" not in mode_set:
         raise TodoError("Use --due only with `todo step --add`.")
@@ -1634,6 +1711,8 @@ def cmd_step_noun(args):
         mode = modes[0] if modes else "show"
     values = args.values
     add_due = due_option_value(args, "step --add") if "due" in mode_set else None
+    if args.yes and mode != "delete":
+        raise TodoError("Use --yes only with `todo step --delete`.")
     if args.refresh and mode != "show":
         raise TodoError("Use --refresh only with `todo step TASK`; mutation modes refresh automatically.")
     if mode == "show":
@@ -1651,6 +1730,9 @@ def cmd_step_noun(args):
     if mode == "undone":
         require_arg_count("step --undone", values, 2)
         return cmd_step_undone(argparse.Namespace(task=values[0], step=values[1]))
+    if mode == "delete":
+        require_arg_count("step --delete", values, 2)
+        return cmd_delete_step(argparse.Namespace(task=values[0], step=values[1], yes=args.yes))
     raise TodoError(f"Unknown step mode {mode}.")
 
 
@@ -2197,6 +2279,7 @@ modes:
   --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --done|--close TASK [TEXT]
   --undone TASK
+  --delete [--yes] TASK
   --wait TASK TEXT
   --resume TASK TEXT
   --due TASK DATE
@@ -2209,6 +2292,8 @@ modes:
     p.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
                    help="complete a task, or add a completed task with --add")
     p.add_argument("--undone", action="store_true", help="reopen a completed task")
+    p.add_argument("--delete", action="store_true", help="delete a task")
+    p.add_argument("--yes", action="store_true", help="skip delete confirmation")
     p.add_argument("--wait", action="store_true", help="mark a task waiting")
     p.add_argument("--resume", action="store_true", help="clear waiting state")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE",
@@ -2235,6 +2320,7 @@ modes:
   --add|--new [--due DATE] TASK STEP [STEP ...]
   --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]
   --done|--close TASK STEP
+  --delete [--yes] TASK STEP
   --undone TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -2242,6 +2328,8 @@ modes:
     p.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
                    help="complete one existing step, or add completed steps with --add")
     p.add_argument("--undone", action="store_true", help="reopen one completed step")
+    p.add_argument("--delete", action="store_true", help="delete one step")
+    p.add_argument("--yes", action="store_true", help="skip delete confirmation")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date with --add")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing steps")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")

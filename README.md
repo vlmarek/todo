@@ -53,6 +53,8 @@ todo task --add -p1 engineering "Update website dependencies" "build/test" "revi
 todo task --add engineering "Update website dependencies" "build/test" "review"
 todo task --add operations "Deliver 224" "check dashboard table" "close build"
 todo task --done website "deployed"
+todo task --delete website
+todo task --delete --yes website
 todo task --wait website "waiting for review"
 todo task --resume website "review returned; addressing comments"
 todo task --priority website 1
@@ -70,9 +72,11 @@ todo step --refresh website
 todo step --add --due 7d website "build/test"
 todo step --add website "build/test" "review" "publish" "deliver"
 todo step --done website review
+todo step --delete website review
+todo step --delete --yes website review
 ```
 
-Show steps, add one or more steps, or mark a step done.
+Show steps, add one or more steps, mark one step done, or delete one step.
 Step commands accept the same `--new`, `--close`, and `--closed` aliases.
 
 ```sh

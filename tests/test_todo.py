@@ -670,6 +670,7 @@ created two
             (["task", "--done"], "usage: todo task --done|--close TASK [TEXT]"),
             (["task", "--add", "--done"], "usage: todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
             (["task", "--undone"], "usage: todo task --undone TASK"),
+            (["task", "--delete"], "usage: todo task --delete [--yes] TASK"),
             (["task", "--wait"], "usage: todo task --wait TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
@@ -678,6 +679,7 @@ created two
             (["step", "--add"], "usage: todo step --add|--new [--due DATE] TASK STEP [STEP ...]"),
             (["step", "--add", "--done"], "usage: todo step --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]"),
             (["step", "--done"], "usage: todo step --done|--close TASK STEP"),
+            (["step", "--delete"], "usage: todo step --delete [--yes] TASK STEP"),
             (["step", "--undone"], "usage: todo step --undone TASK STEP"),
             (["comment", "--add"], "usage: todo comment --add TASK TEXT [TEXT ...]"),
             (["comment", "--edit"], "usage: todo comment --edit TASK"),
@@ -714,6 +716,10 @@ created two
         self.assertTrue(parser.parse_args(["task", "--close", "website", "integrated"]).done)
         self.assertTrue(parser.parse_args(["task", "--closed", "website", "integrated"]).done)
         self.assertTrue(parser.parse_args(["task", "--undone", "website"]).undone)
+        delete_args = parser.parse_args(["task", "--delete", "--yes", "website"])
+        self.assertTrue(delete_args.delete)
+        self.assertTrue(delete_args.yes)
+        self.assertEqual(delete_args.values, ["website"])
         self.assertTrue(parser.parse_args(["task", "--wait", "website", "waiting"]).wait)
         self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
         self.assertTrue(parser.parse_args(["task", "--due", "website", "2d"]).due)
@@ -731,6 +737,12 @@ created two
         with self.assertRaises(todo.TodoError) as cm:
             todo.cmd_task(parser.parse_args(["task", "--refresh", "--done", "website"]))
         self.assertIn("mutation modes refresh automatically", str(cm.exception))
+
+    def test_task_yes_rejected_for_non_delete_modes(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_task(parser.parse_args(["task", "--yes", "--done", "website"]))
+        self.assertIn("Use --yes only", str(cm.exception))
 
     def test_task_priority_reports_swapped_arguments(self):
         with self.assertRaises(todo.TodoError) as cm:
@@ -834,6 +846,42 @@ created two
         self.assertEqual(rc, 0)
         self.assertEqual(calls[0].task, "virtuals2-sca")
 
+    def test_task_delete_dispatches_to_delete(self):
+        calls = []
+        old_cmd_delete_task = todo.cmd_delete_task
+        try:
+            def fake_cmd_delete_task(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_delete_task = fake_cmd_delete_task
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--delete", "--yes", "virtuals2-sca"]))
+        finally:
+            todo.cmd_delete_task = old_cmd_delete_task
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "virtuals2-sca")
+        self.assertTrue(calls[0].yes)
+
+    def test_delete_without_yes_requires_interactive_terminal(self):
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.confirm_delete("task", "website", yes=False)
+        self.assertIn("Use --yes to delete non-interactively", str(cm.exception))
+
+    def test_delete_completed_task_reopens_then_deletes(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_delete_item = todo.delete_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.delete_item = lambda client, cache, task_id: calls.append(("delete", task_id))
+            was_done = todo.delete_task_item(None, None, {"id": "task1", "checked": True})
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.delete_item = old_delete_item
+        self.assertTrue(was_done)
+        self.assertEqual(calls, [("reopen", "task1"), ("delete", "task1")])
+
     def test_move_open_task_only_moves(self):
         calls = []
         old_reopen_item = todo.reopen_item
@@ -896,6 +944,7 @@ created two
         done_args = parser.parse_args(["step", "--done", "website", "review"])
         close_args = parser.parse_args(["step", "--close", "website", "review"])
         undone_args = parser.parse_args(["step", "--undone", "website", "review"])
+        delete_args = parser.parse_args(["step", "--delete", "--yes", "website", "review"])
         self.assertTrue(add_args.add)
         self.assertEqual(add_args.values, ["website", "review", "publish"])
         self.assertTrue(add_done_args.add)
@@ -914,6 +963,9 @@ created two
         self.assertEqual(close_args.values, ["website", "review"])
         self.assertTrue(undone_args.undone)
         self.assertEqual(undone_args.values, ["website", "review"])
+        self.assertTrue(delete_args.delete)
+        self.assertTrue(delete_args.yes)
+        self.assertEqual(delete_args.values, ["website", "review"])
 
     def test_step_add_due_dispatches_to_step(self):
         calls = []
@@ -945,6 +997,12 @@ created two
             todo.cmd_step_noun(parser.parse_args(["step", "--refresh", "--done", "website", "review"]))
         self.assertIn("mutation modes refresh automatically", str(cm.exception))
 
+    def test_step_yes_rejected_for_non_delete_modes(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_step_noun(parser.parse_args(["step", "--yes", "--done", "website", "review"]))
+        self.assertIn("Use --yes only", str(cm.exception))
+
     def test_step_undone_dispatches_to_step_undone(self):
         calls = []
         old_cmd_step_undone = todo.cmd_step_undone
@@ -961,6 +1019,52 @@ created two
         self.assertEqual(rc, 0)
         self.assertEqual(calls[0].task, "website")
         self.assertEqual(calls[0].step, "review")
+
+    def test_step_delete_dispatches_to_delete(self):
+        calls = []
+        old_cmd_delete_step = todo.cmd_delete_step
+        try:
+            def fake_cmd_delete_step(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_delete_step = fake_cmd_delete_step
+            parser = todo.build_parser()
+            rc = todo.cmd_step_noun(parser.parse_args(["step", "--delete", "--yes", "website", "review"]))
+        finally:
+            todo.cmd_delete_step = old_cmd_delete_step
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].step, "review")
+        self.assertTrue(calls[0].yes)
+
+    def test_delete_completed_step_under_completed_task_preserves_parent_done(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_delete_item = todo.delete_item
+        old_close_item = todo.close_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.delete_item = lambda client, cache, task_id: calls.append(("delete", task_id))
+            todo.close_item = lambda client, cache, task_id: calls.append(("close", task_id))
+            parent_was_done, step_was_done = todo.delete_step_item(
+                None,
+                None,
+                {"id": "task1", "checked": True},
+                {"id": "step1", "checked": True},
+            )
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.delete_item = old_delete_item
+            todo.close_item = old_close_item
+        self.assertTrue(parent_was_done)
+        self.assertTrue(step_was_done)
+        self.assertEqual(calls, [
+            ("reopen", "task1"),
+            ("reopen", "step1"),
+            ("delete", "step1"),
+            ("close", "task1"),
+        ])
 
     def test_old_verb_commands_removed(self):
         parser = todo.build_parser()
