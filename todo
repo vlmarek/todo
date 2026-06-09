@@ -50,6 +50,7 @@ class TodoUsage(TodoError):
 
 TASK_USAGE = """usage: todo task TASK
        todo task --add CATEGORY TASK [STEP ...]
+       todo task --add --done CATEGORY TASK [STEP ...]
        todo task --done TASK [TEXT]
        todo task --wait TASK REASON
        todo task --resume TASK TEXT
@@ -90,6 +91,11 @@ Show task comments, add comments, or edit all comments.
 MODE_USAGE = {
     "task": TASK_USAGE,
     "task --add": TASK_ADD_USAGE,
+    "task --add --done": """usage: todo task --add --done CATEGORY TASK [STEP ...]
+
+Create a task in CATEGORY and immediately mark it done. Optional STEP values
+are created as completed steps before the task is completed.
+""",
     "task --done": """usage: todo task --done TASK [TEXT]
 
 Complete TASK. Optional TEXT is stored as a completion comment.
@@ -950,16 +956,28 @@ def cmd_add(args):
             item_args["due"] = {"string": args.due}
         response = mutate(client, cache, "item_add", item_args)
         task_id = mapped_id(response) or find_added_task_id(cache, category_project.get("id"), args.task)
-        if args.steps and not task_id:
-            raise TodoError("Added task, but could not find its Todoist ID to add steps.")
-        print(f"Added: {args.task}")
+        if (args.steps or getattr(args, "done", False)) and not task_id:
+            raise TodoError("Added task, but could not find its Todoist ID.")
+        if getattr(args, "done", False):
+            print(f"Added done task: {args.task}")
+        else:
+            print(f"Added: {args.task}")
         for step in args.steps:
-            mutate(client, cache, "item_add", {
+            response = mutate(client, cache, "item_add", {
                 "content": step,
                 "project_id": str(category_project.get("id")),
                 "parent_id": str(task_id),
             })
-            print(f"Added step: {step}")
+            step_id = mapped_id(response) or find_added_step_id(cache, task_id, step)
+            if getattr(args, "done", False):
+                if not step_id:
+                    raise TodoError(f"Added step {step!r}, but could not find its Todoist ID to mark it done.")
+                close_item(client, cache, step_id)
+                print(f"Added done step: {step}")
+            else:
+                print(f"Added step: {step}")
+        if getattr(args, "done", False):
+            close_item(client, cache, task_id)
         return 0
 
 
@@ -1449,9 +1467,12 @@ def parse_priority_args(values):
 
 def cmd_task(args):
     modes = selected_modes(args, ["add", "done", "wait", "resume", "due", "priority", "move"])
-    if len(modes) > 1:
+    if len(modes) > 1 and set(modes) != {"add", "done"}:
         raise TodoError("Use only one task mode at a time.")
-    mode = modes[0] if modes else "show"
+    if set(modes) == {"add", "done"}:
+        mode = "add_done"
+    else:
+        mode = modes[0] if modes else "show"
     values = args.values
     if mode == "show":
         require_arg_count("task", values, 1)
@@ -1464,6 +1485,17 @@ def cmd_task(args):
             steps=values[2:],
             priority=None,
             due=None,
+            done=False,
+        ))
+    if mode == "add_done":
+        require_arg_count("task --add --done", values, 2, 9999)
+        return cmd_add(argparse.Namespace(
+            category=values[0],
+            task=values[1],
+            steps=values[2:],
+            priority=None,
+            due=None,
+            done=True,
         ))
     if mode == "done":
         require_arg_count("task --done", values, 1, 2)
@@ -1883,6 +1915,7 @@ display:
 
 modes:
   --add CATEGORY TASK [STEP ...]
+  --add --done CATEGORY TASK [STEP ...]
   --done TASK [TEXT]
   --wait TASK TEXT
   --resume TASK TEXT
@@ -1892,7 +1925,7 @@ modes:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--add", action="store_true", help="create a task, optionally with initial steps")
-    p.add_argument("--done", action="store_true", help="complete a task")
+    p.add_argument("--done", action="store_true", help="complete a task, or add a completed task with --add")
     p.add_argument("--wait", action="store_true", help="mark a task waiting")
     p.add_argument("--resume", action="store_true", help="clear waiting state")
     p.add_argument("--due", action="store_true", help="set or clear attention date")

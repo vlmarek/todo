@@ -486,6 +486,7 @@ created two
     def test_empty_mode_flags_print_mode_help(self):
         cases = [
             (["task", "--done"], "usage: todo task --done TASK [TEXT]"),
+            (["task", "--add", "--done"], "usage: todo task --add --done CATEGORY TASK [STEP ...]"),
             (["task", "--wait"], "usage: todo task --wait TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
@@ -516,6 +517,10 @@ created two
     def test_task_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["task", "website"]).values, ["website"])
+        add_done_args = parser.parse_args(["task", "--add", "--done", "Engineering", "fixed bug", "tested"])
+        self.assertTrue(add_done_args.add)
+        self.assertTrue(add_done_args.done)
+        self.assertEqual(add_done_args.values, ["Engineering", "fixed bug", "tested"])
         self.assertTrue(parser.parse_args(["task", "--done", "website", "integrated"]).done)
         self.assertTrue(parser.parse_args(["task", "--wait", "website", "waiting"]).wait)
         self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
@@ -533,6 +538,25 @@ created two
         with self.assertRaises(todo.TodoError) as cm:
             todo.parse_priority_args(["config cleanup", "high"])
         self.assertIn("expects priority P as 1, 2, 3, or 4", str(cm.exception))
+
+    def test_task_add_done_dispatches_to_add(self):
+        calls = []
+        old_cmd_add = todo.cmd_add
+        try:
+            def fake_cmd_add(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_add = fake_cmd_add
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--add", "--done", "Engineering", "fixed bug", "tested"]))
+        finally:
+            todo.cmd_add = old_cmd_add
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].category, "Engineering")
+        self.assertEqual(calls[0].task, "fixed bug")
+        self.assertEqual(calls[0].steps, ["tested"])
+        self.assertTrue(calls[0].done)
 
     def test_step_modes_parse(self):
         parser = todo.build_parser()
