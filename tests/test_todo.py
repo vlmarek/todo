@@ -468,6 +468,29 @@ created two
         self.assertIn("Create a task in CATEGORY", err.getvalue())
         self.assertNotIn("expected 2-9999", err.getvalue())
 
+    def test_empty_mode_flags_print_mode_help(self):
+        cases = [
+            (["task", "--done"], "usage: todo task --done TASK [TEXT]"),
+            (["task", "--wait"], "usage: todo task --wait TASK REASON"),
+            (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
+            (["task", "--due"], "usage: todo task --due TASK DATE"),
+            (["task", "--priority"], "usage: todo task --priority TASK P"),
+            (["task", "--move"], "usage: todo task --move TASK CATEGORY"),
+            (["step", "--add"], "usage: todo step --add TASK STEP [STEP ...]"),
+            (["step", "--add", "--done"], "usage: todo step --add --done TASK STEP [STEP ...]"),
+            (["step", "--done"], "usage: todo step --done TASK STEP"),
+            (["comment", "--add"], "usage: todo comment --add TASK TEXT [TEXT ...]"),
+            (["comment", "--edit"], "usage: todo comment --edit TASK"),
+        ]
+        for argv, usage in cases:
+            with self.subTest(argv=argv):
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    rc = todo.main(argv)
+                self.assertEqual(rc, 1)
+                self.assertIn(usage, err.getvalue())
+                self.assertNotIn("todo:", err.getvalue())
+
     def test_task_add_partial_args_keeps_precise_error(self):
         parser = todo.build_parser()
         args = parser.parse_args(["task", "--add", "Engineering"])

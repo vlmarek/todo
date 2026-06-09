@@ -57,6 +57,54 @@ examples:
   todo task --add Operations "deliver next release" "check dashboard" "close build"
 """
 
+MODE_USAGE = {
+    "task --add": TASK_ADD_USAGE,
+    "task --done": """usage: todo task --done TASK [TEXT]
+
+Complete TASK. Optional TEXT is stored as a completion comment.
+""",
+    "task --wait": """usage: todo task --wait TASK REASON
+
+Mark TASK waiting and store REASON in the task description.
+""",
+    "task --resume": """usage: todo task --resume TASK TEXT
+
+Clear waiting state and due date from TASK.
+""",
+    "task --due": """usage: todo task --due TASK DATE
+
+Set TASK attention date. Use `clear` or `-` to remove the due date.
+""",
+    "task --priority": """usage: todo task --priority TASK P
+
+Set TASK priority. P must be 1, 2, 3, or 4.
+""",
+    "task --move": """usage: todo task --move TASK CATEGORY
+
+Move TASK to CATEGORY.
+""",
+    "step --add": """usage: todo step --add TASK STEP [STEP ...]
+
+Add one or more open steps to TASK.
+""",
+    "step --add --done": """usage: todo step --add --done TASK STEP [STEP ...]
+
+Add one or more steps to TASK and immediately mark them done.
+""",
+    "step --done": """usage: todo step --done TASK STEP
+
+Mark an existing STEP done under TASK.
+""",
+    "comment --add": """usage: todo comment --add TASK TEXT [TEXT ...]
+
+Add one or more comments to TASK. Each TEXT becomes a separate comment.
+""",
+    "comment --edit": """usage: todo comment --edit TASK
+
+Edit all comments on TASK in one editor buffer.
+""",
+}
+
 
 def ensure_app_dir():
     os.makedirs(APP_DIR, mode=0o700, exist_ok=True)
@@ -1337,6 +1385,7 @@ def selected_modes(args, names):
 
 
 def require_arg_count(command, values, minimum, maximum=None, usage=None):
+    usage = usage if usage is not None else MODE_USAGE.get(command)
     maximum = minimum if maximum is None else maximum
     count = len(values)
     if count < minimum or count > maximum:
