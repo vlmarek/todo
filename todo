@@ -1863,7 +1863,9 @@ def print_task_list(cache, tasks, show_steps=False):
         if show_steps:
             steps = subtasks(cache, task.get("id"))
             for step in steps:
-                print(f"    - {content_of(step)}")
+                step_due = format_due(step)
+                step_due_text = f" {step_due}" if step_due else ""
+                print(f"    - {content_of(step)}{step_due_text}")
 
 
 def cmd_waiting(args):

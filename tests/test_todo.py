@@ -329,6 +329,24 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("    - check dashboard", out.getvalue())
         self.assertIn("    - close build", out.getvalue())
 
+    def test_task_list_prints_step_due_dates(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "eng", "content": "utf-8 tmux wide characters", "priority": 1},
+            {
+                "id": "s1",
+                "project_id": "eng",
+                "parent_id": "task1",
+                "content": "publish the release notes",
+                "due": {"date": "2099-06-15"},
+            },
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_list(cache, [cache.data["items"][0]], show_steps=True)
+        self.assertIn("    - publish the release notes due:in ", out.getvalue())
+
     def test_task_list_prints_waiting_reason(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
