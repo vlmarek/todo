@@ -533,12 +533,22 @@ created two
         self.assertTrue(args.add)
         self.assertEqual(args.values, ["operations", "Deliver next release", "check dashboard", "close build"])
 
+    def test_task_add_accepts_priority_flags(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["task", "--add", "-p1", "operations", "Deliver next release"])
+        self.assertTrue(args.add)
+        self.assertEqual(args.add_priority, 1)
+        self.assertEqual(args.values, ["operations", "Deliver next release"])
+        args = parser.parse_args(["task", "--add", "operations", "Deliver next release", "-p4"])
+        self.assertEqual(args.add_priority, 4)
+        self.assertEqual(args.values, ["operations", "Deliver next release"])
+
     def test_task_add_without_args_prints_mode_help(self):
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             rc = todo.main(["task", "--add"])
         self.assertEqual(rc, 1)
-        self.assertIn("usage: todo task --add CATEGORY TASK [STEP ...]", err.getvalue())
+        self.assertIn("usage: todo task --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]", err.getvalue())
         self.assertIn("Create a task in CATEGORY", err.getvalue())
         self.assertNotIn("expected 2-9999", err.getvalue())
 
@@ -561,7 +571,7 @@ created two
     def test_empty_mode_flags_print_mode_help(self):
         cases = [
             (["task", "--done"], "usage: todo task --done TASK [TEXT]"),
-            (["task", "--add", "--done"], "usage: todo task --add --done CATEGORY TASK [STEP ...]"),
+            (["task", "--add", "--done"], "usage: todo task --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
             (["task", "--undone"], "usage: todo task --undone TASK"),
             (["task", "--wait"], "usage: todo task --wait TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
@@ -606,6 +616,12 @@ created two
         self.assertTrue(parser.parse_args(["task", "--priority", "website", "1"]).priority)
         self.assertTrue(parser.parse_args(["task", "--move", "website", "engineering"]).move)
 
+    def test_task_add_priority_flag_requires_add_mode(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_task(parser.parse_args(["task", "-p2", "website"]))
+        self.assertIn("only with `todo task --add`", str(cm.exception))
+
     def test_task_priority_reports_swapped_arguments(self):
         with self.assertRaises(todo.TodoError) as cm:
             todo.parse_priority_args(["2", "config cleanup"])
@@ -627,14 +643,35 @@ created two
 
             todo.cmd_add = fake_cmd_add
             parser = todo.build_parser()
-            rc = todo.cmd_task(parser.parse_args(["task", "--add", "--done", "Engineering", "fixed bug", "tested"]))
+            rc = todo.cmd_task(parser.parse_args(["task", "--add", "--done", "-p2", "Engineering", "fixed bug", "tested"]))
         finally:
             todo.cmd_add = old_cmd_add
         self.assertEqual(rc, 0)
         self.assertEqual(calls[0].category, "Engineering")
         self.assertEqual(calls[0].task, "fixed bug")
         self.assertEqual(calls[0].steps, ["tested"])
+        self.assertEqual(calls[0].priority, 2)
         self.assertTrue(calls[0].done)
+
+    def test_task_add_priority_dispatches_to_add(self):
+        calls = []
+        old_cmd_add = todo.cmd_add
+        try:
+            def fake_cmd_add(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_add = fake_cmd_add
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--add", "-p1", "Engineering", "fixed bug"]))
+        finally:
+            todo.cmd_add = old_cmd_add
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].category, "Engineering")
+        self.assertEqual(calls[0].task, "fixed bug")
+        self.assertEqual(calls[0].steps, [])
+        self.assertEqual(calls[0].priority, 1)
+        self.assertFalse(calls[0].done)
 
     def test_task_undone_dispatches_to_undone(self):
         calls = []

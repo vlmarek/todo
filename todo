@@ -49,8 +49,8 @@ class TodoUsage(TodoError):
 
 
 TASK_USAGE = """usage: todo task TASK
-       todo task --add CATEGORY TASK [STEP ...]
-       todo task --add --done CATEGORY TASK [STEP ...]
+       todo task --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo task --done TASK [TEXT]
        todo task --undone TASK
        todo task --wait TASK REASON
@@ -63,11 +63,12 @@ Show a task, or perform one task operation.
 """
 
 
-TASK_ADD_USAGE = """usage: todo task --add CATEGORY TASK [STEP ...]
+TASK_ADD_USAGE = """usage: todo task --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY, optionally with initial steps.
 
 examples:
+  todo task --add -p1 Engineering "fix config cleanup"
   todo task --add Engineering "fix config cleanup"
   todo task --add Operations "deliver next release" "check dashboard" "close build"
 """
@@ -98,7 +99,7 @@ Search tasks, descriptions, waiting reasons, steps, and comments.
 MODE_USAGE = {
     "task": TASK_USAGE,
     "task --add": TASK_ADD_USAGE,
-    "task --add --done": """usage: todo task --add --done CATEGORY TASK [STEP ...]
+    "task --add --done": """usage: todo task --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY and immediately mark it done. Optional STEP values
 are created as completed steps before the task is completed.
@@ -1531,6 +1532,9 @@ def cmd_task(args):
     else:
         mode = modes[0] if modes else "show"
     values = args.values
+    add_priority = getattr(args, "add_priority", None)
+    if add_priority is not None and mode not in ("add", "add_done"):
+        raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add`.")
     if mode == "show":
         require_arg_count("task", values, 1)
         return cmd_show(argparse.Namespace(task=values[0]))
@@ -1540,7 +1544,7 @@ def cmd_task(args):
             category=values[0],
             task=values[1],
             steps=values[2:],
-            priority=None,
+            priority=add_priority,
             due=None,
             done=False,
         ))
@@ -1550,7 +1554,7 @@ def cmd_task(args):
             category=values[0],
             task=values[1],
             steps=values[2:],
-            priority=None,
+            priority=add_priority,
             due=None,
             done=True,
         ))
@@ -2118,8 +2122,8 @@ display:
   todo task TASK
 
 modes:
-  --add CATEGORY TASK [STEP ...]
-  --add --done CATEGORY TASK [STEP ...]
+  --add [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --add --done [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --done TASK [TEXT]
   --undone TASK
   --wait TASK TEXT
@@ -2137,6 +2141,10 @@ modes:
     p.add_argument("--due", action="store_true", help="set or clear attention date")
     p.add_argument("--priority", action="store_true", help="set priority 1..4")
     p.add_argument("--move", action="store_true", help="move task to another category")
+    p.add_argument("-p1", dest="add_priority", action="store_const", const=1, help="set priority 1 when adding a task")
+    p.add_argument("-p2", dest="add_priority", action="store_const", const=2, help="set priority 2 when adding a task")
+    p.add_argument("-p3", dest="add_priority", action="store_const", const=3, help="set priority 3 when adding a task")
+    p.add_argument("-p4", dest="add_priority", action="store_const", const=4, help="set priority 4 when adding a task")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_task)
 
