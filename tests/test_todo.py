@@ -764,7 +764,7 @@ created two
         with contextlib.redirect_stderr(err):
             rc = todo.main(["task", "--wait", "Eric"])
         self.assertEqual(rc, 1)
-        self.assertIn("usage: todo task --wait TASK REASON", err.getvalue())
+        self.assertIn("usage: todo task --wait [--due DATE] TASK REASON", err.getvalue())
         self.assertIn("Mark TASK waiting", err.getvalue())
         self.assertNotIn("expected 2 argument", err.getvalue())
 
@@ -790,7 +790,7 @@ created two
             (["task", "--add", "--done"], "usage: todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
             (["task", "--undone"], "usage: todo task --undone|--unclose TASK"),
             (["task", "--delete"], "usage: todo task --delete [--yes] TASK"),
-            (["task", "--wait"], "usage: todo task --wait TASK REASON"),
+            (["task", "--wait"], "usage: todo task --wait [--due DATE] TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
             (["task", "--priority"], "usage: todo task --priority TASK P"),
@@ -843,6 +843,13 @@ created two
         self.assertTrue(delete_args.yes)
         self.assertEqual(delete_args.values, ["website"])
         self.assertTrue(parser.parse_args(["task", "--wait", "website", "waiting"]).wait)
+        wait_due_args = parser.parse_args(["task", "--wait", "--due", "7d", "website", "waiting"])
+        wait_due_after_args = parser.parse_args(["task", "--wait", "website", "waiting", "--due", "7d"])
+        self.assertTrue(wait_due_args.wait)
+        self.assertEqual(wait_due_args.due, "7d")
+        self.assertEqual(wait_due_args.values, ["website", "waiting"])
+        self.assertEqual(wait_due_after_args.due, "7d")
+        self.assertEqual(wait_due_after_args.values, ["website", "waiting"])
         self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
         self.assertTrue(parser.parse_args(["task", "--due", "website", "2d"]).due)
         self.assertTrue(parser.parse_args(["task", "--priority", "website", "1"]).priority)
@@ -951,6 +958,32 @@ created two
         self.assertEqual(rc, 0)
         self.assertEqual(calls[0].task, "website")
         self.assertEqual(calls[0].date, "2d")
+
+    def test_task_wait_due_dispatches_to_wait(self):
+        calls = []
+        old_cmd_wait = todo.cmd_wait
+        try:
+            def fake_cmd_wait(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_wait = fake_cmd_wait
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--wait", "--due", "7d", "website", "waiting"]))
+        finally:
+            todo.cmd_wait = old_cmd_wait
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].text, "waiting")
+        self.assertEqual(calls[0].due, "7d")
+
+    def test_wait_due_clear_is_rejected(self):
+        class Cfg:
+            wait_days = 2
+
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.wait_follow_date(todo.argparse.Namespace(due="clear", after=None), Cfg())
+        self.assertIn("Waiting tasks need a follow-up due date", str(cm.exception))
 
     def test_task_undone_dispatches_to_undone(self):
         calls = []

@@ -66,6 +66,7 @@ todo task --unclose website
 todo task --delete website
 todo task --delete --yes website
 todo task --wait website "waiting for review"
+todo task --wait --due friday website "waiting for review"
 todo task --resume website "review returned; addressing comments"
 todo task --priority website 1
 todo task --due website 2d
@@ -84,6 +85,8 @@ weekday names such as `monday`, ISO dates/times, `clear`, and `ask`.
 `--due ask` prompts, previews the parsed due date, and accepts Enter/`y`,
 `n`, or a different due input. Weekday names mean the next occurrence,
 excluding today.
+`--due` on `todo task --wait` sets the waiting follow-up date; if omitted,
+the default is two business days. `clear` is rejected for waiting tasks.
 
 ```sh
 todo step website

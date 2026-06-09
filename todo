@@ -89,7 +89,7 @@ TASK_USAGE = """usage: todo task TASK
        todo task --done|--close TASK [TEXT]
        todo task --undone|--unclose TASK
        todo task --delete [--yes] TASK
-       todo task --wait TASK REASON
+       todo task --wait [--due DATE] TASK REASON
        todo task --resume TASK TEXT
        todo task --due TASK DATE
        todo task --priority TASK P
@@ -160,9 +160,10 @@ Reopen a completed TASK.
 
 Delete TASK. Completed tasks are reopened before deletion.
 """,
-    "task --wait": """usage: todo task --wait TASK REASON
+    "task --wait": """usage: todo task --wait [--due DATE] TASK REASON
 
-Mark TASK waiting and store REASON in the task description.
+Mark TASK waiting and store REASON in the task description. --due sets the
+follow-up date; if omitted, the default is two business days.
 """,
     "task --resume": """usage: todo task --resume TASK TEXT
 
@@ -1498,13 +1499,15 @@ def cmd_wait(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
+        follow_date = wait_follow_date(args, cfg)
+        follow_display = format_due_value_for_display(follow_date)
         existing_due = due_date(task)
         if existing_due and not args.yes:
-            follow = args.due or compute_after(args.after, cfg.wait_days).isoformat()
-            answer = input(f"Existing due date is {existing_due}. Replace with waiting follow-up {follow}? [y/N] ").strip()
+            existing_display = format_due_value_for_display(existing_due)
+            answer = input(f"Existing due date is {existing_display}. "
+                           f"Replace with waiting follow-up {follow_display}? [y/N] ").strip()
             if answer.lower() not in ("y", "yes"):
                 raise TodoError("Cancelled.")
-        follow_date = args.due or compute_after(args.after, cfg.wait_days).isoformat()
         labels = labels_of(task)
         if not any(normalize_name(label) == normalize_name(WAITING_LABEL) for label in labels):
             labels.append(WAITING_LABEL)
@@ -1512,9 +1515,18 @@ def cmd_wait(args):
                     labels=labels,
                     due={"string": follow_date},
                     description=set_waiting_block(task.get("description") or "", args.text))
-        print(f"Waiting until {follow_date}: {content_of(task)}")
+        print(f"Waiting until {follow_display}: {content_of(task)}")
         print(f"Reason: {args.text}")
         return 0
+
+
+def wait_follow_date(args, cfg):
+    if getattr(args, "due", None):
+        due = resolve_due_value(args.due)
+        if due is None:
+            raise TodoError("Waiting tasks need a follow-up due date; use `todo task --resume` to clear waiting.")
+        return due
+    return compute_after(args.after, cfg.wait_days).isoformat()
 
 
 def compute_after(after, default_days):
@@ -1920,12 +1932,17 @@ def cmd_task(args):
         if not mode_set <= {"add", "done", "due"}:
             raise TodoError("Use only one task mode at a time.")
         mode = "add_done" if "done" in mode_set else "add"
+    elif "wait" in mode_set:
+        if not mode_set <= {"wait", "due"}:
+            raise TodoError("Use only one task mode at a time.")
+        mode = "wait"
     elif len(modes) > 1:
         raise TodoError("Use only one task mode at a time.")
     else:
         mode = modes[0] if modes else "show"
     values = args.values
     add_due = due_option_value(args, "task --add") if "add" in mode_set and "due" in mode_set else None
+    wait_due = due_option_value(args, "task --wait") if mode == "wait" and "due" in mode_set else None
     add_priority = getattr(args, "add_priority", None)
     if add_priority is not None and mode not in ("add", "add_done"):
         raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add`.")
@@ -1967,7 +1984,7 @@ def cmd_task(args):
         return cmd_delete_task(argparse.Namespace(task=values[0], yes=args.yes))
     if mode == "wait":
         require_arg_count("task --wait", values, 2)
-        return cmd_wait(argparse.Namespace(task=values[0], text=values[1], after=None, due=None, yes=False))
+        return cmd_wait(argparse.Namespace(task=values[0], text=values[1], after=None, due=wait_due, yes=False))
     if mode == "resume":
         require_arg_count("task --resume", values, 2)
         return cmd_resume(argparse.Namespace(task=values[0], text=values[1]))
@@ -2572,7 +2589,7 @@ modes:
   --done|--close TASK [TEXT]
   --undone|--unclose TASK
   --delete [--yes] TASK
-  --wait TASK TEXT
+  --wait [--due DATE] TASK TEXT
   --resume TASK TEXT
   --due TASK DATE
   --priority TASK P
@@ -2589,7 +2606,7 @@ modes:
     p.add_argument("--wait", action="store_true", help="mark a task waiting")
     p.add_argument("--resume", action="store_true", help="clear waiting state")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE",
-                   help="set or clear attention date, or set initial due date with --add")
+                   help="set or clear attention date, set initial due date with --add, or set wait follow-up")
     p.add_argument("--priority", action="store_true", help="set priority 1..4")
     p.add_argument("--move", action="store_true", help="move task to another category")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing a task")
