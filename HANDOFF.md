@@ -1,0 +1,174 @@
+# Development Handoff
+
+This repository contains `todo`, a dependency-free Python command-line helper
+for Todoist.
+
+Todoist remains the source of truth. The CLI keeps local state in `~/.todo`
+for fast matching, display, reporting, and recent command context.
+
+## Goals
+
+- keep day-to-day Todoist work manageable from a terminal
+- make tasks easy to find by short free-form names
+- track active, waiting, someday, and completed work
+- support task steps, comments, priorities, due dates, and categories
+- generate a plain-text weekly report draft
+- keep Todoist web, mobile, and desktop useful alongside the CLI
+
+## Data Model
+
+Todoist structure:
+
+- top-level project: `Work`
+- categories: Todoist child projects under `Work`
+- default categories: `Operations`, `Engineeringing`, `Admin`, `Someday`
+- categories are dynamic; `todo category` discovers child projects
+- hidden categories are configured in `~/.todo/config`
+- default hidden category: `Someday`
+
+State model:
+
+- active: open task in a non-hidden category
+- waiting: open task with Todoist label `waiting`
+- someday: open task in a hidden category such as `Someday`
+- done: completed Todoist task
+
+Only one label is intentionally used:
+
+```text
+waiting
+```
+
+Due dates mean:
+
+```text
+needs attention on this date
+```
+
+For waiting tasks, the due date is the follow-up date. Default waiting
+follow-up is two business days.
+
+## Local Files
+
+All local tool files are under:
+
+```text
+~/.todo
+```
+
+Expected files:
+
+```text
+~/.todo/config
+~/.todo/cache.json
+~/.todo/report-cursor
+~/.todo/step-context.json
+~/.todo/lock
+```
+
+The Todoist token is stored in `~/.todo/config` or supplied as
+`TODOIST_TOKEN`. Do not commit tokens, cache files, or local state.
+
+## Implementation
+
+The tool is a single Python script:
+
+```text
+todo
+```
+
+Tests are in:
+
+```text
+tests/test_todo.py
+```
+
+Validate with:
+
+```sh
+python3 -m py_compile todo
+python3 -m unittest discover -s tests
+```
+
+No third-party Python dependencies are required.
+
+## Command Behavior
+
+Read-only display commands use the local cache by default:
+
+```sh
+todo task TASK
+todo step TASK
+todo comment TASK
+todo now
+todo waiting
+todo someday
+todo search TEXT
+```
+
+Most read-only commands accept `--refresh` to sync Todoist first.
+
+Mutation commands sync before changing Todoist and require Todoist access.
+Task and comment mutations use Todoist Sync API commands, so transient Sync
+API failures can be retried with command UUIDs.
+
+`todo report` always syncs Todoist and fetches activity before generating
+output. `todo report --final` also advances the report cursor.
+
+## Matching
+
+Task selectors are free-form text matched against active task titles,
+descriptions, and direct steps. If exactly one task matches, the command uses
+it. If multiple tasks match in an interactive terminal, the CLI prompts for a
+number. In non-interactive mode, ambiguous mutation commands refuse to choose.
+
+Numbers are only valid for the command that just printed the numbered list.
+
+## Due Dates
+
+Due shortcuts include:
+
+```text
+2d
+4h
+2bd
+monday
+fri 15:30
+2026-06-16
+2026-06-16 15:00
+clear
+ask
+```
+
+`--due ask` opens an interactive prompt. Weekday names mean the next occurrence
+and do not count today.
+
+Recurring due dates display Todoist's raw recurrence string after `↻`. A
+`starting ...` tail is hidden because the next due date is already shown.
+
+## Reports
+
+Reports are grouped by section, then category:
+
+```text
+Finished
+Progress
+Waiting
+```
+
+Report inputs:
+
+- finished tasks: Todoist completed activity events since the report cursor
+- progress: task comments and relevant activity since the report cursor
+- waiting: waiting tasks whose follow-up date is due in the report window
+
+`todo report --final` prints the report and advances `~/.todo/report-cursor`.
+
+## Public Repository Notes
+
+This public copy should stay generic:
+
+- do not add real company, client, project, bug, review, host, or meeting data
+- keep examples fictional
+- do not commit `~/.todo` files
+- do not commit access tokens or generated cache data
