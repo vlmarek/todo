@@ -1840,7 +1840,7 @@ def sort_now(cache, tasks):
     today = today_local().isoformat()
 
     def key(task):
-        due = due_date(task)
+        due = effective_due_date_for_sort(cache, task)
         overdue_rank = 0
         if due:
             due_day = due[:10]
@@ -1856,6 +1856,18 @@ def sort_now(cache, tasks):
             content_of(task).lower(),
         )
     return sorted(tasks, key=key)
+
+
+def effective_due_date_for_sort(cache, task):
+    due_values = []
+    due = due_date(task)
+    if due:
+        due_values.append(due)
+    for step in subtasks(cache, task.get("id")):
+        due = due_date(step)
+        if due:
+            due_values.append(due)
+    return min(due_values) if due_values else None
 
 
 def print_task_list(cache, tasks, show_steps=False):

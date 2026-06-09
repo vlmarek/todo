@@ -352,6 +352,50 @@ class TodoPureTests(unittest.TestCase):
             todo.print_task_list(cache, [cache.data["items"][0]], show_steps=True)
         self.assertIn("    - publish the release notes due:in ", out.getvalue())
 
+    def test_now_sort_uses_open_step_due_dates(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [
+            {"id": "late", "project_id": "eng", "content": "later task", "priority": 1, "due": {"date": "2099-06-20"}},
+            {"id": "parent", "project_id": "eng", "content": "parent with due step", "priority": 1},
+            {"id": "step", "project_id": "eng", "parent_id": "parent", "content": "soon step", "due": {"date": "2099-06-10"}},
+        ]
+        tasks = [cache.data["items"][0], cache.data["items"][1]]
+        self.assertEqual([todo.content_of(t) for t in todo.sort_now(cache, tasks)],
+                         ["parent with due step", "later task"])
+
+    def test_now_sort_ignores_completed_step_due_dates(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [
+            {"id": "late", "project_id": "eng", "content": "later task", "priority": 1, "due": {"date": "2099-06-20"}},
+            {"id": "parent", "project_id": "eng", "content": "parent with done step", "priority": 1},
+            {
+                "id": "step",
+                "project_id": "eng",
+                "parent_id": "parent",
+                "content": "done soon step",
+                "checked": True,
+                "due": {"date": "2099-06-10"},
+            },
+        ]
+        tasks = [cache.data["items"][0], cache.data["items"][1]]
+        self.assertEqual([todo.content_of(t) for t in todo.sort_now(cache, tasks)],
+                         ["later task", "parent with done step"])
+
+    def test_now_sort_ignores_nested_step_due_dates(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [
+            {"id": "late", "project_id": "eng", "content": "later task", "priority": 1, "due": {"date": "2099-06-20"}},
+            {"id": "parent", "project_id": "eng", "content": "parent with nested step", "priority": 1},
+            {"id": "direct", "project_id": "eng", "parent_id": "parent", "content": "direct step"},
+            {"id": "nested", "project_id": "eng", "parent_id": "direct", "content": "nested step", "due": {"date": "2099-06-10"}},
+        ]
+        tasks = [cache.data["items"][0], cache.data["items"][1]]
+        self.assertEqual([todo.content_of(t) for t in todo.sort_now(cache, tasks)],
+                         ["later task", "parent with nested step"])
+
     def test_task_list_prints_waiting_reason(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
