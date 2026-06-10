@@ -1000,6 +1000,7 @@ created two
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
             (["task", "--priority"], "usage: todo task --priority TASK P"),
+            (["task", "-p1"], "usage: todo task --priority TASK P"),
             (["task", "--move"], "usage: todo task --move TASK CATEGORY"),
             (["task", "--comment"], "usage: todo task --comment TASK TEXT [TEXT ...]"),
             (["task", "--step"], "usage: todo task --step TASK STEP [STEP ...]"),
@@ -1064,6 +1065,9 @@ created two
         self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
         self.assertTrue(parser.parse_args(["task", "--due", "website", "2d"]).due)
         self.assertTrue(parser.parse_args(["task", "--priority", "website", "1"]).priority)
+        p1_args = parser.parse_args(["task", "-p1", "website"])
+        self.assertEqual(p1_args.add_priority, 1)
+        self.assertEqual(p1_args.values, ["website"])
         self.assertTrue(parser.parse_args(["task", "--move", "website", "engineering"]).move)
         comment_args = parser.parse_args(["task", "--comment", "website", "D12345", "bug 123"])
         self.assertTrue(comment_args.comment)
@@ -1123,11 +1127,11 @@ created two
             todo.cmd_task(parser.parse_args(["task", "--step", "--wait", "website", "note"]))
         self.assertIn("Use only one task mode", str(cm.exception))
 
-    def test_task_add_priority_flag_requires_add_mode(self):
+    def test_task_priority_shortcut_rejects_other_modes(self):
         parser = todo.build_parser()
         with self.assertRaises(todo.TodoError) as cm:
-            todo.cmd_task(parser.parse_args(["task", "-p2", "website"]))
-        self.assertIn("only with `todo task --add`", str(cm.exception))
+            todo.cmd_task(parser.parse_args(["task", "-p2", "--done", "website"]))
+        self.assertIn("only with `todo task --add` or `todo task -pN TASK`", str(cm.exception))
 
     def test_task_refresh_rejected_for_mutation_modes(self):
         parser = todo.build_parser()
@@ -1151,6 +1155,23 @@ created two
         with self.assertRaises(todo.TodoError) as cm:
             todo.parse_priority_args(["config cleanup", "high"])
         self.assertIn("expects priority P as 1, 2, 3, or 4", str(cm.exception))
+
+    def test_task_priority_shortcut_dispatches_to_priority(self):
+        calls = []
+        old_cmd_priority = todo.cmd_priority
+        try:
+            def fake_cmd_priority(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_priority = fake_cmd_priority
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "-p2", "website"]))
+        finally:
+            todo.cmd_priority = old_cmd_priority
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].priority, 2)
 
     def test_task_add_done_dispatches_to_add(self):
         calls = []

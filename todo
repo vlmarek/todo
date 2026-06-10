@@ -93,6 +93,7 @@ TASK_USAGE = """usage: todo task TASK
        todo task --resume TASK TEXT
        todo task --due TASK DATE
        todo task --priority TASK P
+       todo task -p1|-p2|-p3|-p4 TASK
        todo task --move TASK CATEGORY
        todo task --comment TASK TEXT [TEXT ...]
        todo task --step TASK STEP [STEP ...]
@@ -180,6 +181,7 @@ excluding today.
     "task --priority": """usage: todo task --priority TASK P
 
 Set TASK priority. P must be 1, 2, 3, or 4.
+Shortcut form: todo task -p1|-p2|-p3|-p4 TASK.
 """,
     "task --move": """usage: todo task --move TASK CATEGORY
 
@@ -1972,6 +1974,7 @@ def cmd_task(args):
         "add", "done", "undone", "delete", "wait", "resume", "due",
         "priority", "move", "comment", "step"])
     mode_set = set(modes)
+    add_priority = getattr(args, "add_priority", None)
     if "add" in mode_set:
         if not mode_set <= {"add", "done", "due"}:
             raise TodoError("Use only one task mode at a time.")
@@ -1984,12 +1987,13 @@ def cmd_task(args):
         raise TodoError("Use only one task mode at a time.")
     else:
         mode = modes[0] if modes else "show"
+    if add_priority is not None and mode == "show":
+        mode = "priority_shortcut"
     values = args.values
     add_due = due_option_value(args, "task --add") if "add" in mode_set and "due" in mode_set else None
     wait_due = due_option_value(args, "task --wait") if mode == "wait" and "due" in mode_set else None
-    add_priority = getattr(args, "add_priority", None)
-    if add_priority is not None and mode not in ("add", "add_done"):
-        raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add`.")
+    if add_priority is not None and mode not in ("add", "add_done", "priority_shortcut"):
+        raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add` or `todo task -pN TASK`.")
     if args.yes and mode != "delete":
         raise TodoError("Use --yes only with `todo task --delete`.")
     if args.refresh and mode != "show":
@@ -2039,6 +2043,9 @@ def cmd_task(args):
         require_arg_count("task --priority", values, 2)
         task, priority = parse_priority_args(values)
         return cmd_priority(argparse.Namespace(task=task, priority=priority))
+    if mode == "priority_shortcut":
+        require_arg_count("task --priority", values, 1)
+        return cmd_priority(argparse.Namespace(task=values[0], priority=add_priority))
     if mode == "move":
         require_arg_count("task --move", values, 2)
         return cmd_move(argparse.Namespace(task=values[0], category=values[1]))
@@ -2676,6 +2683,7 @@ modes:
   --resume TASK TEXT
   --due TASK DATE
   --priority TASK P
+  -p1|-p2|-p3|-p4 TASK
   --move TASK CATEGORY
   --comment TASK TEXT [TEXT ...]
   --step TASK STEP [STEP ...]""",
@@ -2697,10 +2705,14 @@ modes:
     p.add_argument("--comment", action="store_true", help="add one or more comments to a task")
     p.add_argument("--step", action="store_true", help="add one or more steps to a task")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing a task")
-    p.add_argument("-p1", dest="add_priority", action="store_const", const=1, help="set priority 1 when adding a task")
-    p.add_argument("-p2", dest="add_priority", action="store_const", const=2, help="set priority 2 when adding a task")
-    p.add_argument("-p3", dest="add_priority", action="store_const", const=3, help="set priority 3 when adding a task")
-    p.add_argument("-p4", dest="add_priority", action="store_const", const=4, help="set priority 4 when adding a task")
+    p.add_argument("-p1", dest="add_priority", action="store_const", const=1,
+                   help="set priority 1, or set initial priority when adding a task")
+    p.add_argument("-p2", dest="add_priority", action="store_const", const=2,
+                   help="set priority 2, or set initial priority when adding a task")
+    p.add_argument("-p3", dest="add_priority", action="store_const", const=3,
+                   help="set priority 3, or set initial priority when adding a task")
+    p.add_argument("-p4", dest="add_priority", action="store_const", const=4,
+                   help="set priority 4, or set initial priority when adding a task")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_task)
 
