@@ -381,6 +381,42 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("- deliver release", report)
         self.assertNotIn("Done: delivered release", report)
 
+    def test_report_includes_task_comments(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "gate",
+            "content": "short task name",
+        }]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        events = [{
+            "event_date": "2026-06-04T15:32:51Z",
+            "event_type": "completed",
+            "extra_data": {"content": "short task name"},
+            "object_id": "task1",
+            "object_type": "item",
+            "parent_project_id": "gate",
+        }]
+
+        def comments(task_id):
+            self.assertEqual(task_id, "task1")
+            return [
+                {"content": "39293721 long bug synopsis"},
+                {"content": "D13393"},
+            ]
+
+        report = todo.build_report(cache, {"gate"}, since, until, events, comment_fetcher=comments)
+        self.assertIn("- short task name", report)
+        self.assertIn("  - 39293721 long bug synopsis", report)
+        self.assertIn("  - D13393", report)
+
+    def test_report_indents_multiline_comments(self):
+        lines = []
+        todo.append_report_detail(lines, "first line\nsecond line")
+        self.assertEqual(lines, ["  - first line", "    second line"])
+
     def test_report_waiting_uses_description_reason(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
@@ -398,6 +434,23 @@ class TodoPureTests(unittest.TestCase):
         report = todo.build_report(cache, {"gate"}, since, until, [])
         self.assertIn("- Review URL fix", report)
         self.assertIn("  - wait for review (3d)", report)
+
+    def test_report_waiting_ignores_completed_tasks(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "gate",
+            "content": "Completed waiting task",
+            "labels": ["waiting"],
+            "checked": True,
+            "description": todo.set_waiting_block("", "wait for review", since=todo.today_local().isoformat()),
+        }]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        report = todo.build_report(cache, {"gate"}, since, until, [])
+        self.assertIn("Waiting\n- None", report)
+        self.assertNotIn("- Completed waiting task", report)
 
     def test_report_waiting_includes_task_without_due_date(self):
         cache = todo.Cache(todo.Cache.empty())
