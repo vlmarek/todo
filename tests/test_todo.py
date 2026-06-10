@@ -1001,6 +1001,8 @@ created two
             (["task", "--due"], "usage: todo task --due TASK DATE"),
             (["task", "--priority"], "usage: todo task --priority TASK P"),
             (["task", "--move"], "usage: todo task --move TASK CATEGORY"),
+            (["task", "--comment"], "usage: todo task --comment TASK TEXT [TEXT ...]"),
+            (["task", "--step"], "usage: todo task --step TASK STEP [STEP ...]"),
             (["step", "--add"], "usage: todo step --add|--new|--create [--due DATE] TASK STEP [STEP ...]"),
             (["step", "--add", "--done"], "usage: todo step --add|--new|--create --done|--close [--due DATE] TASK STEP [STEP ...]"),
             (["step", "--done"], "usage: todo step --done|--close TASK STEP"),
@@ -1063,6 +1065,63 @@ created two
         self.assertTrue(parser.parse_args(["task", "--due", "website", "2d"]).due)
         self.assertTrue(parser.parse_args(["task", "--priority", "website", "1"]).priority)
         self.assertTrue(parser.parse_args(["task", "--move", "website", "engineering"]).move)
+        comment_args = parser.parse_args(["task", "--comment", "website", "D12345", "bug 123"])
+        self.assertTrue(comment_args.comment)
+        self.assertEqual(comment_args.values, ["website", "D12345", "bug 123"])
+        step_args = parser.parse_args(["task", "--step", "website", "test", "deliver"])
+        self.assertTrue(step_args.step)
+        self.assertEqual(step_args.values, ["website", "test", "deliver"])
+
+    def test_task_comment_dispatches_to_comment_add(self):
+        calls = []
+        old_cmd_comment_noun = todo.cmd_comment_noun
+        try:
+            def fake_cmd_comment_noun(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_comment_noun = fake_cmd_comment_noun
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--comment", "website", "D12345", "bug 123"]))
+        finally:
+            todo.cmd_comment_noun = old_cmd_comment_noun
+        self.assertEqual(rc, 0)
+        self.assertTrue(calls[0].add)
+        self.assertFalse(calls[0].edit)
+        self.assertFalse(calls[0].refresh)
+        self.assertEqual(calls[0].values, ["website", "D12345", "bug 123"])
+
+    def test_task_step_dispatches_to_step_add(self):
+        calls = []
+        old_cmd_step_noun = todo.cmd_step_noun
+        try:
+            def fake_cmd_step_noun(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_step_noun = fake_cmd_step_noun
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--step", "website", "test", "deliver"]))
+        finally:
+            todo.cmd_step_noun = old_cmd_step_noun
+        self.assertEqual(rc, 0)
+        self.assertTrue(calls[0].add)
+        self.assertFalse(calls[0].done)
+        self.assertFalse(calls[0].undone)
+        self.assertFalse(calls[0].delete)
+        self.assertIsNone(calls[0].due)
+        self.assertFalse(calls[0].yes)
+        self.assertFalse(calls[0].refresh)
+        self.assertEqual(calls[0].values, ["website", "test", "deliver"])
+
+    def test_task_shortcuts_reject_other_modes(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_task(parser.parse_args(["task", "--comment", "--done", "website", "note"]))
+        self.assertIn("Use only one task mode", str(cm.exception))
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_task(parser.parse_args(["task", "--step", "--wait", "website", "note"]))
+        self.assertIn("Use only one task mode", str(cm.exception))
 
     def test_task_add_priority_flag_requires_add_mode(self):
         parser = todo.build_parser()
