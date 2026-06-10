@@ -970,7 +970,7 @@ created two
         with contextlib.redirect_stderr(err):
             rc = todo.main(["task", "--wait", "Eric"])
         self.assertEqual(rc, 1)
-        self.assertIn("usage: todo task --wait [--due DATE] TASK REASON", err.getvalue())
+        self.assertIn("usage: todo task --wait|--waiting [--due DATE] TASK REASON", err.getvalue())
         self.assertIn("Mark TASK waiting", err.getvalue())
         self.assertNotIn("expected 2 argument", err.getvalue())
 
@@ -996,7 +996,7 @@ created two
             (["task", "--add", "--done"], "usage: todo task --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]"),
             (["task", "--undone"], "usage: todo task --undone|--unclose TASK"),
             (["task", "--delete"], "usage: todo task --delete [--yes] TASK"),
-            (["task", "--wait"], "usage: todo task --wait [--due DATE] TASK REASON"),
+            (["task", "--wait"], "usage: todo task --wait|--waiting [--due DATE] TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
             (["task", "--due"], "usage: todo task --due TASK DATE"),
             (["task", "--priority"], "usage: todo task --priority TASK P"),
@@ -1055,6 +1055,7 @@ created two
         self.assertTrue(delete_args.yes)
         self.assertEqual(delete_args.values, ["website"])
         self.assertTrue(parser.parse_args(["task", "--wait", "website", "waiting"]).wait)
+        self.assertTrue(parser.parse_args(["task", "--waiting", "website", "waiting"]).wait)
         wait_due_args = parser.parse_args(["task", "--wait", "--due", "7d", "website", "waiting"])
         wait_due_after_args = parser.parse_args(["task", "--wait", "website", "waiting", "--due", "7d"])
         self.assertTrue(wait_due_args.wait)
@@ -1258,7 +1259,7 @@ created two
 
             todo.cmd_wait = fake_cmd_wait
             parser = todo.build_parser()
-            rc = todo.cmd_task(parser.parse_args(["task", "--wait", "--due", "7d", "website", "waiting"]))
+            rc = todo.cmd_task(parser.parse_args(["task", "--waiting", "--due", "7d", "website", "waiting"]))
         finally:
             todo.cmd_wait = old_cmd_wait
         self.assertEqual(rc, 0)

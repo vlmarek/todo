@@ -89,7 +89,7 @@ TASK_USAGE = """usage: todo task TASK
        todo task --done|--close TASK [TEXT]
        todo task --undone|--unclose TASK
        todo task --delete [--yes] TASK
-       todo task --wait [--due DATE] TASK REASON
+       todo task --wait|--waiting [--due DATE] TASK REASON
        todo task --resume TASK TEXT
        todo task --due TASK DATE
        todo task --priority TASK P
@@ -163,7 +163,7 @@ Reopen a completed TASK.
 
 Delete TASK. Completed tasks are reopened before deletion.
 """,
-    "task --wait": """usage: todo task --wait [--due DATE] TASK REASON
+    "task --wait": """usage: todo task --wait|--waiting [--due DATE] TASK REASON
 
 Mark TASK waiting and store REASON in the task description. --due sets the
 follow-up date; if omitted, the default is two business days.
@@ -2679,7 +2679,7 @@ modes:
   --done|--close TASK [TEXT]
   --undone|--unclose TASK
   --delete [--yes] TASK
-  --wait [--due DATE] TASK TEXT
+  --wait|--waiting [--due DATE] TASK TEXT
   --resume TASK TEXT
   --due TASK DATE
   --priority TASK P
@@ -2696,7 +2696,7 @@ modes:
     p.add_argument("--undone", "--unclose", dest="undone", action="store_true", help="reopen a completed task")
     p.add_argument("--delete", action="store_true", help="delete a task")
     p.add_argument("--yes", action="store_true", help="skip delete confirmation")
-    p.add_argument("--wait", action="store_true", help="mark a task waiting")
+    p.add_argument("--wait", "--waiting", dest="wait", action="store_true", help="mark a task waiting")
     p.add_argument("--resume", action="store_true", help="clear waiting state")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE",
                    help="set or clear attention date, set initial due date with --add, or set wait follow-up")
