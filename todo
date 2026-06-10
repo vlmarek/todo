@@ -84,8 +84,8 @@ class TodoUsage(TodoError):
 
 
 TASK_USAGE = """usage: todo task TASK
-       todo task --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-       todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo task --done|--close TASK [TEXT]
        todo task --undone|--unclose TASK
        todo task --delete [--yes] TASK
@@ -99,7 +99,7 @@ Show a task, or perform one task operation.
 """
 
 
-TASK_ADD_USAGE = """usage: todo task --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+TASK_ADD_USAGE = """usage: todo task --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY, optionally with initial steps.
 
@@ -116,8 +116,8 @@ due:
 """
 
 STEP_USAGE = """usage: todo step TASK
-       todo step --add [--due DATE] TASK STEP [STEP ...]
-       todo step --add --done [--due DATE] TASK STEP [STEP ...]
+       todo step --add|--new|--create [--due DATE] TASK STEP [STEP ...]
+       todo step --add|--new|--create --done [--due DATE] TASK STEP [STEP ...]
        todo step --done TASK STEP
        todo step --delete [--yes] TASK STEP
        todo step --undone|--unclose TASK STEP
@@ -127,7 +127,7 @@ Show task steps, add steps, or mark one step done.
 
 
 COMMENT_USAGE = """usage: todo comment TASK
-       todo comment --add TASK TEXT [TEXT ...]
+       todo comment --add|--create TASK TEXT [TEXT ...]
        todo comment --edit TASK
 
 Show task comments, add comments, or edit all comments.
@@ -143,7 +143,7 @@ Search tasks, descriptions, waiting reasons, steps, and comments.
 MODE_USAGE = {
     "task": TASK_USAGE,
     "task --add": TASK_ADD_USAGE,
-    "task --add --done": """usage: todo task --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+    "task --add --done": """usage: todo task --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY and immediately mark it done. Optional STEP values
 are created as completed steps before the task is completed.
@@ -183,14 +183,14 @@ Set TASK priority. P must be 1, 2, 3, or 4.
 
 Move TASK to CATEGORY.
 """,
-    "step --add": """usage: todo step --add|--new [--due DATE] TASK STEP [STEP ...]
+    "step --add": """usage: todo step --add|--new|--create [--due DATE] TASK STEP [STEP ...]
 
 Add one or more open steps to TASK.
 
 DATE accepts Todoist text, 2d, 4h, 2bd, weekdays such as monday,
 ISO dates/times, clear, or ask for an interactive prompt.
 """,
-    "step --add --done": """usage: todo step --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]
+    "step --add --done": """usage: todo step --add|--new|--create --done|--close [--due DATE] TASK STEP [STEP ...]
 
 Add one or more steps to TASK and immediately mark them done.
 
@@ -209,7 +209,7 @@ Reopen a completed STEP under TASK.
 
 Delete STEP under TASK. Completed steps are reopened before deletion.
 """,
-    "comment --add": """usage: todo comment --add TASK TEXT [TEXT ...]
+    "comment --add": """usage: todo comment --add|--create TASK TEXT [TEXT ...]
 
 Add one or more comments to TASK. Each TEXT becomes a separate comment.
 """,
@@ -2596,7 +2596,7 @@ def build_parser():
         help="list or add categories",
         description="List categories, or create a category with --add NAME.",
     )
-    p.add_argument("--add", metavar="NAME", help="category name to create")
+    p.add_argument("--add", "--create", metavar="NAME", help="category name to create")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before listing categories")
     p.set_defaults(func=cmd_category)
 
@@ -2609,8 +2609,8 @@ display:
   todo task TASK
 
 modes:
-  --add|--new [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-  --add|--new --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --done|--close TASK [TEXT]
   --undone|--unclose TASK
   --delete [--yes] TASK
@@ -2621,7 +2621,7 @@ modes:
   --move TASK CATEGORY""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--add", "--new", dest="add", action="store_true",
+    p.add_argument("--add", "--new", "--create", dest="add", action="store_true",
                    help="create a task, optionally with initial steps")
     p.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
                    help="complete a task, or add a completed task with --add")
@@ -2651,14 +2651,14 @@ display:
   todo step TASK
 
 modes:
-  --add|--new [--due DATE] TASK STEP [STEP ...]
-  --add|--new --done|--close [--due DATE] TASK STEP [STEP ...]
+  --add|--new|--create [--due DATE] TASK STEP [STEP ...]
+  --add|--new|--create --done|--close [--due DATE] TASK STEP [STEP ...]
   --done|--close TASK STEP
   --delete [--yes] TASK STEP
   --undone|--unclose TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--add", "--new", dest="add", action="store_true", help="add one or more steps")
+    p.add_argument("--add", "--new", "--create", dest="add", action="store_true", help="add one or more steps")
     p.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
                    help="complete one existing step, or add completed steps with --add")
     p.add_argument("--undone", "--unclose", dest="undone", action="store_true", help="reopen one completed step")
@@ -2678,7 +2678,7 @@ display:
   todo comment TASK
 
 modes:
-  --add TASK TEXT [TEXT ...]
+  --add|--create TASK TEXT [TEXT ...]
   --edit TASK
 
 --edit opens a bracket-form file with all comments. Remove an [id: ...]
@@ -2687,7 +2687,7 @@ comment, it is merged into that previous comment. Multiple [new] blocks create
 multiple comments.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--add", action="store_true", help="create one comment per TEXT argument")
+    p.add_argument("--add", "--create", dest="add", action="store_true", help="create one comment per TEXT argument")
     p.add_argument("--edit", action="store_true", help="edit all comments in one file")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing comments")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
