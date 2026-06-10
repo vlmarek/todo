@@ -2426,7 +2426,8 @@ def build_report(cache, project_ids, since, until, events, step_context=None, co
             comments = sections[section].setdefault(category, {}).setdefault(title, [])
             if detail not in comments:
                 comments.append(detail)
-            append_report_comments(comments, comment_fetcher, context.get("parent_task_id"))
+            if section == "Finished":
+                append_report_comments(comments, comment_fetcher, context.get("parent_task_id"))
             continue
         task = by_id.get(task_id) or synthetic_task_from_event(event)
         context = event_context.get(task_id, {})
@@ -2435,7 +2436,8 @@ def build_report(cache, project_ids, since, until, events, step_context=None, co
         comments = sections[kind].setdefault(category, {}).setdefault(title, [])
         if text and text != title:
             comments.append(text)
-        append_report_comments(comments, comment_fetcher, task_id)
+        if kind == "Finished":
+            append_report_comments(comments, comment_fetcher, task_id)
 
     for task in by_id.values():
         if task.get("checked") or not has_waiting(task):
@@ -2448,7 +2450,6 @@ def build_report(cache, project_ids, since, until, events, step_context=None, co
             reason = waiting_reason_display(task)
             if reason:
                 details.append(reason)
-            append_report_comments(details, comment_fetcher, task.get("id"))
             category_items[title] = details
 
     lines = [f"Report {iso_utc(since)} -> {iso_utc(until)}", ""]

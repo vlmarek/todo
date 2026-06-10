@@ -412,6 +412,37 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("  - 39293721 long bug synopsis", report)
         self.assertIn("  - D13393", report)
 
+    def test_report_does_not_include_comments_for_progress(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "gate", "content": "Prepare new cbe"},
+        ]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+        event = {
+            "event_date": "2026-06-07T18:10:05Z",
+            "event_type": "completed",
+            "extra_data": {"content": "Seed gcc16"},
+            "object_id": "step1",
+            "object_type": "item",
+            "parent_project_id": "gate",
+        }
+        context = {
+            "step1": {
+                "step_title_last_seen": "Seed gcc16",
+                "parent_task_id": "task1",
+                "parent_title_last_seen": "Prepare new cbe",
+                "category_last_seen": "Operations",
+            },
+        }
+
+        def comments(task_id):
+            raise AssertionError("comments should not be fetched for progress entries")
+
+        report = todo.build_report(cache, {"gate"}, since, until, [event], context, comments)
+        self.assertIn("Progress\nOperations\n- Prepare new cbe\n  - Seed gcc16", report)
+
     def test_report_indents_multiline_comments(self):
         lines = []
         todo.append_report_detail(lines, "first line\nsecond line")
@@ -434,6 +465,26 @@ class TodoPureTests(unittest.TestCase):
         report = todo.build_report(cache, {"gate"}, since, until, [])
         self.assertIn("- Review URL fix", report)
         self.assertIn("  - wait for review (3d)", report)
+
+    def test_report_does_not_include_comments_for_waiting(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "gate",
+            "content": "Review URL fix",
+            "labels": ["waiting"],
+            "description": todo.set_waiting_block("", "wait for review", since=todo.today_local().isoformat()),
+        }]
+        since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
+        until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
+
+        def comments(task_id):
+            raise AssertionError("comments should not be fetched for waiting entries")
+
+        report = todo.build_report(cache, {"gate"}, since, until, [], comment_fetcher=comments)
+        self.assertIn("- Review URL fix", report)
+        self.assertNotIn("D13393", report)
 
     def test_report_waiting_ignores_completed_tasks(self):
         cache = todo.Cache(todo.Cache.empty())
