@@ -48,6 +48,16 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual([c["name"] for c in cats], ["Engineering"])
         self.assertEqual(todo.category_project_by_name(cache, "root", "engineering")["id"], "eng")
 
+    def test_cache_tracks_reminders(self):
+        cache = todo.Cache(todo.Cache.empty())
+        self.assertIn("reminders", cache.data)
+        cache.apply_sync({
+            "full_sync": True,
+            "sync_token": "next",
+            "reminders": [{"id": "r1", "item_id": "task1", "minute_offset": 10, "type": "relative"}],
+        })
+        self.assertEqual(cache.data["reminders"][0]["id"], "r1")
+
     def test_merge_deletes_objects(self):
         existing = [{"id": "1", "name": "old"}, {"id": "2", "name": "keep"}]
         incoming = [{"id": "1", "is_deleted": True}, {"id": "3", "name": "new"}]
@@ -59,6 +69,12 @@ class TodoPureTests(unittest.TestCase):
         delta = dt.timedelta(days=2, hours=3, minutes=4)
         self.assertEqual(todo.format_duration(delta), "2d 3h")
         self.assertEqual(todo.format_duration(dt.timedelta(hours=1, minutes=20)), "1h 20m")
+
+    def test_format_reminder_offset(self):
+        self.assertEqual(todo.format_reminder_offset(0), "at due")
+        self.assertEqual(todo.format_reminder_offset(10), "10m before")
+        self.assertEqual(todo.format_reminder_offset(90), "1h 30m before")
+        self.assertEqual(todo.format_reminder_offset(1440), "1d before")
 
     def test_waiting_age_uses_since_date(self):
         task = {
@@ -665,6 +681,24 @@ class TodoPureTests(unittest.TestCase):
             todo.print_task_list(cache, [cache.data["items"][0]], show_steps=True)
         self.assertIn("    - publish the release notes due:in ", out.getvalue())
 
+    def test_task_list_prints_reminders(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "eng", "content": "AI Report meeting", "priority": 1},
+            {"id": "step1", "project_id": "eng", "parent_id": "task1", "content": "join call"},
+        ]
+        cache.data["reminders"] = [
+            {"id": "r1", "item_id": "task1", "type": "relative", "minute_offset": 0},
+            {"id": "r2", "item_id": "step1", "type": "relative", "minute_offset": 10},
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_list(cache, [cache.data["items"][0]], show_steps=True)
+        text = out.getvalue()
+        self.assertIn("AI Report meeting reminder:at due", text)
+        self.assertIn("    - join call reminder:10m before", text)
+
     def test_now_sort_uses_open_step_due_dates(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "eng", "name": "Engineering"}]
@@ -745,10 +779,31 @@ class TodoPureTests(unittest.TestCase):
             todo.print_task_detail(cache, cache.data["items"][0])
         text = out.getvalue()
         self.assertIn("P2  Operations  Deliver release", text)
+        self.assertIn("Reminders\n- None", text)
         self.assertIn("- [ ] check dashboard due:", text)
         self.assertNotIn(future_due, text)
         self.assertIn("- [x] close build", text)
         self.assertIn("Progress: checked table", text)
+
+    def test_show_prints_reminders(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "gate", "content": "AI Report meeting", "priority": 3},
+            {"id": "s1", "project_id": "gate", "parent_id": "task1", "content": "join call"},
+        ]
+        cache.data["reminders"] = [
+            {"id": "r1", "item_id": "task1", "type": "relative", "minute_offset": 0},
+            {"id": "r2", "item_id": "task1", "type": "relative", "minute_offset": 30},
+            {"id": "r3", "item_id": "s1", "type": "relative", "minute_offset": 10},
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_detail(cache, cache.data["items"][0])
+        text = out.getvalue()
+        self.assertIn("Reminders: at due, 30m before", text)
+        self.assertIn("Reminders\n- at due\n- 30m before", text)
+        self.assertIn("- [ ] join call reminder:10m before", text)
 
     def test_print_steps_shows_due_dates(self):
         cache = todo.Cache(todo.Cache.empty())
@@ -764,6 +819,21 @@ class TodoPureTests(unittest.TestCase):
         text = out.getvalue()
         self.assertIn("[ ] check dashboard due:", text)
         self.assertNotIn(future_due, text)
+
+    def test_print_steps_shows_reminders(self):
+        cache = todo.Cache(todo.Cache.empty())
+        task = {"id": "task1", "project_id": "gate", "content": "Deliver release"}
+        cache.data["items"] = [
+            task,
+            {"id": "s1", "project_id": "gate", "parent_id": "task1", "content": "join call"},
+        ]
+        cache.data["reminders"] = [
+            {"id": "r1", "item_id": "s1", "type": "relative", "minute_offset": 15},
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_steps(cache, task)
+        self.assertIn("[ ] join call reminder:15m before", out.getvalue())
 
     def test_show_accepts_direct_comments(self):
         cache = todo.Cache(todo.Cache.empty())

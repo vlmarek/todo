@@ -375,7 +375,7 @@ class Config:
 
 
 class Cache:
-    RESOURCE_KEYS = ["projects", "sections", "labels", "items", "notes"]
+    RESOURCE_KEYS = ["projects", "sections", "labels", "items", "notes", "reminders"]
 
     def __init__(self, data=None):
         self.data = data or self.empty()
@@ -485,7 +485,7 @@ class Todoist:
                 raise TodoError(f"Todoist API connection failed: {e.reason}") from e
 
     def sync(self, cache, resources=None):
-        resources = resources or ["projects", "sections", "labels", "items", "notes", "completed_info"]
+        resources = resources or ["projects", "sections", "labels", "items", "notes", "reminders", "completed_info"]
         response = self.request("POST", SYNC_URL, {
             "sync_token": cache.data.get("sync_token") or "*",
             "resource_types": json.dumps(resources),
@@ -646,6 +646,21 @@ def all_subtasks(cache, task_id):
 def notes_for(cache, task_id):
     notes = [n for n in live_objects(cache, "notes") if str(n.get("item_id")) == str(task_id)]
     return sorted(notes, key=lambda n: n.get("posted_at") or n.get("posted") or "")
+
+
+def reminders_for(cache, task_id):
+    reminders = [r for r in live_objects(cache, "reminders")
+                 if str(r.get("item_id") or r.get("task_id")) == str(task_id)]
+    return sorted(reminders, key=reminder_sort_key)
+
+
+def reminder_sort_key(reminder):
+    due = reminder.get("due") or {}
+    return (
+        str(reminder.get("type") or ""),
+        int(reminder.get("minute_offset") or 0),
+        str(due.get("date") or due.get("string") or ""),
+    )
 
 
 def note_time(note):
@@ -851,6 +866,49 @@ def format_due_display(due):
     if " left" in due or due.startswith("due:in "):
         return colorize(due, "cyan")
     return due
+
+
+def format_reminder_offset(minutes):
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        return ""
+    if minutes == 0:
+        return "at due"
+    days, rem = divmod(minutes, 1440)
+    hours, rem = divmod(rem, 60)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if rem:
+        parts.append(f"{rem}m")
+    return f"{' '.join(parts)} before" if parts else "before"
+
+
+def format_reminder(reminder):
+    if reminder.get("type") == "relative":
+        text = format_reminder_offset(reminder.get("minute_offset"))
+        return text or "relative"
+    due = reminder.get("due") or {}
+    raw = due.get("date") or due.get("string")
+    if raw:
+        return f"at {format_due_value_for_display(raw)}"
+    return str(reminder.get("type") or "reminder")
+
+
+def format_reminders(cache, task_id):
+    values = [format_reminder(reminder) for reminder in reminders_for(cache, task_id)]
+    values = [value for value in values if value]
+    if not values:
+        return ""
+    label = "reminders" if len(values) != 1 else "reminder"
+    return f"{label}:{', '.join(values)}"
+
+
+def format_reminders_display(text):
+    return colorize(text, "cyan") if text else ""
 
 
 def format_waiting_marker(text="waiting"):
@@ -1293,13 +1351,24 @@ def print_task_detail(cache, task, comments=None):
     waiting = f" {format_waiting_marker()}" if has_waiting(task) else ""
     due = format_due(task)
     due_text = format_due_display(due) if due else colorize("none", "base01", dim=True)
+    task_reminders = reminders_for(cache, task.get("id"))
+    reminder_summary = ", ".join(format_reminder(reminder) for reminder in task_reminders)
     print(f"{format_priority(task)}  {project_name(cache, task.get('project_id'))}  {content_of(task)}{waiting}")
     print(f"Due: {due_text}")
+    if reminder_summary:
+        print(f"Reminders: {format_reminders_display(reminder_summary)}")
     description = remove_waiting_block(task.get("description") or "")
     if description:
         print()
         print("Description")
         print(description)
+    print()
+    print("Reminders")
+    if not task_reminders:
+        print("- None")
+    else:
+        for reminder in task_reminders:
+            print(f"- {format_reminder(reminder)}")
     print()
     print("Steps")
     children = all_subtasks(cache, task.get("id"))
@@ -1309,7 +1378,9 @@ def print_task_detail(cache, task, comments=None):
         for child in children:
             due = format_due(child)
             due_text = f" {format_due_display(due)}" if due else ""
-            print(f"- {format_step_mark(child.get('checked'))} {content_of(child)}{due_text}")
+            reminder = format_reminders(cache, child.get("id"))
+            reminder_text = f" {format_reminders_display(reminder)}" if reminder else ""
+            print(f"- {format_step_mark(child.get('checked'))} {content_of(child)}{due_text}{reminder_text}")
     print()
     print("Comments")
     notes = comments if comments is not None else notes_for(cache, task.get("id"))
@@ -1452,7 +1523,9 @@ def print_steps(cache, task):
     for i, child in enumerate(children, 1):
         due = format_due(child)
         due_text = f" {format_due_display(due)}" if due else ""
-        print(f"{i:2d}  {format_step_mark(child.get('checked'))} {content_of(child)}{due_text}")
+        reminder = format_reminders(cache, child.get("id"))
+        reminder_text = f" {format_reminders_display(reminder)}" if reminder else ""
+        print(f"{i:2d}  {format_step_mark(child.get('checked'))} {content_of(child)}{due_text}{reminder_text}")
 
 
 def resolve_step(cache, task, selector):
@@ -2325,9 +2398,11 @@ def print_task_list(cache, tasks, show_steps=False):
     for task in tasks:
         due = format_due(task)
         due_text = f" {format_due_display(due)}" if due else ""
+        reminder = format_reminders(cache, task.get("id"))
+        reminder_text = f" {format_reminders_display(reminder)}" if reminder else ""
         waiting = f" {format_waiting_marker()}" if has_waiting(task) else ""
         print(f"{format_priority(task)}  "
-              f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}{due_text}{waiting}")
+              f"{project_name(cache, task.get('project_id')):<12} {content_of(task)}{due_text}{reminder_text}{waiting}")
         reason = waiting_reason_display(task)
         if reason:
             print(f"    {reason}")
@@ -2336,7 +2411,9 @@ def print_task_list(cache, tasks, show_steps=False):
             for step in steps:
                 step_due = format_due(step)
                 step_due_text = f" {format_due_display(step_due)}" if step_due else ""
-                print(f"    - {content_of(step)}{step_due_text}")
+                step_reminder = format_reminders(cache, step.get("id"))
+                step_reminder_text = f" {format_reminders_display(step_reminder)}" if step_reminder else ""
+                print(f"    - {content_of(step)}{step_due_text}{step_reminder_text}")
 
 
 def cmd_waiting(args):
