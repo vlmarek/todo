@@ -866,6 +866,12 @@ def colorize(text, color, bold=False, dim=False):
     return f"\033[{';'.join(attrs)}m{text}\033[0m"
 
 
+def clear_screen_if_terminal(stream=None):
+    stream = stream or sys.stdout
+    if hasattr(stream, "isatty") and stream.isatty():
+        print("\033[H\033[J", end="", file=stream)
+
+
 def format_priority(item):
     priority = api_priority_to_cli(item.get("priority"))
     text = f"P{priority}"
@@ -2504,6 +2510,7 @@ def cmd_now(args):
                 continue
             tasks.append(task)
         tasks = sort_now(cache, tasks)
+        clear_screen_if_terminal()
         print_task_list(cache, tasks, show_steps=True)
         return 0
 

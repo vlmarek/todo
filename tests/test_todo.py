@@ -140,6 +140,20 @@ class TodoPureTests(unittest.TestCase):
         finally:
             todo.set_color_mode(old_mode)
 
+    def test_clear_screen_skips_non_terminal(self):
+        out = io.StringIO()
+        todo.clear_screen_if_terminal(out)
+        self.assertEqual(out.getvalue(), "")
+
+    def test_clear_screen_writes_ansi_for_terminal(self):
+        class Tty(io.StringIO):
+            def isatty(self):
+                return True
+
+        out = Tty()
+        todo.clear_screen_if_terminal(out)
+        self.assertEqual(out.getvalue(), "\033[H\033[J")
+
     def test_color_always_colors_task_list(self):
         old_mode = todo.COLOR_MODE
         try:
