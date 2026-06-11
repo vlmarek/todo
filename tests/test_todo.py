@@ -818,7 +818,7 @@ class TodoPureTests(unittest.TestCase):
             todo.print_task_detail(cache, cache.data["items"][0])
         text = out.getvalue()
         self.assertIn("P2  Operations  Deliver release", text)
-        self.assertIn("Reminders\n- None", text)
+        self.assertNotIn("Reminders\n", text)
         self.assertIn("- [ ] check dashboard due:", text)
         self.assertNotIn(future_due, text)
         self.assertIn("- [x] close build", text)

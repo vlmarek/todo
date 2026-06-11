@@ -1466,11 +1466,9 @@ def print_task_detail(cache, task, comments=None):
         print()
         print("Description")
         print(description)
-    print()
-    print("Reminders")
-    if not task_reminders:
-        print("- None")
-    else:
+    if task_reminders:
+        print()
+        print("Reminders")
         for reminder in task_reminders:
             print(f"- {format_reminder(reminder)}")
     print()
