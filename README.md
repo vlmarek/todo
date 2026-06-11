@@ -57,7 +57,7 @@ List or add categories. Categories are Todoist child projects under `Work`.
 ```sh
 todo task "website"
 todo task --refresh "website"
-todo task --add --due 7d -p1 engineering "Update website dependencies" "build/test" "review"
+todo task --add --due "friday 11:00" --reminder 10m -p1 engineering "Update website dependencies" "build/test" "review"
 todo task --add -p1 engineering "Update website dependencies" "build/test" "review"
 todo task --add engineering "Update website dependencies" "build/test" "review"
 todo task --add operations "Deliver 224" "check dashboard table" "close build"
@@ -73,6 +73,8 @@ todo task --due website 2d
 todo task --due website 2bd
 todo task --due website monday
 todo task --due website ask
+todo task --due --reminder 10m website "friday 11:00"
+todo task --reminder 10m website
 todo task --move website engineering
 ```
 
@@ -87,13 +89,18 @@ weekday names such as `monday`, ISO dates/times, `clear`, and `ask`.
 excluding today.
 `--due` on `todo task --wait` sets the waiting follow-up date; if omitted,
 the default is two business days. `clear` is rejected for waiting tasks.
+`--reminder` creates a Todoist relative reminder for an item that has a due
+date with a time. It accepts offsets such as `0`, `10m`, `2h`, `1d`, and
+`at due`; repeat it to create multiple reminders. Reminders are displayed by
+`todo task`, `todo step`, and `todo now`.
 
 ```sh
 todo step website
 todo step --refresh website
-todo step --add --due 7d website "build/test"
+todo step --add --due "friday 11:00" --reminder 10m website "build/test"
 todo step --add --due ask website "publish the release notes"
 todo step --add website "build/test" "review" "publish" "deliver"
+todo step --reminder 10m website "build/test"
 todo step --done website review
 todo step --unclose website review
 todo step --delete website review

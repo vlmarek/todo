@@ -51,12 +51,36 @@ class TodoPureTests(unittest.TestCase):
     def test_cache_tracks_reminders(self):
         cache = todo.Cache(todo.Cache.empty())
         self.assertIn("reminders", cache.data)
+        self.assertEqual(cache.data["resource_keys"], todo.Cache.RESOURCE_KEYS)
         cache.apply_sync({
             "full_sync": True,
             "sync_token": "next",
             "reminders": [{"id": "r1", "item_id": "task1", "minute_offset": 10, "type": "relative"}],
         })
         self.assertEqual(cache.data["reminders"][0]["id"], "r1")
+
+    def test_cache_load_forces_full_sync_when_resource_keys_change(self):
+        old_cache = {
+            "sync_token": "old-token",
+            "synced_at": "2026-06-01T00:00:00Z",
+            "projects": [],
+            "sections": [],
+            "labels": [],
+            "items": [],
+            "notes": [],
+        }
+        old_path = todo.CACHE_PATH
+        with todo.tempfile.TemporaryDirectory() as tmpdir:
+            path = str(pathlib.Path(tmpdir) / "cache.json")
+            pathlib.Path(path).write_text(todo.json.dumps(old_cache), encoding="utf-8")
+            try:
+                todo.CACHE_PATH = path
+                cache = todo.Cache.load()
+            finally:
+                todo.CACHE_PATH = old_path
+        self.assertEqual(cache.data["sync_token"], "*")
+        self.assertEqual(cache.data["resource_keys"], todo.Cache.RESOURCE_KEYS)
+        self.assertIn("reminders", cache.data)
 
     def test_merge_deletes_objects(self):
         existing = [{"id": "1", "name": "old"}, {"id": "2", "name": "keep"}]
@@ -75,6 +99,21 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(todo.format_reminder_offset(10), "10m before")
         self.assertEqual(todo.format_reminder_offset(90), "1h 30m before")
         self.assertEqual(todo.format_reminder_offset(1440), "1d before")
+
+    def test_parse_reminder_offset(self):
+        self.assertEqual(todo.parse_reminder_offset("at due"), 0)
+        self.assertEqual(todo.parse_reminder_offset("10m"), 10)
+        self.assertEqual(todo.parse_reminder_offset("2h"), 120)
+        self.assertEqual(todo.parse_reminder_offset("1d 2h 30m"), 1590)
+        self.assertEqual(todo.parse_reminder_offset("15"), 15)
+        with self.assertRaises(todo.TodoError):
+            todo.parse_reminder_offset("soon")
+
+    def test_item_has_due_time(self):
+        self.assertTrue(todo.item_has_due_time({"due": {"date": "2026-06-11T16:00:00"}}))
+        self.assertTrue(todo.item_has_due_time({"due": {"datetime": "2026-06-11T16:00:00Z"}}))
+        self.assertFalse(todo.item_has_due_time({"due": {"date": "2026-06-11"}}))
+        self.assertFalse(todo.item_has_due_time({}))
 
     def test_waiting_age_uses_since_date(self):
         task = {
@@ -1031,7 +1070,7 @@ created two
         with contextlib.redirect_stderr(err):
             rc = todo.main(["task", "--add"])
         self.assertEqual(rc, 1)
-        self.assertIn("usage: todo task --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]", err.getvalue())
+        self.assertIn("usage: todo task --add|--new|--create [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]", err.getvalue())
         self.assertIn("Create a task in CATEGORY", err.getvalue())
         self.assertNotIn("expected 2-9999", err.getvalue())
 
@@ -1068,13 +1107,13 @@ created two
             (["task", "--delete"], "usage: todo task --delete [--yes] TASK"),
             (["task", "--wait"], "usage: todo task --wait|--waiting [--due DATE] TASK REASON"),
             (["task", "--resume"], "usage: todo task --resume TASK TEXT"),
-            (["task", "--due"], "usage: todo task --due TASK DATE"),
+            (["task", "--due"], "usage: todo task --due [--reminder OFFSET] TASK DATE"),
             (["task", "--priority"], "usage: todo task --priority TASK P"),
             (["task", "-p1"], "usage: todo task --priority TASK P"),
             (["task", "--move"], "usage: todo task --move TASK CATEGORY"),
             (["task", "--comment"], "usage: todo task --comment TASK TEXT [TEXT ...]"),
             (["task", "--step"], "usage: todo task --step TASK STEP [STEP ...]"),
-            (["step", "--add"], "usage: todo step --add|--new|--create [--due DATE] TASK STEP [STEP ...]"),
+            (["step", "--add"], "usage: todo step --add|--new|--create [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]"),
             (["step", "--add", "--done"], "usage: todo step --add|--new|--create --done|--close [--due DATE] TASK STEP [STEP ...]"),
             (["step", "--done"], "usage: todo step --done|--close TASK STEP"),
             (["step", "--delete"], "usage: todo step --delete [--yes] TASK STEP"),
@@ -1096,7 +1135,7 @@ created two
         args = parser.parse_args(["task", "--add", "Engineering"])
         with self.assertRaises(todo.TodoUsage) as cm:
             todo.cmd_task(args)
-        self.assertIn("usage: todo task --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]",
+        self.assertIn("usage: todo task --add|--new|--create [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]",
                       str(cm.exception))
         self.assertNotIn("expected 2-9999 argument", str(cm.exception))
 
@@ -1135,6 +1174,12 @@ created two
         self.assertEqual(wait_due_after_args.values, ["website", "waiting"])
         self.assertTrue(parser.parse_args(["task", "--resume", "website", "back"]).resume)
         self.assertTrue(parser.parse_args(["task", "--due", "website", "2d"]).due)
+        reminder_args = parser.parse_args(["task", "--reminder", "10m", "website"])
+        self.assertEqual(reminder_args.reminder, ["10m"])
+        self.assertEqual(reminder_args.values, ["website"])
+        due_reminder_args = parser.parse_args(["task", "--due", "--reminder", "10m", "website", "tomorrow 10:00"])
+        self.assertEqual(due_reminder_args.reminder, ["10m"])
+        self.assertEqual(due_reminder_args.values, ["website", "tomorrow 10:00"])
         self.assertTrue(parser.parse_args(["task", "--priority", "website", "1"]).priority)
         p1_args = parser.parse_args(["task", "-p1", "website"])
         self.assertEqual(p1_args.add_priority, 1)
@@ -1302,6 +1347,28 @@ created two
         self.assertEqual(calls[0].task, "fixed bug")
         self.assertEqual(calls[0].due, "7d")
 
+    def test_task_add_reminder_dispatches_to_add(self):
+        calls = []
+        old_cmd_add = todo.cmd_add
+        try:
+            def fake_cmd_add(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_add = fake_cmd_add
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args([
+                "task", "--add", "--due", "tomorrow 10:00", "--reminder", "10m",
+                "--reminder", "0", "Engineering", "fixed bug",
+            ]))
+        finally:
+            todo.cmd_add = old_cmd_add
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].category, "Engineering")
+        self.assertEqual(calls[0].task, "fixed bug")
+        self.assertEqual(calls[0].due, "tomorrow 10:00")
+        self.assertEqual(calls[0].reminders, ["10m", "0"])
+
     def test_task_due_dispatch_still_accepts_legacy_order(self):
         calls = []
         old_cmd_due = todo.cmd_due
@@ -1318,6 +1385,51 @@ created two
         self.assertEqual(rc, 0)
         self.assertEqual(calls[0].task, "website")
         self.assertEqual(calls[0].date, "2d")
+
+    def test_task_due_reminder_dispatches_to_due(self):
+        calls = []
+        old_cmd_due = todo.cmd_due
+        try:
+            def fake_cmd_due(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_due = fake_cmd_due
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args([
+                "task", "--due", "--reminder", "10m", "website", "tomorrow 10:00",
+            ]))
+        finally:
+            todo.cmd_due = old_cmd_due
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].date, "tomorrow 10:00")
+        self.assertEqual(calls[0].reminders, ["10m"])
+
+    def test_task_reminder_dispatches(self):
+        calls = []
+        old_cmd_task_reminder = todo.cmd_task_reminder
+        try:
+            def fake_cmd_task_reminder(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_task_reminder = fake_cmd_task_reminder
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--reminder", "10m", "website"]))
+        finally:
+            todo.cmd_task_reminder = old_cmd_task_reminder
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].reminders, ["10m"])
+
+    def test_task_add_done_rejects_reminder_before_mutation(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_task(parser.parse_args([
+                "task", "--add", "--done", "--reminder", "10m", "Engineering", "fixed bug",
+            ]))
+        self.assertIn("Use --reminder only for open tasks", str(cm.exception))
 
     def test_task_wait_due_dispatches_to_wait(self):
         calls = []
@@ -1457,6 +1569,7 @@ created two
         create_args = parser.parse_args(["step", "--create", "website", "review"])
         add_due_args = parser.parse_args(["step", "--add", "--due", "7d", "website", "review"])
         add_due_after_args = parser.parse_args(["step", "--add", "website", "review", "--due", "7d"])
+        add_reminder_args = parser.parse_args(["step", "--add", "--due", "tomorrow 10:00", "--reminder", "10m", "website", "review"])
         done_args = parser.parse_args(["step", "--done", "website", "review"])
         close_args = parser.parse_args(["step", "--close", "website", "review"])
         undone_args = parser.parse_args(["step", "--undone", "website", "review"])
@@ -1476,6 +1589,8 @@ created two
         self.assertEqual(add_due_args.values, ["website", "review"])
         self.assertEqual(add_due_after_args.due, "7d")
         self.assertEqual(add_due_after_args.values, ["website", "review"])
+        self.assertEqual(add_reminder_args.reminder, ["10m"])
+        self.assertEqual(add_reminder_args.values, ["website", "review"])
         self.assertTrue(done_args.done)
         self.assertEqual(done_args.values, ["website", "review"])
         self.assertTrue(close_args.done)
@@ -1505,6 +1620,53 @@ created two
         self.assertEqual(calls[0].task, "website")
         self.assertEqual(calls[0].steps, ["review"])
         self.assertEqual(calls[0].due, "7d")
+
+    def test_step_add_reminder_dispatches_to_step(self):
+        calls = []
+        old_cmd_step = todo.cmd_step
+        try:
+            def fake_cmd_step(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_step = fake_cmd_step
+            parser = todo.build_parser()
+            rc = todo.cmd_step_noun(parser.parse_args([
+                "step", "--add", "--due", "tomorrow 10:00", "--reminder", "10m", "website", "review",
+            ]))
+        finally:
+            todo.cmd_step = old_cmd_step
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].steps, ["review"])
+        self.assertEqual(calls[0].due, "tomorrow 10:00")
+        self.assertEqual(calls[0].reminders, ["10m"])
+
+    def test_step_reminder_dispatches(self):
+        calls = []
+        old_cmd_step_reminder = todo.cmd_step_reminder
+        try:
+            def fake_cmd_step_reminder(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_step_reminder = fake_cmd_step_reminder
+            parser = todo.build_parser()
+            rc = todo.cmd_step_noun(parser.parse_args(["step", "--reminder", "10m", "website", "review"]))
+        finally:
+            todo.cmd_step_reminder = old_cmd_step_reminder
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].step, "review")
+        self.assertEqual(calls[0].reminders, ["10m"])
+
+    def test_step_add_done_rejects_reminder_before_mutation(self):
+        parser = todo.build_parser()
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.cmd_step_noun(parser.parse_args([
+                "step", "--add", "--done", "--reminder", "10m", "website", "review",
+            ]))
+        self.assertIn("Use --reminder only for open steps", str(cm.exception))
 
     def test_step_due_requires_add_mode(self):
         parser = todo.build_parser()

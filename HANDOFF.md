@@ -12,6 +12,7 @@ for fast matching, display, reporting, and recent command context.
 - make tasks easy to find by short free-form names
 - track active, waiting, someday, and completed work
 - support task steps, comments, priorities, due dates, and categories
+- support Todoist relative reminders for due tasks and steps
 - generate a plain-text weekly report draft
 - keep Todoist web, mobile, and desktop useful alongside the CLI
 
@@ -145,6 +146,26 @@ and do not count today.
 
 Recurring due dates display Todoist's raw recurrence string after `↻`. A
 `starting ...` tail is hidden because the next due date is already shown.
+
+## Reminders
+
+Reminder data is synced into the local cache from Todoist's `reminders`
+resource and displayed by task, step, and now views.
+
+Supported creation forms:
+
+```sh
+todo task --add --due "friday 11:00" --reminder 10m Engineering "meeting"
+todo task --due --reminder 10m meeting "friday 11:00"
+todo task --reminder 10m meeting
+todo step --add --due "friday 11:00" --reminder 10m meeting "join call"
+todo step --reminder 10m meeting "join call"
+```
+
+`--reminder` creates Todoist relative reminders only. Offsets accept `0`,
+`10m`, `2h`, `1d`, combined forms such as `1d 2h 30m`, and `at due`.
+The target item must have a due date with a time; date-only due values are
+rejected before calling Todoist.
 
 ## Reports
 

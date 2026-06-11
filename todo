@@ -84,14 +84,15 @@ class TodoUsage(TodoError):
 
 
 TASK_USAGE = """usage: todo task TASK
-       todo task --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo task --add|--new|--create [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo task --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo task --done|--close TASK [TEXT]
        todo task --undone|--unclose TASK
        todo task --delete [--yes] TASK
        todo task --wait|--waiting [--due DATE] TASK REASON
        todo task --resume TASK TEXT
-       todo task --due TASK DATE
+       todo task --due [--reminder OFFSET] TASK DATE
+       todo task --reminder OFFSET TASK
        todo task --priority TASK P
        todo task -p1|-p2|-p3|-p4 TASK
        todo task --move TASK CATEGORY
@@ -102,12 +103,12 @@ Show a task, or perform one task operation.
 """
 
 
-TASK_ADD_USAGE = """usage: todo task --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+TASK_ADD_USAGE = """usage: todo task --add|--new|--create [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 
 Create a task in CATEGORY, optionally with initial steps.
 
 examples:
-  todo task --add --due 7d -p1 Engineering "fix config cleanup"
+  todo task --add --due "friday 11:00" --reminder 10m -p1 Engineering "fix config cleanup"
   todo task --add --due ask Engineering "fix config cleanup"
   todo task --add -p1 Engineering "fix config cleanup"
   todo task --add Engineering "fix config cleanup"
@@ -116,14 +117,17 @@ examples:
 due:
   DATE accepts Todoist text, 2d, 4h, 2bd, weekdays such as monday,
   ISO dates/times, clear, or ask for an interactive prompt.
+reminder:
+  OFFSET is relative to the due time: 0, 10m, 2h, 1d, or "at due".
 """
 
 STEP_USAGE = """usage: todo step TASK
-       todo step --add|--new|--create [--due DATE] TASK STEP [STEP ...]
+       todo step --add|--new|--create [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]
        todo step --add|--new|--create --done [--due DATE] TASK STEP [STEP ...]
        todo step --done TASK STEP
        todo step --delete [--yes] TASK STEP
        todo step --undone|--unclose TASK STEP
+       todo step --reminder OFFSET TASK STEP
 
 Show task steps, add steps, or mark one step done.
 """
@@ -172,11 +176,19 @@ follow-up date; if omitted, the default is two business days.
 
 Clear waiting state and due date from TASK.
 """,
-    "task --due": """usage: todo task --due TASK DATE
+    "task --due": """usage: todo task --due [--reminder OFFSET] TASK DATE
 
 Set TASK attention date. Use `clear` or `-` to remove the due date.
 Use ask for an interactive prompt. Weekdays mean the next occurrence,
 excluding today.
+
+Use --reminder OFFSET to add one or more reminders relative to the new due
+time. OFFSET accepts 0, 10m, 2h, 1d, or "at due".
+""",
+    "task --reminder": """usage: todo task --reminder OFFSET TASK
+
+Add a reminder to TASK relative to its existing due time. Repeat --reminder
+to add multiple reminders. OFFSET accepts 0, 10m, 2h, 1d, or "at due".
 """,
     "task --priority": """usage: todo task --priority TASK P
 
@@ -197,12 +209,13 @@ This is a shortcut for `todo comment --add TASK TEXT [TEXT ...]`.
 Add one or more open steps to TASK.
 This is a shortcut for `todo step --add TASK STEP [STEP ...]`.
 """,
-    "step --add": """usage: todo step --add|--new|--create [--due DATE] TASK STEP [STEP ...]
+    "step --add": """usage: todo step --add|--new|--create [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]
 
 Add one or more open steps to TASK.
 
 DATE accepts Todoist text, 2d, 4h, 2bd, weekdays such as monday,
 ISO dates/times, clear, or ask for an interactive prompt.
+OFFSET accepts 0, 10m, 2h, 1d, or "at due".
 """,
     "step --add --done": """usage: todo step --add|--new|--create --done|--close [--due DATE] TASK STEP [STEP ...]
 
@@ -218,6 +231,11 @@ Mark an existing STEP done under TASK.
     "step --undone": """usage: todo step --undone|--unclose TASK STEP
 
 Reopen a completed STEP under TASK.
+""",
+    "step --reminder": """usage: todo step --reminder OFFSET TASK STEP
+
+Add a reminder to STEP relative to its existing due time. Repeat --reminder
+to add multiple reminders. OFFSET accepts 0, 10m, 2h, 1d, or "at due".
 """,
     "step --delete": """usage: todo step --delete [--yes] TASK STEP
 
@@ -382,7 +400,7 @@ class Cache:
 
     @classmethod
     def empty(cls):
-        data = {"sync_token": "*", "synced_at": None}
+        data = {"sync_token": "*", "synced_at": None, "resource_keys": list(cls.RESOURCE_KEYS)}
         for key in cls.RESOURCE_KEYS:
             data[key] = []
         return data
@@ -392,7 +410,13 @@ class Cache:
         if not os.path.exists(CACHE_PATH):
             return cls()
         with open(CACHE_PATH, "r", encoding="utf-8") as f:
-            return cls(json.load(f))
+            data = json.load(f)
+        if data.get("resource_keys") != cls.RESOURCE_KEYS:
+            data["sync_token"] = "*"
+            data["resource_keys"] = list(cls.RESOURCE_KEYS)
+        for key in cls.RESOURCE_KEYS:
+            data.setdefault(key, [])
+        return cls(data)
 
     def save(self):
         atomic_write(CACHE_PATH, json.dumps(self.data, indent=2, sort_keys=True) + "\n")
@@ -887,6 +911,37 @@ def format_reminder_offset(minutes):
     return f"{' '.join(parts)} before" if parts else "before"
 
 
+def parse_reminder_offset(value):
+    text = str(value or "").strip().lower()
+    if text in ("0", "0m", "due", "at due", "on due"):
+        return 0
+    if re.fullmatch(r"\d+", text):
+        return int(text)
+    total = 0
+    pos = 0
+    matched = False
+    for match in re.finditer(r"(\d+)\s*([dhm])", text):
+        if text[pos:match.start()].strip():
+            raise TodoError(f"Cannot parse reminder offset {value!r}. Use 0, 10m, 2h, 1d, or 'at due'.")
+        amount = int(match.group(1))
+        unit = match.group(2)
+        if unit == "d":
+            total += amount * 1440
+        elif unit == "h":
+            total += amount * 60
+        else:
+            total += amount
+        pos = match.end()
+        matched = True
+    if matched and not text[pos:].strip():
+        return total
+    raise TodoError(f"Cannot parse reminder offset {value!r}. Use 0, 10m, 2h, 1d, or 'at due'.")
+
+
+def parse_reminder_offsets(values):
+    return [parse_reminder_offset(value) for value in values or []]
+
+
 def format_reminder(reminder):
     if reminder.get("type") == "relative":
         text = format_reminder_offset(reminder.get("minute_offset"))
@@ -1196,6 +1251,43 @@ def delete_item(client, cache, task_id):
     mutate(client, cache, "item_delete", {"id": str(task_id)})
 
 
+def cached_item(cache, item_id):
+    return item_by_id(cache).get(str(item_id))
+
+
+def item_has_due_time(item):
+    due = (item or {}).get("due") or {}
+    if due.get("datetime"):
+        return True
+    value = due.get("date") or ""
+    return "T" in value
+
+
+def add_relative_reminders(client, cache, item_id, offsets):
+    offsets = parse_reminder_offsets(offsets)
+    if not offsets:
+        return
+    item = cached_item(cache, item_id)
+    if not item_has_due_time(item):
+        raise TodoError("Relative reminders need a due date with time. "
+                        "Set one with --due, for example `--due \"tomorrow 10:00\"`.")
+    existing = {int(reminder.get("minute_offset") or 0)
+                for reminder in reminders_for(cache, item_id)
+                if reminder.get("type") == "relative"}
+    for offset in offsets:
+        label = format_reminder_offset(offset)
+        if offset in existing:
+            print(f"Reminder already exists: {label}")
+            continue
+        mutate(client, cache, "reminder_add", {
+            "item_id": str(item_id),
+            "type": "relative",
+            "minute_offset": offset,
+        })
+        existing.add(offset)
+        print(f"Added reminder: {label}")
+
+
 def cmd_init(args):
     with lock_state():
         cfg = Config.load()
@@ -1262,6 +1354,12 @@ def cmd_add(args):
         task_id = mapped_id(response) or find_added_task_id(cache, category_project.get("id"), args.task)
         if (args.steps or getattr(args, "done", False)) and not task_id:
             raise TodoError("Added task, but could not find its Todoist ID.")
+        if getattr(args, "reminders", None):
+            if not task_id:
+                raise TodoError("Added task, but could not find its Todoist ID to add reminders.")
+            if getattr(args, "done", False):
+                raise TodoError("Use --reminder only for open tasks.")
+            add_relative_reminders(client, cache, task_id, args.reminders)
         if getattr(args, "done", False):
             print(f"Added done task: {args.task}")
         else:
@@ -1328,6 +1426,12 @@ def cmd_step(args):
                 item_args["due"] = {"string": due_value}
             response = mutate(client, cache, "item_add", item_args)
             step_id = mapped_id(response) or find_added_step_id(cache, task.get("id"), step)
+            if getattr(args, "reminders", None):
+                if not step_id:
+                    raise TodoError(f"Added step {step!r}, but could not find its Todoist ID to add reminders.")
+                if getattr(args, "done", False):
+                    raise TodoError("Use --reminder only for open steps.")
+                add_relative_reminders(client, cache, step_id, args.reminders)
             if getattr(args, "done", False):
                 if not step_id:
                     raise TodoError(f"Added step {step!r}, but could not find its Todoist ID to mark it done.")
@@ -1942,11 +2046,34 @@ def cmd_due(args):
         task = resolve_task(cache, cfg, args.task)
         due_value = resolve_due_value(args.date)
         if due_value is None:
+            if getattr(args, "reminders", None):
+                raise TodoError("Cannot add reminders after clearing the due date.")
             update_item(client, cache, task.get("id"), due=None)
             print(f"Cleared due date: {content_of(task)}")
         else:
             update_item(client, cache, task.get("id"), due={"string": due_value})
+            if getattr(args, "reminders", None):
+                add_relative_reminders(client, cache, task.get("id"), args.reminders)
             print(f"Due {format_due_value_for_display(due_value)}: {content_of(task)}")
+        return 0
+
+
+def cmd_task_reminder(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        add_relative_reminders(client, cache, task.get("id"), args.reminders)
+        return 0
+
+
+def cmd_step_reminder(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task)
+        step = resolve_step(cache, task, args.step)
+        add_relative_reminders(client, cache, step.get("id"), args.reminders)
         return 0
 
 
@@ -2045,17 +2172,21 @@ def task_due_mode_values(args):
 def cmd_task(args):
     modes = selected_modes(args, [
         "add", "done", "undone", "delete", "wait", "resume", "due",
-        "priority", "move", "comment", "step"])
+        "reminder", "priority", "move", "comment", "step"])
     mode_set = set(modes)
     add_priority = getattr(args, "add_priority", None)
     if "add" in mode_set:
-        if not mode_set <= {"add", "done", "due"}:
+        if not mode_set <= {"add", "done", "due", "reminder"}:
             raise TodoError("Use only one task mode at a time.")
         mode = "add_done" if "done" in mode_set else "add"
     elif "wait" in mode_set:
         if not mode_set <= {"wait", "due"}:
             raise TodoError("Use only one task mode at a time.")
         mode = "wait"
+    elif "due" in mode_set:
+        if not mode_set <= {"due", "reminder"}:
+            raise TodoError("Use only one task mode at a time.")
+        mode = "due"
     elif len(modes) > 1:
         raise TodoError("Use only one task mode at a time.")
     else:
@@ -2065,12 +2196,17 @@ def cmd_task(args):
     values = args.values
     add_due = due_option_value(args, "task --add") if "add" in mode_set and "due" in mode_set else None
     wait_due = due_option_value(args, "task --wait") if mode == "wait" and "due" in mode_set else None
+    reminder_offsets = args.reminder or []
     if add_priority is not None and mode not in ("add", "add_done", "priority_shortcut"):
         raise TodoError("Use -p1, -p2, -p3, or -p4 only with `todo task --add` or `todo task -pN TASK`.")
     if args.yes and mode != "delete":
         raise TodoError("Use --yes only with `todo task --delete`.")
     if args.refresh and mode != "show":
         raise TodoError("Use --refresh only with `todo task TASK`; mutation modes refresh automatically.")
+    if reminder_offsets and mode not in ("add", "add_done", "due", "reminder"):
+        raise TodoError("Use --reminder only with `todo task --add`, `todo task --due`, or `todo task --reminder`.")
+    if reminder_offsets and mode == "add_done":
+        raise TodoError("Use --reminder only for open tasks.")
     if mode == "show":
         require_arg_count("task", values, 1)
         return cmd_show(argparse.Namespace(task=values[0], refresh=args.refresh))
@@ -2082,6 +2218,7 @@ def cmd_task(args):
             steps=values[2:],
             priority=add_priority,
             due=add_due,
+            reminders=reminder_offsets,
             done=False,
         ))
     if mode == "add_done":
@@ -2092,6 +2229,7 @@ def cmd_task(args):
             steps=values[2:],
             priority=add_priority,
             due=add_due,
+            reminders=reminder_offsets,
             done=True,
         ))
     if mode == "done":
@@ -2111,7 +2249,10 @@ def cmd_task(args):
         return cmd_resume(argparse.Namespace(task=values[0], text=values[1]))
     if mode == "due":
         task, date = task_due_mode_values(args)
-        return cmd_due(argparse.Namespace(task=task, date=date))
+        return cmd_due(argparse.Namespace(task=task, date=date, reminders=reminder_offsets))
+    if mode == "reminder":
+        require_arg_count("task --reminder", values, 1)
+        return cmd_task_reminder(argparse.Namespace(task=values[0], reminders=reminder_offsets))
     if mode == "priority":
         require_arg_count("task --priority", values, 2)
         task, priority = parse_priority_args(values)
@@ -2129,17 +2270,19 @@ def cmd_task(args):
         require_arg_count("task --step", values, 2, 9999)
         return cmd_step_noun(argparse.Namespace(
             add=True, done=False, undone=False, delete=False, due=None,
-            yes=False, refresh=False, values=values))
+            reminder=[], yes=False, refresh=False, values=values))
     raise TodoError(f"Unknown task mode {mode}.")
 
 
 def cmd_step_noun(args):
-    modes = selected_modes(args, ["add", "done", "undone", "delete", "due"])
+    modes = selected_modes(args, ["add", "done", "undone", "delete", "due", "reminder"])
     mode_set = set(modes)
     if "due" in mode_set and "add" not in mode_set:
         raise TodoError("Use --due only with `todo step --add`.")
+    if "reminder" in mode_set and "add" not in mode_set and len(mode_set) > 1:
+        raise TodoError("Use only one step mode at a time.")
     if "add" in mode_set:
-        if not mode_set <= {"add", "done", "due"}:
+        if not mode_set <= {"add", "done", "due", "reminder"}:
             raise TodoError("Use only one step mode at a time.")
         mode = "add_done" if "done" in mode_set else "add"
     elif len(modes) > 1:
@@ -2148,19 +2291,26 @@ def cmd_step_noun(args):
         mode = modes[0] if modes else "show"
     values = args.values
     add_due = due_option_value(args, "step --add") if "due" in mode_set else None
+    reminder_offsets = args.reminder or []
     if args.yes and mode != "delete":
         raise TodoError("Use --yes only with `todo step --delete`.")
     if args.refresh and mode != "show":
         raise TodoError("Use --refresh only with `todo step TASK`; mutation modes refresh automatically.")
+    if reminder_offsets and mode not in ("add", "add_done", "reminder"):
+        raise TodoError("Use --reminder only with `todo step --add` or `todo step --reminder`.")
+    if reminder_offsets and mode == "add_done":
+        raise TodoError("Use --reminder only for open steps.")
     if mode == "show":
         require_arg_count("step", values, 1)
-        return cmd_step(argparse.Namespace(task=values[0], steps=[], due=None, refresh=args.refresh))
+        return cmd_step(argparse.Namespace(task=values[0], steps=[], due=None, reminders=[], refresh=args.refresh))
     if mode == "add":
         require_arg_count("step --add", values, 2, 9999)
-        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=False, due=add_due))
+        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=False, due=add_due,
+                                           reminders=reminder_offsets))
     if mode == "add_done":
         require_arg_count("step --add --done", values, 2, 9999)
-        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=True, due=add_due))
+        return cmd_step(argparse.Namespace(task=values[0], steps=values[1:], done=True, due=add_due,
+                                           reminders=reminder_offsets))
     if mode == "done":
         require_arg_count("step --done", values, 2)
         return cmd_check(argparse.Namespace(task=values[0], step=values[1]))
@@ -2170,6 +2320,9 @@ def cmd_step_noun(args):
     if mode == "delete":
         require_arg_count("step --delete", values, 2)
         return cmd_delete_step(argparse.Namespace(task=values[0], step=values[1], yes=args.yes))
+    if mode == "reminder":
+        require_arg_count("step --reminder", values, 2)
+        return cmd_step_reminder(argparse.Namespace(task=values[0], step=values[1], reminders=reminder_offsets))
     raise TodoError(f"Unknown step mode {mode}.")
 
 
@@ -2751,14 +2904,15 @@ display:
   todo task TASK
 
 modes:
-  --add|--new|--create [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+  --add|--new|--create [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --done|--close TASK [TEXT]
   --undone|--unclose TASK
   --delete [--yes] TASK
   --wait|--waiting [--due DATE] TASK TEXT
   --resume TASK TEXT
-  --due TASK DATE
+  --due [--reminder OFFSET] TASK DATE
+  --reminder OFFSET TASK
   --priority TASK P
   -p1|-p2|-p3|-p4 TASK
   --move TASK CATEGORY
@@ -2777,6 +2931,8 @@ modes:
     p.add_argument("--resume", action="store_true", help="clear waiting state")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE",
                    help="set or clear attention date, set initial due date with --add, or set wait follow-up")
+    p.add_argument("--reminder", action="append", metavar="OFFSET",
+                   help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
     p.add_argument("--priority", action="store_true", help="set priority 1..4")
     p.add_argument("--move", action="store_true", help="move task to another category")
     p.add_argument("--comment", action="store_true", help="add one or more comments to a task")
@@ -2802,11 +2958,12 @@ display:
   todo step TASK
 
 modes:
-  --add|--new|--create [--due DATE] TASK STEP [STEP ...]
+  --add|--new|--create [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]
   --add|--new|--create --done|--close [--due DATE] TASK STEP [STEP ...]
   --done|--close TASK STEP
   --delete [--yes] TASK STEP
-  --undone|--unclose TASK STEP""",
+  --undone|--unclose TASK STEP
+  --reminder OFFSET TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--add", "--new", "--create", dest="add", action="store_true", help="add one or more steps")
@@ -2816,6 +2973,8 @@ modes:
     p.add_argument("--delete", action="store_true", help="delete one step")
     p.add_argument("--yes", action="store_true", help="skip delete confirmation")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date with --add")
+    p.add_argument("--reminder", action="append", metavar="OFFSET",
+                   help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing steps")
     p.add_argument("values", nargs="*", help="arguments for the selected mode")
     p.set_defaults(func=cmd_step_noun)
