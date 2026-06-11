@@ -1125,6 +1125,7 @@ created two
             (["task", "--priority"], "usage: todo task --priority TASK P"),
             (["task", "-p1"], "usage: todo task --priority TASK P"),
             (["task", "--move"], "usage: todo task --move TASK CATEGORY"),
+            (["task", "--rename"], "usage: todo task --rename TASK NEW_NAME"),
             (["task", "--comment"], "usage: todo task --comment TASK TEXT [TEXT ...]"),
             (["task", "--step"], "usage: todo task --step TASK STEP [STEP ...]"),
             (["step", "--add"], "usage: todo step --add|--new|--create [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]"),
@@ -1132,6 +1133,7 @@ created two
             (["step", "--done"], "usage: todo step --done|--close TASK STEP"),
             (["step", "--delete"], "usage: todo step --delete [--yes] TASK STEP"),
             (["step", "--undone"], "usage: todo step --undone|--unclose TASK STEP"),
+            (["step", "--rename"], "usage: todo step --rename TASK STEP NEW_NAME"),
             (["comment", "--add"], "usage: todo comment --add|--create TASK TEXT [TEXT ...]"),
             (["comment", "--edit"], "usage: todo comment --edit TASK"),
         ]
@@ -1199,6 +1201,7 @@ created two
         self.assertEqual(p1_args.add_priority, 1)
         self.assertEqual(p1_args.values, ["website"])
         self.assertTrue(parser.parse_args(["task", "--move", "website", "engineering"]).move)
+        self.assertTrue(parser.parse_args(["task", "--rename", "website", "new website"]).rename)
         comment_args = parser.parse_args(["task", "--comment", "website", "D12345", "bug 123"])
         self.assertTrue(comment_args.comment)
         self.assertEqual(comment_args.values, ["website", "D12345", "bug 123"])
@@ -1504,6 +1507,23 @@ created two
         self.assertEqual(calls[0].task, "virtuals2-sca")
         self.assertTrue(calls[0].yes)
 
+    def test_task_rename_dispatches_to_rename(self):
+        calls = []
+        old_cmd_rename_task = todo.cmd_rename_task
+        try:
+            def fake_cmd_rename_task(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_rename_task = fake_cmd_rename_task
+            parser = todo.build_parser()
+            rc = todo.cmd_task(parser.parse_args(["task", "--rename", "virtuals2-sca", "virtuals2 sca"]))
+        finally:
+            todo.cmd_rename_task = old_cmd_rename_task
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "virtuals2-sca")
+        self.assertEqual(calls[0].new_name, "virtuals2 sca")
+
     def test_delete_without_yes_requires_interactive_terminal(self):
         with self.assertRaises(todo.TodoError) as cm:
             todo.confirm_delete("task", "website", yes=False)
@@ -1573,6 +1593,56 @@ created two
             ("close", "task1"),
         ])
 
+    def test_rename_open_task_only_updates(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_update_item = todo.update_item
+        old_close_item = todo.close_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.update_item = lambda client, cache, task_id, **kwargs: calls.append(("update", task_id, kwargs))
+            todo.close_item = lambda client, cache, task_id: calls.append(("close", task_id))
+
+            was_done = todo.rename_task_item(
+                None,
+                None,
+                {"id": "task1", "checked": False},
+                "new title",
+            )
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.update_item = old_update_item
+            todo.close_item = old_close_item
+        self.assertFalse(was_done)
+        self.assertEqual(calls, [("update", "task1", {"content": "new title"})])
+
+    def test_rename_completed_task_reopens_updates_and_closes(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_update_item = todo.update_item
+        old_close_item = todo.close_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.update_item = lambda client, cache, task_id, **kwargs: calls.append(("update", task_id, kwargs))
+            todo.close_item = lambda client, cache, task_id: calls.append(("close", task_id))
+
+            was_done = todo.rename_task_item(
+                None,
+                None,
+                {"id": "task1", "checked": True},
+                "new title",
+            )
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.update_item = old_update_item
+            todo.close_item = old_close_item
+        self.assertTrue(was_done)
+        self.assertEqual(calls, [
+            ("reopen", "task1"),
+            ("update", "task1", {"content": "new title"}),
+            ("close", "task1"),
+        ])
+
     def test_step_modes_parse(self):
         parser = todo.build_parser()
         self.assertEqual(parser.parse_args(["step", "website"]).values, ["website"])
@@ -1589,6 +1659,7 @@ created two
         undone_args = parser.parse_args(["step", "--undone", "website", "review"])
         unclose_args = parser.parse_args(["step", "--unclose", "website", "review"])
         delete_args = parser.parse_args(["step", "--delete", "--yes", "website", "review"])
+        rename_args = parser.parse_args(["step", "--rename", "website", "review", "new review"])
         self.assertTrue(add_args.add)
         self.assertEqual(add_args.values, ["website", "review", "publish"])
         self.assertTrue(add_done_args.add)
@@ -1616,6 +1687,8 @@ created two
         self.assertTrue(delete_args.delete)
         self.assertTrue(delete_args.yes)
         self.assertEqual(delete_args.values, ["website", "review"])
+        self.assertTrue(rename_args.rename)
+        self.assertEqual(rename_args.values, ["website", "review", "new review"])
 
     def test_step_add_due_dispatches_to_step(self):
         calls = []
@@ -1673,6 +1746,80 @@ created two
         self.assertEqual(calls[0].task, "website")
         self.assertEqual(calls[0].step, "review")
         self.assertEqual(calls[0].reminders, ["10m"])
+
+    def test_step_rename_dispatches(self):
+        calls = []
+        old_cmd_rename_step = todo.cmd_rename_step
+        try:
+            def fake_cmd_rename_step(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_rename_step = fake_cmd_rename_step
+            parser = todo.build_parser()
+            rc = todo.cmd_step_noun(parser.parse_args(["step", "--rename", "website", "review", "new review"]))
+        finally:
+            todo.cmd_rename_step = old_cmd_rename_step
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].step, "review")
+        self.assertEqual(calls[0].new_name, "new review")
+
+    def test_rename_open_step_only_updates(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_update_item = todo.update_item
+        old_close_item = todo.close_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.update_item = lambda client, cache, task_id, **kwargs: calls.append(("update", task_id, kwargs))
+            todo.close_item = lambda client, cache, task_id: calls.append(("close", task_id))
+
+            parent_was_done, step_was_done = todo.rename_step_item(
+                None,
+                None,
+                {"id": "task1", "checked": False},
+                {"id": "step1", "checked": False},
+                "new step",
+            )
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.update_item = old_update_item
+            todo.close_item = old_close_item
+        self.assertFalse(parent_was_done)
+        self.assertFalse(step_was_done)
+        self.assertEqual(calls, [("update", "step1", {"content": "new step"})])
+
+    def test_rename_completed_step_reopens_updates_and_closes(self):
+        calls = []
+        old_reopen_item = todo.reopen_item
+        old_update_item = todo.update_item
+        old_close_item = todo.close_item
+        try:
+            todo.reopen_item = lambda client, cache, task_id: calls.append(("reopen", task_id))
+            todo.update_item = lambda client, cache, task_id, **kwargs: calls.append(("update", task_id, kwargs))
+            todo.close_item = lambda client, cache, task_id: calls.append(("close", task_id))
+
+            parent_was_done, step_was_done = todo.rename_step_item(
+                None,
+                None,
+                {"id": "task1", "checked": True},
+                {"id": "step1", "checked": True},
+                "new step",
+            )
+        finally:
+            todo.reopen_item = old_reopen_item
+            todo.update_item = old_update_item
+            todo.close_item = old_close_item
+        self.assertTrue(parent_was_done)
+        self.assertTrue(step_was_done)
+        self.assertEqual(calls, [
+            ("reopen", "task1"),
+            ("reopen", "step1"),
+            ("update", "step1", {"content": "new step"}),
+            ("close", "step1"),
+            ("close", "task1"),
+        ])
 
     def test_step_add_done_rejects_reminder_before_mutation(self):
         parser = todo.build_parser()

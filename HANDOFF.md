@@ -113,6 +113,15 @@ Mutation commands sync before changing Todoist and require Todoist access.
 Task and comment mutations use Todoist Sync API commands, so transient Sync
 API failures can be retried with command UUIDs.
 
+Rename commands update Todoist item titles:
+
+```sh
+todo task --rename TASK NEW_NAME
+todo step --rename TASK STEP NEW_NAME
+```
+
+Completed tasks or steps are reopened for the rename and then closed again.
+
 `todo report` always syncs Todoist and fetches activity before generating
 output. `todo report --final` also advances the report cursor.
 

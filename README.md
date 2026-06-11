@@ -76,6 +76,7 @@ todo task --due website ask
 todo task --due --reminder 10m website "friday 11:00"
 todo task --reminder 10m website
 todo task --move website engineering
+todo task --rename website "Website dependency update"
 ```
 
 Show, add, complete, wait/resume, prioritize, schedule, or move tasks.
@@ -105,9 +106,11 @@ todo step --done website review
 todo step --unclose website review
 todo step --delete website review
 todo step --delete --yes website review
+todo step --rename website review "send review"
 ```
 
-Show steps, add one or more steps, mark one step done, or delete one step.
+Show steps, add one or more steps, mark one step done, rename one step, or
+delete one step.
 Step commands accept the same `--new`, `--close`, and `--closed` aliases.
 `--unclose` is accepted as an alias for `--undone`.
 

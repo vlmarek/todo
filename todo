@@ -96,6 +96,7 @@ TASK_USAGE = """usage: todo task TASK
        todo task --priority TASK P
        todo task -p1|-p2|-p3|-p4 TASK
        todo task --move TASK CATEGORY
+       todo task --rename TASK NEW_NAME
        todo task --comment TASK TEXT [TEXT ...]
        todo task --step TASK STEP [STEP ...]
 
@@ -127,6 +128,7 @@ STEP_USAGE = """usage: todo step TASK
        todo step --done TASK STEP
        todo step --delete [--yes] TASK STEP
        todo step --undone|--unclose TASK STEP
+       todo step --rename TASK STEP NEW_NAME
        todo step --reminder OFFSET TASK STEP
 
 Show task steps, add steps, or mark one step done.
@@ -199,6 +201,11 @@ Shortcut form: todo task -p1|-p2|-p3|-p4 TASK.
 
 Move TASK to CATEGORY.
 """,
+    "task --rename": """usage: todo task --rename TASK NEW_NAME
+
+Rename TASK to NEW_NAME. Completed tasks are reopened, renamed, and closed
+again.
+""",
     "task --comment": """usage: todo task --comment TASK TEXT [TEXT ...]
 
 Add one or more comments to TASK. Each TEXT becomes a separate comment.
@@ -240,6 +247,11 @@ to add multiple reminders. OFFSET accepts 0, 10m, 2h, 1d, or "at due".
     "step --delete": """usage: todo step --delete [--yes] TASK STEP
 
 Delete STEP under TASK. Completed steps are reopened before deletion.
+""",
+    "step --rename": """usage: todo step --rename TASK STEP NEW_NAME
+
+Rename STEP under TASK to NEW_NAME. Completed steps are reopened, renamed, and
+closed again.
 """,
     "comment --add": """usage: todo comment --add|--create TASK TEXT [TEXT ...]
 
@@ -2111,6 +2123,58 @@ def move_task_to_project(client, cache, task, category_project):
     return was_done
 
 
+def rename_task_item(client, cache, task, new_name):
+    was_done = bool(task.get("checked"))
+    if was_done:
+        reopen_item(client, cache, task.get("id"))
+    update_item(client, cache, task.get("id"), content=new_name)
+    if was_done:
+        close_item(client, cache, task.get("id"))
+    return was_done
+
+
+def cmd_rename_task(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task, include_completed=True)
+        old_name = content_of(task)
+        was_done = rename_task_item(client, cache, task, args.new_name)
+        state = "completed task" if was_done else "task"
+        print(f"Renamed {state}: {old_name} -> {args.new_name}")
+        return 0
+
+
+def rename_step_item(client, cache, task, step, new_name):
+    parent_was_done = bool(task.get("checked"))
+    step_was_done = bool(step.get("checked"))
+    if parent_was_done:
+        reopen_item(client, cache, task.get("id"))
+    if step_was_done:
+        reopen_item(client, cache, step.get("id"))
+    update_item(client, cache, step.get("id"), content=new_name)
+    if step_was_done:
+        close_item(client, cache, step.get("id"))
+    if parent_was_done:
+        close_item(client, cache, task.get("id"))
+    return parent_was_done, step_was_done
+
+
+def cmd_rename_step(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        task = resolve_task(cache, cfg, args.task, include_completed=True)
+        step = resolve_step(cache, task, args.step)
+        old_name = content_of(step)
+        parent_was_done, step_was_done = rename_step_item(client, cache, task, step, args.new_name)
+        state = "completed step" if step_was_done else "step"
+        if parent_was_done:
+            state = f"{state} from completed task"
+        print(f"Renamed {state}: {old_name} -> {args.new_name}")
+        return 0
+
+
 def cmd_move(args):
     with lock_state():
         cfg, client, cache = load_runtime()
@@ -2176,7 +2240,7 @@ def task_due_mode_values(args):
 def cmd_task(args):
     modes = selected_modes(args, [
         "add", "done", "undone", "delete", "wait", "resume", "due",
-        "reminder", "priority", "move", "comment", "step"])
+        "reminder", "priority", "move", "rename", "comment", "step"])
     mode_set = set(modes)
     add_priority = getattr(args, "add_priority", None)
     if "add" in mode_set:
@@ -2267,6 +2331,9 @@ def cmd_task(args):
     if mode == "move":
         require_arg_count("task --move", values, 2)
         return cmd_move(argparse.Namespace(task=values[0], category=values[1]))
+    if mode == "rename":
+        require_arg_count("task --rename", values, 2)
+        return cmd_rename_task(argparse.Namespace(task=values[0], new_name=values[1]))
     if mode == "comment":
         require_arg_count("task --comment", values, 2, 9999)
         return cmd_comment_noun(argparse.Namespace(add=True, edit=False, refresh=False, values=values))
@@ -2279,7 +2346,7 @@ def cmd_task(args):
 
 
 def cmd_step_noun(args):
-    modes = selected_modes(args, ["add", "done", "undone", "delete", "due", "reminder"])
+    modes = selected_modes(args, ["add", "done", "undone", "delete", "due", "reminder", "rename"])
     mode_set = set(modes)
     if "due" in mode_set and "add" not in mode_set:
         raise TodoError("Use --due only with `todo step --add`.")
@@ -2324,6 +2391,9 @@ def cmd_step_noun(args):
     if mode == "delete":
         require_arg_count("step --delete", values, 2)
         return cmd_delete_step(argparse.Namespace(task=values[0], step=values[1], yes=args.yes))
+    if mode == "rename":
+        require_arg_count("step --rename", values, 3)
+        return cmd_rename_step(argparse.Namespace(task=values[0], step=values[1], new_name=values[2]))
     if mode == "reminder":
         require_arg_count("step --reminder", values, 2)
         return cmd_step_reminder(argparse.Namespace(task=values[0], step=values[1], reminders=reminder_offsets))
@@ -2921,6 +2991,7 @@ modes:
   --priority TASK P
   -p1|-p2|-p3|-p4 TASK
   --move TASK CATEGORY
+  --rename TASK NEW_NAME
   --comment TASK TEXT [TEXT ...]
   --step TASK STEP [STEP ...]""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -2940,6 +3011,7 @@ modes:
                    help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
     p.add_argument("--priority", action="store_true", help="set priority 1..4")
     p.add_argument("--move", action="store_true", help="move task to another category")
+    p.add_argument("--rename", action="store_true", help="rename a task")
     p.add_argument("--comment", action="store_true", help="add one or more comments to a task")
     p.add_argument("--step", action="store_true", help="add one or more steps to a task")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing a task")
@@ -2968,6 +3040,7 @@ modes:
   --done|--close TASK STEP
   --delete [--yes] TASK STEP
   --undone|--unclose TASK STEP
+  --rename TASK STEP NEW_NAME
   --reminder OFFSET TASK STEP""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -2977,6 +3050,7 @@ modes:
     p.add_argument("--undone", "--unclose", dest="undone", action="store_true", help="reopen one completed step")
     p.add_argument("--delete", action="store_true", help="delete one step")
     p.add_argument("--yes", action="store_true", help="skip delete confirmation")
+    p.add_argument("--rename", action="store_true", help="rename one step")
     p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date with --add")
     p.add_argument("--reminder", action="append", metavar="OFFSET",
                    help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
