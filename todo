@@ -136,6 +136,7 @@ Show task steps, add steps, or mark one step done.
 
 
 COMMENT_USAGE = """usage: todo comment TASK
+       todo comment TASK TEXT [TEXT ...]
        todo comment --add|--create TASK TEXT [TEXT ...]
        todo comment --edit TASK
 
@@ -146,6 +147,43 @@ Show task comments, add comments, or edit all comments.
 SEARCH_USAGE = """usage: todo search TEXT
 
 Search tasks, descriptions, waiting reasons, steps, and comments.
+"""
+
+RENAME_USAGE = """usage: todo rename ITEM NEW_NAME
+
+Rename a task or direct step. If ITEM matches multiple tasks or steps, choose
+one interactively.
+"""
+
+DONE_USAGE = """usage: todo done|close ITEM [TEXT]
+
+Complete a task or direct step. Optional TEXT is stored as a completion
+comment when ITEM resolves to a task.
+"""
+
+UNCLOSE_USAGE = """usage: todo unclose|undone ITEM
+
+Reopen a completed task or direct step.
+"""
+
+DELETE_USAGE = """usage: todo delete [--yes] ITEM
+
+Delete a task or direct step. Use --yes for non-interactive deletion.
+"""
+
+WAIT_USAGE = """usage: todo wait [--due DATE] TASK REASON
+
+Mark TASK waiting. This shortcut searches tasks only.
+"""
+
+MOVE_USAGE = """usage: todo move TASK CATEGORY
+
+Move TASK to CATEGORY. This shortcut searches tasks only.
+"""
+
+PRIORITY_USAGE = """usage: todo priority TASK P
+
+Set TASK priority to 1, 2, 3, or 4. This shortcut searches tasks only.
 """
 
 
@@ -264,6 +302,13 @@ Edit all comments on TASK in one editor buffer.
     "step": STEP_USAGE,
     "comment": COMMENT_USAGE,
     "search": SEARCH_USAGE,
+    "rename": RENAME_USAGE,
+    "done": DONE_USAGE,
+    "unclose": UNCLOSE_USAGE,
+    "delete": DELETE_USAGE,
+    "wait": WAIT_USAGE,
+    "move": MOVE_USAGE,
+    "priority": PRIORITY_USAGE,
 }
 
 
@@ -1198,6 +1243,93 @@ def print_candidates(cache, candidates, header):
     print()
 
 
+def item_candidate_text(cache, candidate):
+    task = candidate["task"]
+    if candidate["kind"] == "task":
+        state = "done" if task.get("checked") else "open"
+        return (f"{candidate['kind']:<4} {state:<4} "
+                f"{format_priority(task)}  {project_name(cache, task.get('project_id')):<12} "
+                f"{content_of(task)}")
+    step = candidate["step"]
+    state = "done" if step.get("checked") else "open"
+    return (f"{candidate['kind']:<4} {state:<4} "
+            f"{format_priority(task)}  {project_name(cache, task.get('project_id')):<12} "
+            f"{content_of(task)} / {content_of(step)}")
+
+
+def print_item_candidates(cache, candidates, header):
+    print(header)
+    print()
+    for i, candidate in enumerate(candidates, 1):
+        print(f"{i:2d}  {item_candidate_text(cache, candidate)}")
+    print()
+
+
+def choose_item(cache, selector, candidates):
+    if not sys.stdin.isatty():
+        print_item_candidates(cache, candidates, f"Multiple items match {selector!r}:")
+        raise TodoError("Refusing to choose an item in non-interactive mode.")
+    print_item_candidates(cache, candidates, f"Multiple items match {selector!r}:")
+    answer = input("Select item number, or Enter to cancel: ").strip()
+    if not answer:
+        raise TodoError("Cancelled.")
+    try:
+        index = int(answer)
+    except ValueError as e:
+        raise TodoError("Selection must be a number.") from e
+    if index < 1 or index > len(candidates):
+        raise TodoError("Selection out of range.")
+    return candidates[index - 1]
+
+
+def resolve_task_or_step(cache, cfg, selector, include_completed=False):
+    project_ids = set(root_project_ids(cache, cfg))
+    tasks = [item for item in live_objects(cache, "items")
+             if str(item.get("project_id")) in project_ids
+             and not item.get("parent_id")]
+    tasks_by_id = {str(task.get("id")): task for task in tasks}
+    steps = [item for item in live_objects(cache, "items")
+             if str(item.get("parent_id")) in tasks_by_id]
+    if not include_completed:
+        tasks = [task for task in tasks if not task.get("checked")]
+        live_task_ids = {str(task.get("id")) for task in tasks}
+        steps = [step for step in steps
+                 if str(step.get("parent_id")) in live_task_ids
+                 and not step.get("checked")]
+    exact = []
+    for task in tasks:
+        if str(task.get("id")) == selector:
+            exact.append({"kind": "task", "task": task})
+    for step in steps:
+        if str(step.get("id")) == selector:
+            exact.append({"kind": "step", "task": tasks_by_id[str(step.get("parent_id"))], "step": step})
+    if len(exact) == 1:
+        return exact[0]
+
+    selector_norm = selector.lower()
+    candidates = []
+    for task in tasks:
+        if selector_norm in content_of(task).lower():
+            candidates.append({"kind": "task", "task": task})
+    for step in steps:
+        if selector_norm in content_of(step).lower():
+            candidates.append({"kind": "step", "task": tasks_by_id[str(step.get("parent_id"))], "step": step})
+    candidates = sorted(candidates, key=lambda candidate: (
+        bool((candidate.get("step") or candidate["task"]).get("checked")),
+        has_waiting(candidate["task"]),
+        is_hidden_category(cache, cfg, candidate["task"]),
+        0 if candidate["kind"] == "task" else 1,
+        project_name(cache, candidate["task"].get("project_id")).lower(),
+        content_of(candidate["task"]).lower(),
+        content_of(candidate.get("step") or {}).lower(),
+    ))
+    if not candidates:
+        raise TodoError(f"No task or step matches {selector!r}.")
+    if len(candidates) == 1:
+        return candidates[0]
+    return choose_item(cache, selector, candidates)
+
+
 def require_project_and_category(cache, cfg, category):
     project = root_project(cache, cfg)
     category_project = category_project_by_name(cache, project.get("id"), category)
@@ -1678,17 +1810,21 @@ def resolve_step(cache, task, selector):
     return matches[index - 1]
 
 
+def complete_step_item(client, cache, step):
+    if step.get("checked"):
+        print(f"Step already done: {content_of(step)}")
+        return
+    close_item(client, cache, step.get("id"))
+    print(f"Done step: {content_of(step)}")
+
+
 def cmd_check(args):
     with lock_state():
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
         step = resolve_step(cache, task, args.step)
-        if step.get("checked"):
-            print(f"Step already done: {content_of(step)}")
-            return 0
-        close_item(client, cache, step.get("id"))
-        print(f"Done step: {content_of(step)}")
+        complete_step_item(client, cache, step)
         return 0
 
 
@@ -1937,26 +2073,33 @@ def cmd_resume(args):
         return 0
 
 
+def complete_task_item(client, cache, task, text=None):
+    if task.get("checked"):
+        print(f"Task already done: {content_of(task)}")
+        return
+    open_steps = subtasks(cache, task.get("id"))
+    if open_steps:
+        print("Open steps:")
+        for i, child in enumerate(open_steps, 1):
+            print(f"{i:2d}  {format_step_mark(False)} {content_of(child)}")
+        print()
+        answer = input("Mark all open steps done and complete parent task? [y/N] ").strip()
+        if answer.lower() not in ("y", "yes"):
+            raise TodoError("Cancelled; task left open.")
+        for child in open_steps:
+            close_item(client, cache, child.get("id"))
+    if text:
+        add_note(client, cache, task.get("id"), f"Done: {text}")
+    close_item(client, cache, task.get("id"))
+    print(f"Done: {content_of(task)}")
+
+
 def cmd_done(args):
     with lock_state():
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
-        open_steps = subtasks(cache, task.get("id"))
-        if open_steps:
-            print("Open steps:")
-            for i, child in enumerate(open_steps, 1):
-                print(f"{i:2d}  {format_step_mark(False)} {content_of(child)}")
-            print()
-            answer = input("Mark all open steps done and complete parent task? [y/N] ").strip()
-            if answer.lower() not in ("y", "yes"):
-                raise TodoError("Cancelled; task left open.")
-            for child in open_steps:
-                close_item(client, cache, child.get("id"))
-        if args.text:
-            add_note(client, cache, task.get("id"), f"Done: {args.text}")
-        close_item(client, cache, task.get("id"))
-        print(f"Done: {content_of(task)}")
+        complete_task_item(client, cache, task, args.text)
         return 0
 
 
@@ -2172,6 +2315,88 @@ def cmd_rename_step(args):
         if parent_was_done:
             state = f"{state} from completed task"
         print(f"Renamed {state}: {old_name} -> {args.new_name}")
+        return 0
+
+
+def cmd_rename_any(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        target = resolve_task_or_step(cache, cfg, args.item, include_completed=True)
+        if target["kind"] == "task":
+            task = target["task"]
+            old_name = content_of(task)
+            was_done = rename_task_item(client, cache, task, args.new_name)
+            state = "completed task" if was_done else "task"
+            print(f"Renamed {state}: {old_name} -> {args.new_name}")
+            return 0
+        task = target["task"]
+        step = target["step"]
+        old_name = content_of(step)
+        parent_was_done, step_was_done = rename_step_item(client, cache, task, step, args.new_name)
+        state = "completed step" if step_was_done else "step"
+        if parent_was_done:
+            state = f"{state} from completed task"
+        print(f"Renamed {state}: {old_name} -> {args.new_name}")
+        return 0
+
+
+def cmd_done_any(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        target = resolve_task_or_step(cache, cfg, args.item, include_completed=True)
+        if target["kind"] == "task":
+            complete_task_item(client, cache, target["task"], args.text)
+            return 0
+        if args.text:
+            raise TodoError("Completion text is only supported for tasks.")
+        complete_step_item(client, cache, target["step"])
+        return 0
+
+
+def cmd_unclose_any(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        target = resolve_task_or_step(cache, cfg, args.item, include_completed=True)
+        if target["kind"] == "task":
+            task = target["task"]
+            if not task.get("checked"):
+                print(f"Already open: {content_of(task)}")
+                return 0
+            reopen_item(client, cache, task.get("id"))
+            print(f"Reopened: {content_of(task)}")
+            return 0
+        step = target["step"]
+        if not step.get("checked"):
+            print(f"Step already open: {content_of(step)}")
+            return 0
+        reopen_item(client, cache, step.get("id"))
+        print(f"Reopened step: {content_of(step)}")
+        return 0
+
+
+def cmd_delete_any(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        target = resolve_task_or_step(cache, cfg, args.item, include_completed=True)
+        if target["kind"] == "task":
+            task = target["task"]
+            confirm_delete("task", content_of(task), args.yes)
+            was_done = delete_task_item(client, cache, task)
+            state = "completed task" if was_done else "task"
+            print(f"Deleted {state}: {content_of(task)}")
+            return 0
+        task = target["task"]
+        step = target["step"]
+        confirm_delete("step", f"{content_of(task)} / {content_of(step)}", args.yes)
+        parent_was_done, step_was_done = delete_step_item(client, cache, task, step)
+        state = "completed step" if step_was_done else "step"
+        if parent_was_done:
+            state = f"{state} from completed task"
+        print(f"Deleted {state}: {content_of(step)}")
         return 0
 
 
@@ -2409,6 +2634,10 @@ def cmd_comment_noun(args):
     if args.refresh and mode != "show":
         raise TodoError("Use --refresh only with `todo comment TASK`; mutation modes refresh automatically.")
     if mode == "show":
+        if len(values) > 1:
+            if args.refresh:
+                raise TodoError("Use --refresh only with `todo comment TASK`; mutation modes refresh automatically.")
+            return cmd_comment(argparse.Namespace(task=values[0], texts=values[1:], edit=False, refresh=False))
         require_arg_count("comment", values, 1)
         return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=False, refresh=args.refresh))
     if mode == "add":
@@ -2418,6 +2647,46 @@ def cmd_comment_noun(args):
         require_arg_count("comment --edit", values, 1)
         return cmd_comment(argparse.Namespace(task=values[0], texts=[], edit=True, refresh=False))
     raise TodoError(f"Unknown comment mode {mode}.")
+
+
+def cmd_rename_shortcut(args):
+    require_arg_count("rename", args.values, 2)
+    return cmd_rename_any(argparse.Namespace(item=args.values[0], new_name=args.values[1]))
+
+
+def cmd_done_shortcut(args):
+    require_arg_count("done", args.values, 1, 2)
+    return cmd_done_any(argparse.Namespace(
+        item=args.values[0],
+        text=args.values[1] if len(args.values) == 2 else None,
+    ))
+
+
+def cmd_unclose_shortcut(args):
+    require_arg_count("unclose", args.values, 1)
+    return cmd_unclose_any(argparse.Namespace(item=args.values[0]))
+
+
+def cmd_delete_shortcut(args):
+    require_arg_count("delete", args.values, 1)
+    return cmd_delete_any(argparse.Namespace(item=args.values[0], yes=args.yes))
+
+
+def cmd_wait_shortcut(args):
+    due = due_option_value(args, "wait") if args.due is not None else None
+    require_arg_count("wait", args.values, 2)
+    return cmd_wait(argparse.Namespace(task=args.values[0], text=args.values[1], after=None, due=due, yes=False))
+
+
+def cmd_move_shortcut(args):
+    require_arg_count("move", args.values, 2)
+    return cmd_move(argparse.Namespace(task=args.values[0], category=args.values[1]))
+
+
+def cmd_priority_shortcut(args):
+    require_arg_count("priority", args.values, 2)
+    task, priority = parse_priority_args(args.values)
+    return cmd_priority(argparse.Namespace(task=task, priority=priority))
 
 
 def compact_text(text, limit=120):
@@ -2940,6 +3209,8 @@ def build_parser():
         epilog="""examples:
   todo now
   todo task --add operations "Deliver release" "check dashboard table" "close build"
+  todo rename "review" "send review"
+  todo done "send review"
   todo step --done "Deliver release" "check dashboard table"
   todo task --wait "REVIEW-123" "waiting for review"
   todo report --final""",
@@ -2969,6 +3240,73 @@ def build_parser():
     p.add_argument("--add", "--create", metavar="NAME", help="category name to create")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before listing categories")
     p.set_defaults(func=cmd_category)
+
+    p = sub.add_parser(
+        "rename",
+        help="rename a task or step",
+        description=RENAME_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("values", nargs="*", help="ITEM NEW_NAME")
+    p.set_defaults(func=cmd_rename_shortcut)
+
+    p = sub.add_parser(
+        "done",
+        aliases=["close", "closed"],
+        help="complete a task or step",
+        description=DONE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("values", nargs="*", help="ITEM [TEXT]")
+    p.set_defaults(func=cmd_done_shortcut)
+
+    p = sub.add_parser(
+        "unclose",
+        aliases=["undone"],
+        help="reopen a task or step",
+        description=UNCLOSE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("values", nargs="*", help="ITEM")
+    p.set_defaults(func=cmd_unclose_shortcut)
+
+    p = sub.add_parser(
+        "delete",
+        help="delete a task or step",
+        description=DELETE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--yes", action="store_true", help="skip delete confirmation")
+    p.add_argument("values", nargs="*", help="ITEM")
+    p.set_defaults(func=cmd_delete_shortcut)
+
+    p = sub.add_parser(
+        "wait",
+        help="mark a task waiting",
+        description=WAIT_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set waiting follow-up date")
+    p.add_argument("values", nargs="*", help="TASK REASON")
+    p.set_defaults(func=cmd_wait_shortcut)
+
+    p = sub.add_parser(
+        "move",
+        help="move a task to a category",
+        description=MOVE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("values", nargs="*", help="TASK CATEGORY")
+    p.set_defaults(func=cmd_move_shortcut)
+
+    p = sub.add_parser(
+        "priority",
+        help="set task priority",
+        description=PRIORITY_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("values", nargs="*", help="TASK P")
+    p.set_defaults(func=cmd_priority_shortcut)
 
     p = sub.add_parser(
         "task",
@@ -3067,6 +3405,7 @@ display:
   todo comment TASK
 
 modes:
+  TASK TEXT [TEXT ...]
   --add|--create TASK TEXT [TEXT ...]
   --edit TASK
 

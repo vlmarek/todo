@@ -113,6 +113,25 @@ Mutation commands sync before changing Todoist and require Todoist access.
 Task and comment mutations use Todoist Sync API commands, so transient Sync
 API failures can be retried with command UUIDs.
 
+Common shortcut commands:
+
+```sh
+todo rename ITEM NEW_NAME
+todo done ITEM
+todo close ITEM
+todo unclose ITEM
+todo delete [--yes] ITEM
+todo wait [--due DATE] TASK REASON
+todo move TASK CATEGORY
+todo priority TASK P
+todo comment TASK TEXT [TEXT ...]
+```
+
+`rename`, `done`/`close`, `unclose`, and `delete` search both parent task
+titles and direct step titles. Ambiguous matches print a numbered choice list
+in an interactive terminal and refuse to guess non-interactively. `wait`,
+`move`, `priority`, and `comment` are task-only shortcuts.
+
 Rename commands update Todoist item titles:
 
 ```sh

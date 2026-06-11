@@ -54,6 +54,24 @@ todo category --add training
 
 List or add categories. Categories are Todoist child projects under `Work`.
 
+Shortcut commands cover common edits:
+
+```sh
+todo rename review "send review"
+todo done review
+todo close review
+todo unclose review
+todo delete --yes review
+todo wait --due 2d website "waiting for review"
+todo move website engineering
+todo priority website 1
+todo comment website "fixed test failure; staging deploy still running"
+```
+
+`rename`, `done`/`close`, `unclose`, and `delete` search task and direct step
+titles. If multiple items match, an interactive terminal shows numbered
+choices. `wait`, `move`, `priority`, and `comment` are task-only shortcuts.
+
 ```sh
 todo task "website"
 todo task --refresh "website"
@@ -117,12 +135,13 @@ Step commands accept the same `--new`, `--close`, and `--closed` aliases.
 ```sh
 todo comment website
 todo comment --refresh website
+todo comment website "fixed test failure; staging deploy still running"
 todo comment --add website "fixed test failure; staging deploy still running"
 todo comment --add website "unit tests passed" "staging still running"
 todo comment --edit website
 ```
 
-Shows task comments, creates one comment per `--add` text argument, or edits
+Shows task comments, creates one comment per text argument, or edits
 all comments in `$EDITOR`.
 
 The edit buffer uses bracket headers:

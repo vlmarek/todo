@@ -702,6 +702,50 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertIn("step done: Seed gcc16", results[0]["matches"])
 
+    def test_resolve_task_or_step_matches_titles_only(self):
+        parser = todo.configparser.ConfigParser()
+        parser.add_section("main")
+        parser.set("main", "project", "Work")
+        cfg = todo.Config(parser)
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [
+            {"id": "root", "name": "Work"},
+            {"id": "eng", "name": "Engineering", "parent_id": "root"},
+        ]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "eng", "content": "vim update", "description": "mentions review"},
+            {"id": "task2", "project_id": "eng", "content": "tmux update"},
+            {"id": "step1", "project_id": "eng", "parent_id": "task1", "content": "send review"},
+        ]
+        target = todo.resolve_task_or_step(cache, cfg, "review")
+        self.assertEqual(target["kind"], "step")
+        self.assertEqual(target["step"]["id"], "step1")
+
+    def test_resolve_task_or_step_reports_ambiguous_items(self):
+        parser = todo.configparser.ConfigParser()
+        parser.add_section("main")
+        parser.set("main", "project", "Work")
+        cfg = todo.Config(parser)
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [
+            {"id": "root", "name": "Work"},
+            {"id": "eng", "name": "Engineering", "parent_id": "root"},
+        ]
+        cache.data["items"] = [
+            {"id": "task1", "project_id": "eng", "content": "review dashboard"},
+            {"id": "task2", "project_id": "eng", "content": "vim update"},
+            {"id": "step1", "project_id": "eng", "parent_id": "task2", "content": "review change"},
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            with self.assertRaises(todo.TodoError) as cm:
+                todo.resolve_task_or_step(cache, cfg, "review")
+        self.assertIn("Refusing to choose", str(cm.exception))
+        text = out.getvalue()
+        self.assertIn("task open", text)
+        self.assertIn("step open", text)
+        self.assertIn("vim update / review change", text)
+
     def test_task_list_prints_all_open_steps(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
@@ -1103,6 +1147,13 @@ created two
             (["step"], "usage: todo step TASK"),
             (["comment"], "usage: todo comment TASK"),
             (["search"], "usage: todo search TEXT"),
+            (["rename"], "usage: todo rename ITEM NEW_NAME"),
+            (["done"], "usage: todo done|close ITEM [TEXT]"),
+            (["unclose"], "usage: todo unclose|undone ITEM"),
+            (["delete"], "usage: todo delete [--yes] ITEM"),
+            (["wait"], "usage: todo wait [--due DATE] TASK REASON"),
+            (["move"], "usage: todo move TASK CATEGORY"),
+            (["priority"], "usage: todo priority TASK P"),
         ]
         for argv, usage in cases:
             with self.subTest(argv=argv):
@@ -1208,6 +1259,91 @@ created two
         step_args = parser.parse_args(["task", "--step", "website", "test", "deliver"])
         self.assertTrue(step_args.step)
         self.assertEqual(step_args.values, ["website", "test", "deliver"])
+
+    def test_shortcut_commands_parse(self):
+        parser = todo.build_parser()
+        rename_args = parser.parse_args(["rename", "review", "send review"])
+        done_args = parser.parse_args(["done", "review"])
+        close_args = parser.parse_args(["close", "review", "sent"])
+        unclose_args = parser.parse_args(["unclose", "review"])
+        undone_args = parser.parse_args(["undone", "review"])
+        delete_args = parser.parse_args(["delete", "--yes", "review"])
+        wait_args = parser.parse_args(["wait", "--due", "2d", "vim", "waiting for review"])
+        move_args = parser.parse_args(["move", "vim", "Engineering"])
+        priority_args = parser.parse_args(["priority", "vim", "1"])
+        self.assertEqual(rename_args.values, ["review", "send review"])
+        self.assertEqual(done_args.values, ["review"])
+        self.assertEqual(close_args.values, ["review", "sent"])
+        self.assertEqual(unclose_args.values, ["review"])
+        self.assertEqual(undone_args.values, ["review"])
+        self.assertTrue(delete_args.yes)
+        self.assertEqual(delete_args.values, ["review"])
+        self.assertEqual(wait_args.due, "2d")
+        self.assertEqual(wait_args.values, ["vim", "waiting for review"])
+        self.assertEqual(move_args.values, ["vim", "Engineering"])
+        self.assertEqual(priority_args.values, ["vim", "1"])
+
+    def test_comment_without_add_dispatches_to_comment_add(self):
+        calls = []
+        old_cmd_comment = todo.cmd_comment
+        try:
+            def fake_cmd_comment(args):
+                calls.append(args)
+                return 0
+
+            todo.cmd_comment = fake_cmd_comment
+            parser = todo.build_parser()
+            rc = todo.cmd_comment_noun(parser.parse_args(["comment", "website", "D12345", "bug 123"]))
+        finally:
+            todo.cmd_comment = old_cmd_comment
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0].task, "website")
+        self.assertEqual(calls[0].texts, ["D12345", "bug 123"])
+        self.assertFalse(calls[0].edit)
+        self.assertFalse(calls[0].refresh)
+
+    def test_shortcut_dispatches(self):
+        parser = todo.build_parser()
+        calls = []
+        old_cmd_rename_any = todo.cmd_rename_any
+        old_cmd_done_any = todo.cmd_done_any
+        old_cmd_unclose_any = todo.cmd_unclose_any
+        old_cmd_delete_any = todo.cmd_delete_any
+        old_cmd_wait = todo.cmd_wait
+        old_cmd_move = todo.cmd_move
+        old_cmd_priority = todo.cmd_priority
+        try:
+            todo.cmd_rename_any = lambda args: calls.append(("rename", args.item, args.new_name)) or 0
+            todo.cmd_done_any = lambda args: calls.append(("done", args.item, args.text)) or 0
+            todo.cmd_unclose_any = lambda args: calls.append(("unclose", args.item)) or 0
+            todo.cmd_delete_any = lambda args: calls.append(("delete", args.item, args.yes)) or 0
+            todo.cmd_wait = lambda args: calls.append(("wait", args.task, args.text, args.due)) or 0
+            todo.cmd_move = lambda args: calls.append(("move", args.task, args.category)) or 0
+            todo.cmd_priority = lambda args: calls.append(("priority", args.task, args.priority)) or 0
+            parser.parse_args(["rename", "vim", "vim update"]).func(parser.parse_args(["rename", "vim", "vim update"]))
+            parser.parse_args(["done", "vim", "delivered"]).func(parser.parse_args(["done", "vim", "delivered"]))
+            parser.parse_args(["unclose", "vim"]).func(parser.parse_args(["unclose", "vim"]))
+            parser.parse_args(["delete", "--yes", "vim"]).func(parser.parse_args(["delete", "--yes", "vim"]))
+            parser.parse_args(["wait", "--due", "2d", "vim", "waiting"]).func(parser.parse_args(["wait", "--due", "2d", "vim", "waiting"]))
+            parser.parse_args(["move", "vim", "Engineering"]).func(parser.parse_args(["move", "vim", "Engineering"]))
+            parser.parse_args(["priority", "vim", "1"]).func(parser.parse_args(["priority", "vim", "1"]))
+        finally:
+            todo.cmd_rename_any = old_cmd_rename_any
+            todo.cmd_done_any = old_cmd_done_any
+            todo.cmd_unclose_any = old_cmd_unclose_any
+            todo.cmd_delete_any = old_cmd_delete_any
+            todo.cmd_wait = old_cmd_wait
+            todo.cmd_move = old_cmd_move
+            todo.cmd_priority = old_cmd_priority
+        self.assertEqual(calls, [
+            ("rename", "vim", "vim update"),
+            ("done", "vim", "delivered"),
+            ("unclose", "vim"),
+            ("delete", "vim", True),
+            ("wait", "vim", "waiting", "2d"),
+            ("move", "vim", "Engineering"),
+            ("priority", "vim", 1),
+        ])
 
     def test_task_comment_dispatches_to_comment_add(self):
         calls = []
@@ -1912,7 +2048,7 @@ created two
 
     def test_old_verb_commands_removed(self):
         parser = todo.build_parser()
-        for command in ("add", "show", "check", "wait", "resume", "done", "priority", "due", "move"):
+        for command in ("add", "show", "check", "resume", "due"):
             with self.subTest(command=command):
                 with contextlib.redirect_stderr(io.StringIO()):
                     with self.assertRaises(SystemExit):
