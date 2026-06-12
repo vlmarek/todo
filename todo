@@ -1243,16 +1243,23 @@ def print_candidates(cache, candidates, header):
     print()
 
 
+def format_item_choice_kind(kind, checked):
+    text = f"{kind:<4} {'done' if checked else 'open':<4}"
+    if checked:
+        return colorize(text, "base01", dim=True)
+    return text
+
+
 def item_candidate_text(cache, candidate):
     task = candidate["task"]
     if candidate["kind"] == "task":
-        state = "done" if task.get("checked") else "open"
-        return (f"{candidate['kind']:<4} {state:<4} "
+        label = format_item_choice_kind(candidate["kind"], task.get("checked"))
+        return (f"{label} "
                 f"{format_priority(task)}  {project_name(cache, task.get('project_id')):<12} "
                 f"{content_of(task)}")
     step = candidate["step"]
-    state = "done" if step.get("checked") else "open"
-    return (f"{candidate['kind']:<4} {state:<4} "
+    label = format_item_choice_kind(candidate["kind"], step.get("checked"))
+    return (f"{label} "
             f"{format_priority(task)}  {project_name(cache, task.get('project_id')):<12} "
             f"{content_of(task)} / {content_of(step)}")
 

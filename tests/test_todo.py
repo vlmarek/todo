@@ -187,6 +187,26 @@ class TodoPureTests(unittest.TestCase):
         finally:
             todo.set_color_mode(old_mode)
 
+    def test_done_choice_label_is_dim_gray_when_colored(self):
+        old_mode = todo.COLOR_MODE
+        try:
+            todo.set_color_mode("always")
+            text = todo.format_item_choice_kind("task", True)
+            self.assertIn("\033[", text)
+            self.assertIn("2;38;2;88;110;117", text)
+            self.assertIn("task done", text)
+        finally:
+            todo.set_color_mode(old_mode)
+
+    def test_choice_label_is_plain_without_color(self):
+        old_mode = todo.COLOR_MODE
+        try:
+            todo.set_color_mode("never")
+            self.assertEqual(todo.format_item_choice_kind("task", True), "task done")
+            self.assertEqual(todo.format_item_choice_kind("step", False), "step open")
+        finally:
+            todo.set_color_mode(old_mode)
+
     def test_no_color_disables_auto(self):
         class Tty:
             def isatty(self):
