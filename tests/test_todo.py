@@ -1624,11 +1624,33 @@ created two
 
     def test_wait_due_clear_is_rejected(self):
         class Cfg:
-            wait_days = 2
+            default_wait_due = "2bd"
 
         with self.assertRaises(todo.TodoError) as cm:
             todo.wait_follow_date(todo.argparse.Namespace(due="clear", after=None), Cfg())
         self.assertIn("Waiting tasks need a follow-up due date", str(cm.exception))
+
+    def test_wait_default_due_uses_due_parser(self):
+        class Cfg:
+            default_wait_due = "1d"
+
+        calls = []
+        old_resolve_due_value = todo.resolve_due_value
+        try:
+            todo.resolve_due_value = lambda value: calls.append(value) or "parsed due"
+            self.assertEqual(todo.wait_follow_date(todo.argparse.Namespace(due=None, after=None), Cfg()),
+                             "parsed due")
+        finally:
+            todo.resolve_due_value = old_resolve_due_value
+        self.assertEqual(calls, ["1d"])
+
+    def test_wait_default_due_bad_config_mentions_key(self):
+        class Cfg:
+            default_wait_due = "clear"
+
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.wait_follow_date(todo.argparse.Namespace(due=None, after=None), Cfg())
+        self.assertIn("default_wait_due", str(cm.exception))
 
     def test_task_undone_dispatches_to_undone(self):
         calls = []

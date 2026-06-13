@@ -47,7 +47,9 @@ needs attention on this date
 ```
 
 For waiting tasks, the due date is the follow-up date. Default waiting
-follow-up is two business days.
+follow-up comes from `default_wait_due` in `~/.todo/config`, falling back to
+`2bd`. The value uses the same syntax as `--due`, so `1d` means one calendar
+day and `1bd` means one business day.
 
 ## Local Files
 

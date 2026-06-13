@@ -39,7 +39,7 @@ TODOIST_RETRY_HTTP_CODES = {408, 429, 500, 502, 503, 504}
 DEFAULT_PROJECT = "Work"
 DEFAULT_SECTIONS = ["Operations", "Engineeringing", "Admin", "Someday"]
 DEFAULT_HIDDEN_FROM_NOW = ["Someday"]
-DEFAULT_WAIT_DAYS = 2
+DEFAULT_WAIT_DUE = "2bd"
 WAITING_LABEL = "waiting"
 WAITING_BLOCK_RE = re.compile(r"(?:\n{0,2})\[todo waiting\]\n(.*?)\n\[/todo waiting\]\n?", re.DOTALL)
 COLOR_MODE = "auto"
@@ -418,8 +418,8 @@ class Config:
             self.parser.set("main", "default_sections", ",".join(DEFAULT_SECTIONS))
         if not self.parser.has_option("main", "hidden_from_now"):
             self.parser.set("main", "hidden_from_now", ",".join(DEFAULT_HIDDEN_FROM_NOW))
-        if not self.parser.has_option("main", "wait_days"):
-            self.parser.set("main", "wait_days", str(DEFAULT_WAIT_DAYS))
+        if not self.parser.has_option("main", "default_wait_due"):
+            self.parser.set("main", "default_wait_due", DEFAULT_WAIT_DUE)
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=APP_DIR,
                                          prefix=".config.") as f:
             self.parser.write(f)
@@ -445,8 +445,8 @@ class Config:
             self.parser.get("main", "hidden_from_now", fallback=",".join(DEFAULT_HIDDEN_FROM_NOW)))]
 
     @property
-    def wait_days(self):
-        return self.parser.getint("main", "wait_days", fallback=DEFAULT_WAIT_DAYS)
+    def default_wait_due(self):
+        return self.parser.get("main", "default_wait_due", fallback=DEFAULT_WAIT_DUE)
 
 
 class Cache:
@@ -1906,27 +1906,13 @@ def wait_follow_date(args, cfg):
         if due is None:
             raise TodoError("Waiting tasks need a follow-up due date; use `todo task --resume` to clear waiting.")
         return due
-    return compute_after(args.after, cfg.wait_days).isoformat()
-
-
-def compute_after(after, default_days):
-    if not after:
-        return add_business_days(today_local(), default_days)
-    value = after.strip().lower()
-    if value in ("tomorrow", "1d", "1 day"):
-        return today_local() + dt.timedelta(days=1)
-    if value in ("2 business days", "2bd", "2 business day"):
-        return add_business_days(today_local(), 2)
-    m = re.fullmatch(r"(\d+)\s*(d|day|days)", value)
-    if m:
-        return today_local() + dt.timedelta(days=int(m.group(1)))
-    m = re.fullmatch(r"(\d+)\s*(bd|business days?|businessdays?)", value)
-    if m:
-        return add_business_days(today_local(), int(m.group(1)))
-    parsed = parse_date(value)
-    if parsed:
-        return parsed
-    raise TodoError(f"Cannot parse --after value {after!r}. Use e.g. '2 business days', '5d', or YYYY-MM-DD.")
+    try:
+        due = resolve_due_value(cfg.default_wait_due)
+    except TodoError as e:
+        raise TodoError(f"Invalid default_wait_due in ~/.todo/config: {e}") from e
+    if due is None:
+        raise TodoError("Invalid default_wait_due in ~/.todo/config: waiting tasks need a follow-up due date.")
+    return due
 
 
 def parse_date(value):

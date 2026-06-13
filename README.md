@@ -107,7 +107,9 @@ weekday names such as `monday`, ISO dates/times, `clear`, and `ask`.
 `n`, or a different due input. Weekday names mean the next occurrence,
 excluding today.
 `--due` on `todo task --wait` sets the waiting follow-up date; if omitted,
-the default is two business days. `clear` is rejected for waiting tasks.
+the default is `default_wait_due` from `~/.todo/config`, falling back to
+`2bd`. The value uses the same syntax as `--due`, so `1d` means one calendar
+day and `1bd` means one business day. `clear` is rejected for waiting tasks.
 `--reminder` creates a Todoist relative reminder for an item that has a due
 date with a time. It accepts offsets such as `0`, `10m`, `2h`, `1d`, and
 `at due`; repeat it to create multiple reminders. Reminders are displayed by
