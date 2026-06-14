@@ -210,7 +210,10 @@ Waiting
 Report inputs:
 
 - finished tasks: Todoist completed activity events since the report cursor
-- progress: task comments and relevant activity since the report cursor
+- progress: relevant activity since the report cursor
+- optional progress comments: `todo report --comments` includes note/comment
+  activity where Todoist reports `object_type=note` and `event_type=added`;
+  note updates/edits are ignored
 - waiting: waiting tasks whose follow-up date is due in the report window
 
 `todo report --final` prints the report and advances `~/.todo/report-cursor`.
