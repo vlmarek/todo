@@ -442,9 +442,14 @@ class TodoPureTests(unittest.TestCase):
         report = todo.build_report(cache, {"gate"}, since, until, [event], context)
         self.assertIn("Finished\nOperations\n- Prepare new cbe\n  - Step done: Seed gcc16", report)
 
-    def test_report_ignores_note_events(self):
+    def test_report_includes_added_note_events_as_progress(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        cache.data["items"] = [{
+            "id": "task1",
+            "project_id": "gate",
+            "content": "deliver release",
+        }]
         since = dt.datetime(2026, 6, 3, tzinfo=dt.timezone.utc)
         until = dt.datetime(2026, 6, 10, tzinfo=dt.timezone.utc)
         events = [
@@ -468,9 +473,9 @@ class TodoPureTests(unittest.TestCase):
         ]
         report = todo.build_report(cache, {"gate"}, since, until, events)
         self.assertIn("- deliver release", report)
-        self.assertNotIn("Done: delivered release", report)
+        self.assertIn("  - Done: delivered release", report)
 
-    def test_report_comments_includes_added_note_events_as_progress(self):
+    def test_report_added_note_events_use_parent_task(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
         cache.data["items"] = [{
@@ -489,7 +494,7 @@ class TodoPureTests(unittest.TestCase):
             "parent_item_id": "task1",
             "parent_project_id": "gate",
         }]
-        report = todo.build_report(cache, {"gate"}, since, until, events, include_added_comments=True)
+        report = todo.build_report(cache, {"gate"}, since, until, events)
         self.assertIn("Progress\nOperations\n- short task name", report)
         self.assertIn("  - 39465911 Update vim to 9.2.0564", report)
 
@@ -512,7 +517,7 @@ class TodoPureTests(unittest.TestCase):
             "parent_item_id": "task1",
             "parent_project_id": "gate",
         }]
-        report = todo.build_report(cache, {"gate"}, since, until, events, include_added_comments=True)
+        report = todo.build_report(cache, {"gate"}, since, until, events)
         self.assertIn("Progress\n- None", report)
         self.assertNotIn("edited comment text", report)
 
@@ -683,7 +688,7 @@ class TodoPureTests(unittest.TestCase):
             todo.load_step_context = lambda: {}
             out = io.StringIO()
             args = todo.argparse.Namespace(final=False, since="2026-06-03T00:00:00Z",
-                                           until="2026-06-04T00:00:00Z", comments=False)
+                                           until="2026-06-04T00:00:00Z")
             with contextlib.redirect_stdout(out):
                 self.assertEqual(todo.cmd_report(args), 0)
         finally:
@@ -2185,10 +2190,11 @@ created two
             with self.assertRaises(SystemExit):
                 parser.parse_args(["report", "--refresh"])
 
-    def test_report_comments_flag(self):
+    def test_report_comments_flag_removed(self):
         parser = todo.build_parser()
-        args = parser.parse_args(["report", "--comments"])
-        self.assertTrue(args.comments)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["report", "--comments"])
 
     def test_comment_refresh_rejected_for_mutation_modes(self):
         parser = todo.build_parser()

@@ -2966,7 +2966,7 @@ def cmd_report(args):
 
         report = build_report(
             cache, set(root_project_ids(cache, cfg)), since, until, events,
-            load_step_context(), fetch_report_comments, include_added_comments=args.comments)
+            load_step_context(), fetch_report_comments)
         print(report)
         if args.final:
             atomic_write(CURSOR_PATH, iso_utc(until) + "\n")
@@ -2996,8 +2996,7 @@ def current_wednesday_start():
     return local_start.astimezone(dt.timezone.utc)
 
 
-def build_report(cache, project_ids, since, until, events, step_context=None,
-                 comment_fetcher=None, include_added_comments=False):
+def build_report(cache, project_ids, since, until, events, step_context=None, comment_fetcher=None):
     by_id = {str(item.get("id")): item for item in live_objects(cache, "items")
              if str(item.get("project_id")) in project_ids}
     event_context = report_event_context(cache, events)
@@ -3008,7 +3007,7 @@ def build_report(cache, project_ids, since, until, events, step_context=None,
         if skip_report_event(event, since, until):
             continue
         if event.get("object_type") == "note":
-            if include_added_comments and is_added_comment_event(event):
+            if is_added_comment_event(event):
                 task_id = event_task_id(event)
                 text = activity_text(event)
                 if not text:
@@ -3475,7 +3474,6 @@ multiple comments.""",
     p.add_argument("--final", action="store_true", help="print the report and advance the report cursor to now")
     p.add_argument("--since", help="override report start timestamp")
     p.add_argument("--until", help="override report end timestamp")
-    p.add_argument("--comments", action="store_true", help="include comments added during the report period")
     p.set_defaults(func=cmd_report)
 
     return parser
