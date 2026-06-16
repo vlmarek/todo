@@ -1618,6 +1618,11 @@ def print_task_detail(cache, task, comments=None):
     print(f"Due: {due_text}")
     if reminder_summary:
         print(f"Reminders: {format_reminders_display(reminder_summary)}")
+    reason = waiting_reason_display(task)
+    if reason:
+        print()
+        print("Waiting")
+        print(f"- {reason}")
     description = remove_waiting_block(task.get("description") or "")
     if description:
         print()

@@ -953,6 +953,24 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("- [x] close build", text)
         self.assertIn("Progress: checked table", text)
 
+    def test_show_prints_waiting_reason(self):
+        cache = todo.Cache(todo.Cache.empty())
+        cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
+        task = {
+            "id": "task1",
+            "project_id": "gate",
+            "content": "Backport vim",
+            "labels": ["waiting"],
+            "description": todo.set_waiting_block("plain description", "Wait for review", since="2026-06-15"),
+        }
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            todo.print_task_detail(cache, task, comments=[])
+        text = out.getvalue()
+        self.assertIn("Waiting\n- Wait for review", text)
+        self.assertIn("Description\nplain description", text)
+        self.assertNotIn("[todo waiting]", text)
+
     def test_show_prints_reminders(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
