@@ -1241,6 +1241,7 @@ created two
             (["unclose"], "usage: todo unclose|undone ITEM"),
             (["delete"], "usage: todo delete [--yes] ITEM"),
             (["wait"], "usage: todo wait [--due DATE] TASK REASON"),
+            (["resume"], "usage: todo resume TASK TEXT"),
             (["move"], "usage: todo move TASK CATEGORY"),
             (["priority"], "usage: todo priority TASK P"),
         ]
@@ -1358,6 +1359,7 @@ created two
         undone_args = parser.parse_args(["undone", "review"])
         delete_args = parser.parse_args(["delete", "--yes", "review"])
         wait_args = parser.parse_args(["wait", "--due", "2d", "vim", "waiting for review"])
+        resume_args = parser.parse_args(["resume", "vim", "review returned"])
         move_args = parser.parse_args(["move", "vim", "Engineering"])
         priority_args = parser.parse_args(["priority", "vim", "1"])
         self.assertEqual(rename_args.values, ["review", "send review"])
@@ -1369,6 +1371,7 @@ created two
         self.assertEqual(delete_args.values, ["review"])
         self.assertEqual(wait_args.due, "2d")
         self.assertEqual(wait_args.values, ["vim", "waiting for review"])
+        self.assertEqual(resume_args.values, ["vim", "review returned"])
         self.assertEqual(move_args.values, ["vim", "Engineering"])
         self.assertEqual(priority_args.values, ["vim", "1"])
 
@@ -1399,6 +1402,7 @@ created two
         old_cmd_unclose_any = todo.cmd_unclose_any
         old_cmd_delete_any = todo.cmd_delete_any
         old_cmd_wait = todo.cmd_wait
+        old_cmd_resume = todo.cmd_resume
         old_cmd_move = todo.cmd_move
         old_cmd_priority = todo.cmd_priority
         try:
@@ -1407,6 +1411,7 @@ created two
             todo.cmd_unclose_any = lambda args: calls.append(("unclose", args.item)) or 0
             todo.cmd_delete_any = lambda args: calls.append(("delete", args.item, args.yes)) or 0
             todo.cmd_wait = lambda args: calls.append(("wait", args.task, args.text, args.due)) or 0
+            todo.cmd_resume = lambda args: calls.append(("resume", args.task, args.text)) or 0
             todo.cmd_move = lambda args: calls.append(("move", args.task, args.category)) or 0
             todo.cmd_priority = lambda args: calls.append(("priority", args.task, args.priority)) or 0
             parser.parse_args(["rename", "vim", "vim update"]).func(parser.parse_args(["rename", "vim", "vim update"]))
@@ -1414,6 +1419,7 @@ created two
             parser.parse_args(["unclose", "vim"]).func(parser.parse_args(["unclose", "vim"]))
             parser.parse_args(["delete", "--yes", "vim"]).func(parser.parse_args(["delete", "--yes", "vim"]))
             parser.parse_args(["wait", "--due", "2d", "vim", "waiting"]).func(parser.parse_args(["wait", "--due", "2d", "vim", "waiting"]))
+            parser.parse_args(["resume", "vim", "review returned"]).func(parser.parse_args(["resume", "vim", "review returned"]))
             parser.parse_args(["move", "vim", "Engineering"]).func(parser.parse_args(["move", "vim", "Engineering"]))
             parser.parse_args(["priority", "vim", "1"]).func(parser.parse_args(["priority", "vim", "1"]))
         finally:
@@ -1422,6 +1428,7 @@ created two
             todo.cmd_unclose_any = old_cmd_unclose_any
             todo.cmd_delete_any = old_cmd_delete_any
             todo.cmd_wait = old_cmd_wait
+            todo.cmd_resume = old_cmd_resume
             todo.cmd_move = old_cmd_move
             todo.cmd_priority = old_cmd_priority
         self.assertEqual(calls, [
@@ -1430,6 +1437,7 @@ created two
             ("unclose", "vim"),
             ("delete", "vim", True),
             ("wait", "vim", "waiting", "2d"),
+            ("resume", "vim", "review returned"),
             ("move", "vim", "Engineering"),
             ("priority", "vim", 1),
         ])
@@ -2159,7 +2167,7 @@ created two
 
     def test_old_verb_commands_removed(self):
         parser = todo.build_parser()
-        for command in ("add", "show", "check", "resume", "due"):
+        for command in ("add", "show", "check", "due"):
             with self.subTest(command=command):
                 with contextlib.redirect_stderr(io.StringIO()):
                     with self.assertRaises(SystemExit):

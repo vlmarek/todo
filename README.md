@@ -63,6 +63,7 @@ todo close review
 todo unclose review
 todo delete --yes review
 todo wait --due 2d website "waiting for review"
+todo resume website "review returned"
 todo move website engineering
 todo priority website 1
 todo comment website "fixed test failure; staging deploy still running"
@@ -70,7 +71,8 @@ todo comment website "fixed test failure; staging deploy still running"
 
 `rename`, `done`/`close`, `unclose`, and `delete` search task and direct step
 titles. If multiple items match, an interactive terminal shows numbered
-choices. `wait`, `move`, `priority`, and `comment` are task-only shortcuts.
+choices. `wait`, `resume`, `move`, `priority`, and `comment` are task-only
+shortcuts.
 
 ```sh
 todo task "website"

@@ -176,6 +176,11 @@ WAIT_USAGE = """usage: todo wait [--due DATE] TASK REASON
 Mark TASK waiting. This shortcut searches tasks only.
 """
 
+RESUME_USAGE = """usage: todo resume TASK TEXT
+
+Clear waiting state from TASK. This shortcut searches tasks only.
+"""
+
 MOVE_USAGE = """usage: todo move TASK CATEGORY
 
 Move TASK to CATEGORY. This shortcut searches tasks only.
@@ -307,6 +312,7 @@ Edit all comments on TASK in one editor buffer.
     "unclose": UNCLOSE_USAGE,
     "delete": DELETE_USAGE,
     "wait": WAIT_USAGE,
+    "resume": RESUME_USAGE,
     "move": MOVE_USAGE,
     "priority": PRIORITY_USAGE,
 }
@@ -2676,6 +2682,11 @@ def cmd_wait_shortcut(args):
     return cmd_wait(argparse.Namespace(task=args.values[0], text=args.values[1], after=None, due=due, yes=False))
 
 
+def cmd_resume_shortcut(args):
+    require_arg_count("resume", args.values, 2)
+    return cmd_resume(argparse.Namespace(task=args.values[0], text=args.values[1]))
+
+
 def cmd_move_shortcut(args):
     require_arg_count("move", args.values, 2)
     return cmd_move(argparse.Namespace(task=args.values[0], category=args.values[1]))
@@ -3304,6 +3315,15 @@ def build_parser():
     p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set waiting follow-up date")
     p.add_argument("values", nargs="*", help="TASK REASON")
     p.set_defaults(func=cmd_wait_shortcut)
+
+    p = sub.add_parser(
+        "resume",
+        help="clear task waiting state",
+        description=RESUME_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("values", nargs="*", help="TASK TEXT")
+    p.set_defaults(func=cmd_resume_shortcut)
 
     p = sub.add_parser(
         "move",
