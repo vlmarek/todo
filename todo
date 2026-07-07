@@ -3532,9 +3532,18 @@ multiple comments.""",
     return parser
 
 
+def expand_help_command(argv):
+    values = list(sys.argv[1:] if argv is None else argv)
+    if values and values[0] == "help":
+        if len(values) == 1:
+            return ["--help"]
+        return values[1:] + ["--help"]
+    return values
+
+
 def main(argv=None):
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(expand_help_command(argv))
     set_color_mode(args.color)
     if not hasattr(args, "func"):
         parser.print_help()

@@ -115,6 +115,16 @@ Mutation commands sync before changing Todoist and require Todoist access.
 Task and comment mutations use Todoist Sync API commands, so transient Sync
 API failures can be retried with command UUIDs.
 
+Help can be requested with either form:
+
+```sh
+todo task --help
+todo help task
+```
+
+`todo help ...` is implemented by rewriting argv to `todo ... --help` before
+argparse parses the command.
+
 Common shortcut commands:
 
 ```sh

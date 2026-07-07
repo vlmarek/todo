@@ -38,6 +38,14 @@ This creates or validates the `Work` project, default categories, and the
 ## Commands
 
 ```sh
+todo help
+todo help task
+todo help schedule
+```
+
+`todo help ...` displays the same help as `todo ... --help`.
+
+```sh
 todo --color=auto now
 todo --color=always task website
 todo --color=never now

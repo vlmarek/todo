@@ -136,6 +136,20 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(args.reminder, ["10m"])
         self.assertEqual(args.values, ["meeting", "tomorrow 11:00"])
 
+    def test_help_command_expansion(self):
+        self.assertEqual(todo.expand_help_command(["help"]), ["--help"])
+        self.assertEqual(todo.expand_help_command(["help", "task"]), ["task", "--help"])
+        self.assertEqual(todo.expand_help_command(["help", "task", "--due"]), ["task", "--due", "--help"])
+        self.assertEqual(todo.expand_help_command(["task", "website"]), ["task", "website"])
+
+    def test_help_command_prints_subcommand_help(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            with self.assertRaises(SystemExit) as cm:
+                todo.main(["help", "schedule"])
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("usage: todo schedule", out.getvalue())
+
     def test_schedule_shortcut_passes_due_arguments(self):
         calls = []
         old_cmd_due = todo.cmd_due
