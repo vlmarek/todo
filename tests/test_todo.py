@@ -129,6 +129,30 @@ class TodoPureTests(unittest.TestCase):
         args = parser.parse_args(["--color=never", "task", "website"])
         self.assertEqual(args.color, "never")
 
+    def test_schedule_parser_flag(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["schedule", "--reminder", "10m", "meeting", "tomorrow 11:00"])
+        self.assertIs(args.func, todo.cmd_schedule_shortcut)
+        self.assertEqual(args.reminder, ["10m"])
+        self.assertEqual(args.values, ["meeting", "tomorrow 11:00"])
+
+    def test_schedule_shortcut_passes_due_arguments(self):
+        calls = []
+        old_cmd_due = todo.cmd_due
+        try:
+            todo.cmd_due = lambda args: calls.append(args) or 0
+            args = todo.argparse.Namespace(values=["meeting", "tomorrow 11:00"], reminder=["10m"])
+            self.assertEqual(todo.cmd_schedule_shortcut(args), 0)
+        finally:
+            todo.cmd_due = old_cmd_due
+        self.assertEqual(calls[0].task, "meeting")
+        self.assertEqual(calls[0].date, "tomorrow 11:00")
+        self.assertEqual(calls[0].reminders, ["10m"])
+
+    def test_schedule_shortcut_without_args_shows_usage(self):
+        with self.assertRaises(todo.TodoUsage):
+            todo.cmd_schedule_shortcut(todo.argparse.Namespace(values=[], reminder=[]))
+
     def test_color_auto_is_plain_when_redirected(self):
         old_mode = todo.COLOR_MODE
         try:

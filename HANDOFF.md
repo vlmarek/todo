@@ -125,6 +125,7 @@ todo unclose ITEM
 todo delete [--yes] ITEM
 todo wait [--due DATE] TASK REASON
 todo resume TASK TEXT
+todo schedule [--reminder OFFSET] TASK TIME
 todo move TASK CATEGORY
 todo priority TASK P
 todo comment TASK TEXT [TEXT ...]
@@ -133,7 +134,8 @@ todo comment TASK TEXT [TEXT ...]
 `rename`, `done`/`close`, `unclose`, and `delete` search both parent task
 titles and direct step titles. Ambiguous matches print a numbered choice list
 in an interactive terminal and refuse to guess non-interactively. `wait`,
-`resume`, `move`, `priority`, and `comment` are task-only shortcuts.
+`resume`, `schedule`, `move`, `priority`, and `comment` are task-only
+shortcuts.
 
 Rename commands update Todoist item titles:
 
@@ -186,6 +188,8 @@ resource and displayed by task, step, and now views.
 Supported creation forms:
 
 ```sh
+todo schedule meeting "friday 11:00"
+todo schedule --reminder 10m meeting "friday 11:00"
 todo task --add --due "friday 11:00" --reminder 10m Engineering "meeting"
 todo task --due --reminder 10m meeting "friday 11:00"
 todo task --reminder 10m meeting

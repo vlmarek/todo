@@ -64,6 +64,8 @@ todo unclose review
 todo delete --yes review
 todo wait --due 2d website "waiting for review"
 todo resume website "review returned"
+todo schedule website "tomorrow 11:00"
+todo schedule --reminder 10m website "friday 11:00"
 todo move website engineering
 todo priority website 1
 todo comment website "fixed test failure; staging deploy still running"
@@ -71,8 +73,8 @@ todo comment website "fixed test failure; staging deploy still running"
 
 `rename`, `done`/`close`, `unclose`, and `delete` search task and direct step
 titles. If multiple items match, an interactive terminal shows numbered
-choices. `wait`, `resume`, `move`, `priority`, and `comment` are task-only
-shortcuts.
+choices. `wait`, `resume`, `schedule`, `move`, `priority`, and `comment` are
+task-only shortcuts.
 
 ```sh
 todo task "website"
@@ -112,6 +114,13 @@ excluding today.
 the default is `default_wait_due` from `~/.todo/config`, falling back to
 `2bd`. The value uses the same syntax as `--due`, so `1d` means one calendar
 day and `1bd` means one business day. `clear` is rejected for waiting tasks.
+`todo schedule TASK TIME` is a shortcut for setting a timed task due date:
+
+```sh
+todo schedule website "tomorrow 11:00"
+todo schedule --reminder 10m website "friday 11:00"
+```
+
 `--reminder` creates a Todoist relative reminder for an item that has a due
 date with a time. It accepts offsets such as `0`, `10m`, `2h`, `1d`, and
 `at due`; repeat it to create multiple reminders. Reminders are displayed by

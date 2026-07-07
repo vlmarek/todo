@@ -181,6 +181,16 @@ RESUME_USAGE = """usage: todo resume TASK TEXT
 Clear waiting state from TASK. This shortcut searches tasks only.
 """
 
+SCHEDULE_USAGE = """usage: todo schedule [--reminder OFFSET] TASK TIME
+
+Schedule TASK for a specific date/time. This shortcut searches tasks only and
+uses the same date parser as `todo task --due`.
+
+examples:
+  todo schedule "GK call" "tomorrow 11:00"
+  todo schedule --reminder 10m "GK call" "friday 11:00"
+"""
+
 MOVE_USAGE = """usage: todo move TASK CATEGORY
 
 Move TASK to CATEGORY. This shortcut searches tasks only.
@@ -313,6 +323,7 @@ Edit all comments on TASK in one editor buffer.
     "delete": DELETE_USAGE,
     "wait": WAIT_USAGE,
     "resume": RESUME_USAGE,
+    "schedule": SCHEDULE_USAGE,
     "move": MOVE_USAGE,
     "priority": PRIORITY_USAGE,
 }
@@ -2687,6 +2698,11 @@ def cmd_resume_shortcut(args):
     return cmd_resume(argparse.Namespace(task=args.values[0], text=args.values[1]))
 
 
+def cmd_schedule_shortcut(args):
+    require_arg_count("schedule", args.values, 2)
+    return cmd_due(argparse.Namespace(task=args.values[0], date=args.values[1], reminders=args.reminder or []))
+
+
 def cmd_move_shortcut(args):
     require_arg_count("move", args.values, 2)
     return cmd_move(argparse.Namespace(task=args.values[0], category=args.values[1]))
@@ -3237,6 +3253,7 @@ def build_parser():
   todo task --add operations "Deliver release" "check dashboard table" "close build"
   todo rename "review" "send review"
   todo done "send review"
+  todo schedule "GK call" "friday 11:00"
   todo step --done "Deliver release" "check dashboard table"
   todo task --wait "REVIEW-123" "waiting for review"
   todo report --final""",
@@ -3324,6 +3341,17 @@ def build_parser():
     )
     p.add_argument("values", nargs="*", help="TASK TEXT")
     p.set_defaults(func=cmd_resume_shortcut)
+
+    p = sub.add_parser(
+        "schedule",
+        help="schedule a task for a specific time",
+        description=SCHEDULE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--reminder", action="append", metavar="OFFSET",
+                   help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
+    p.add_argument("values", nargs="*", help="TASK TIME")
+    p.set_defaults(func=cmd_schedule_shortcut)
 
     p = sub.add_parser(
         "move",
