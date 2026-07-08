@@ -129,6 +129,9 @@ argparse parses the command.
 Common shortcut commands:
 
 ```sh
+todo add task CATEGORY TASK [STEP ...]
+todo add step TASK STEP [STEP ...]
+todo add comment TASK TEXT [TEXT ...]
 todo rename ITEM NEW_NAME
 todo done ITEM
 todo close ITEM
@@ -142,11 +145,12 @@ todo priority TASK P
 todo comment TASK TEXT [TEXT ...]
 ```
 
-`rename`, `done`/`close`, `unclose`, and `delete` search both parent task
-titles and direct step titles. Ambiguous matches print a numbered choice list
-in an interactive terminal and refuse to guess non-interactively. `wait`,
-`resume`, `schedule`, `move`, `priority`, and `comment` are task-only
-shortcuts.
+`todo add task`, `todo add step`, and `todo add comment` delegate to the
+existing task, step, and comment creation paths. `rename`, `done`/`close`,
+`unclose`, and `delete` search both parent task titles and direct step titles.
+Ambiguous matches print a numbered choice list in an interactive terminal and
+refuse to guess non-interactively. `wait`, `resume`, `schedule`, `move`,
+`priority`, and `comment` are task-only shortcuts.
 
 Rename commands update Todoist item titles:
 
