@@ -14,6 +14,7 @@ It is not created by, affiliated with, or supported by Doist.
 - Hidden-from-now categories: configured in `~/.todo/config`, default `Someday`
 - Todoist label: `waiting`
 - Due date: "needs attention on this date"
+- New task priority: P2 unless `-p1`/`-p2`/`-p3`/`-p4` is given
 - Subtasks: next or missing steps
 - Comments: report history
 
@@ -110,6 +111,8 @@ todo task --rename website "Website dependency update"
 ```
 
 Show, add, complete, wait/resume, prioritize, schedule, or move tasks.
+New tasks default to P2; pass `-p1`, `-p2`, `-p3`, or `-p4` with `--add` to
+override that initial priority.
 `--new` is accepted as an alias for `--add`; `--close` and `--closed` are
 accepted as aliases for `--done`.
 `--unclose` is accepted as an alias for `--undone`.

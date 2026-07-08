@@ -33,6 +33,7 @@ State model:
 - waiting: open task with Todoist label `waiting`
 - someday: open task in a hidden category such as `Someday`
 - done: completed Todoist task
+- new task priority: P2 by default unless task creation passes `-pN`
 
 Only one label is intentionally used:
 

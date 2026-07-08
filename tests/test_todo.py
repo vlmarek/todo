@@ -21,6 +21,40 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(todo.api_priority_to_cli(4), 1)
         self.assertEqual(todo.api_priority_to_cli(1), 4)
 
+    def test_task_add_priority_defaults_to_p2(self):
+        self.assertEqual(todo.task_add_priority(None), 2)
+        self.assertEqual(todo.task_add_priority(1), 1)
+
+    def test_cmd_add_sends_default_p2_priority(self):
+        calls = []
+        old_lock_state = todo.lock_state
+        old_load_runtime = todo.load_runtime
+        old_sync_or_fail = todo.sync_or_fail
+        old_require_project_and_category = todo.require_project_and_category
+        old_mutate = todo.mutate
+        old_mapped_id = todo.mapped_id
+        try:
+            todo.lock_state = contextlib.nullcontext
+            todo.load_runtime = lambda: (object(), object(), todo.Cache(todo.Cache.empty()))
+            todo.sync_or_fail = lambda client, cache: None
+            todo.require_project_and_category = lambda cache, cfg, category: ({"id": "root"}, {"id": "eng"})
+            todo.mutate = lambda client, cache, type_, args: calls.append((type_, args)) or {}
+            todo.mapped_id = lambda response: "task1"
+            args = todo.argparse.Namespace(category="engineering", task="new task", steps=[],
+                                           priority=None, due=None, reminders=[], done=False)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(todo.cmd_add(args), 0)
+        finally:
+            todo.lock_state = old_lock_state
+            todo.load_runtime = old_load_runtime
+            todo.sync_or_fail = old_sync_or_fail
+            todo.require_project_and_category = old_require_project_and_category
+            todo.mutate = old_mutate
+            todo.mapped_id = old_mapped_id
+        self.assertEqual(calls[0][0], "item_add")
+        self.assertEqual(calls[0][1]["priority"], todo.cli_priority_to_api(2))
+
     def test_business_days_skip_weekend(self):
         friday = dt.date(2026, 6, 5)
         self.assertEqual(todo.add_business_days(friday, 2), dt.date(2026, 6, 9))

@@ -40,6 +40,7 @@ DEFAULT_PROJECT = "Work"
 DEFAULT_SECTIONS = ["Operations", "Engineeringing", "Admin", "Someday"]
 DEFAULT_HIDDEN_FROM_NOW = ["Someday"]
 DEFAULT_WAIT_DUE = "2bd"
+DEFAULT_TASK_PRIORITY = 2
 WAITING_LABEL = "waiting"
 WAITING_BLOCK_RE = re.compile(r"(?:\n{0,2})\[todo waiting\]\n(.*?)\n\[/todo waiting\]\n?", re.DOTALL)
 COLOR_MODE = "auto"
@@ -908,6 +909,10 @@ def api_priority_to_cli(value):
     return 5 - value
 
 
+def task_add_priority(value):
+    return DEFAULT_TASK_PRIORITY if value is None else value
+
+
 def set_color_mode(mode):
     global COLOR_MODE
     COLOR_MODE = mode
@@ -1519,9 +1524,8 @@ def cmd_add(args):
         item_args = {
             "content": args.task,
             "project_id": str(category_project.get("id")),
+            "priority": cli_priority_to_api(task_add_priority(args.priority)),
         }
-        if args.priority:
-            item_args["priority"] = cli_priority_to_api(args.priority)
         if due_value:
             item_args["due"] = {"string": due_value}
         response = mutate(client, cache, "item_add", item_args)
