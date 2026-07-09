@@ -2375,7 +2375,7 @@ def cmd_done_any(args):
     with lock_state():
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
-        target = resolve_task_or_step(cache, cfg, args.item, include_completed=True)
+        target = resolve_task_or_step(cache, cfg, args.item, include_completed=False)
         if target["kind"] == "task":
             complete_task_item(client, cache, target["task"], args.text)
             return 0

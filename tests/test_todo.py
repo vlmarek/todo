@@ -947,6 +947,33 @@ class TodoPureTests(unittest.TestCase):
         self.assertIn("step open", text)
         self.assertIn("vim update / review change", text)
 
+    def test_done_shortcut_resolves_only_open_items(self):
+        calls = []
+        old_lock_state = todo.lock_state
+        old_load_runtime = todo.load_runtime
+        old_sync_or_fail = todo.sync_or_fail
+        old_resolve_task_or_step = todo.resolve_task_or_step
+        old_complete_step_item = todo.complete_step_item
+        try:
+            todo.lock_state = contextlib.nullcontext
+            todo.load_runtime = lambda: (object(), object(), todo.Cache(todo.Cache.empty()))
+            todo.sync_or_fail = lambda client, cache: None
+
+            def fake_resolve(cache, cfg, selector, include_completed=False):
+                calls.append((selector, include_completed))
+                return {"kind": "step", "task": {"id": "task1"}, "step": {"id": "step1", "content": "review"}}
+
+            todo.resolve_task_or_step = fake_resolve
+            todo.complete_step_item = lambda client, cache, step: calls.append(("complete", step["id"]))
+            self.assertEqual(todo.cmd_done_any(todo.argparse.Namespace(item="review", text=None)), 0)
+        finally:
+            todo.lock_state = old_lock_state
+            todo.load_runtime = old_load_runtime
+            todo.sync_or_fail = old_sync_or_fail
+            todo.resolve_task_or_step = old_resolve_task_or_step
+            todo.complete_step_item = old_complete_step_item
+        self.assertEqual(calls, [("review", False), ("complete", "step1")])
+
     def test_task_list_prints_all_open_steps(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
