@@ -974,6 +974,35 @@ class TodoPureTests(unittest.TestCase):
             todo.complete_step_item = old_complete_step_item
         self.assertEqual(calls, [("review", False), ("complete", "step1")])
 
+    def test_rename_shortcut_resolves_only_open_items(self):
+        calls = []
+        old_lock_state = todo.lock_state
+        old_load_runtime = todo.load_runtime
+        old_sync_or_fail = todo.sync_or_fail
+        old_resolve_task_or_step = todo.resolve_task_or_step
+        old_rename_task_item = todo.rename_task_item
+        try:
+            todo.lock_state = contextlib.nullcontext
+            todo.load_runtime = lambda: (object(), object(), todo.Cache(todo.Cache.empty()))
+            todo.sync_or_fail = lambda client, cache: None
+
+            def fake_resolve(cache, cfg, selector, include_completed=False):
+                calls.append((selector, include_completed))
+                return {"kind": "task", "task": {"id": "task1", "content": "old name"}}
+
+            todo.resolve_task_or_step = fake_resolve
+            todo.rename_task_item = lambda client, cache, task, new_name: calls.append(("rename", task["id"], new_name)) or False
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(todo.cmd_rename_any(todo.argparse.Namespace(item="old", new_name="new")), 0)
+        finally:
+            todo.lock_state = old_lock_state
+            todo.load_runtime = old_load_runtime
+            todo.sync_or_fail = old_sync_or_fail
+            todo.resolve_task_or_step = old_resolve_task_or_step
+            todo.rename_task_item = old_rename_task_item
+        self.assertEqual(calls, [("old", False), ("rename", "task1", "new")])
+
     def test_task_list_prints_all_open_steps(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
