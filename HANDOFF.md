@@ -136,8 +136,7 @@ todo add comment TASK TEXT [TEXT ...]
 todo add category CATEGORY
 todo rename ITEM NEW_NAME
 todo done ITEM
-todo close ITEM
-todo unclose ITEM
+todo reopen ITEM
 todo delete [--yes] ITEM
 todo wait [--due DATE] TASK REASON
 todo resume TASK TEXT
@@ -151,14 +150,19 @@ todo comment TASK TEXT [TEXT ...]
 `todo add CATEGORY TASK [STEP ...]` creates a task by default. `todo add task`,
 `todo add step`, `todo add comment`, and `todo add category` delegate to the
 existing task, step, comment, and category creation paths. `rename`,
-`done`/`close`, `unclose`, and `delete` search both parent task titles and
-direct step titles. Ambiguous matches print a numbered choice list in an
-interactive terminal and refuse to guess non-interactively. `wait`, `resume`,
-`move`, `priority`, and `comment` are task-only shortcuts. `due` searches both
-parent task titles and direct step titles; `schedule` is an alias for `due`.
+`done`, `reopen`, `delete`, and `due` search both parent task titles and direct
+step titles. Ambiguous matches print a numbered choice list in an interactive
+terminal and refuse to guess non-interactively. Accepted aliases:
+`close`/`closed` for `done`, `unclose`/`undone` for `reopen`, and `schedule`
+for `due`. `wait`, `resume`, `move`, `priority`, and `comment` are task-only
+shortcuts.
 If the first argument after `todo add` is `task`, `step`, `comment`, or
 `category`, it is treated as an explicit kind; otherwise it is treated as the
 task category.
+
+`todo task --...` and `todo step --...` mutation modes are compatibility forms
+for older usage and scripts. Prefer the verb commands in help examples and
+documentation.
 
 Rename commands update Todoist item titles:
 

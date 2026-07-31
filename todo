@@ -85,6 +85,65 @@ class TodoUsage(TodoError):
     pass
 
 
+TOP_LEVEL_HELP = """usage: todo [-h] [--color {auto,always,never}] COMMAND ...
+
+Command-line helper for Todoist tasks.
+
+options:
+  -h, --help            show this help message and exit
+  --color {auto,always,never}
+                        color output: auto, always, or never
+
+commands:
+  Work queue:
+    now                 show actionable tasks
+    waiting             show waiting tasks
+    someday             show hidden-category tasks
+    search              search tasks, steps, and comments
+
+  Create:
+    add                 create a task, step, comment, or category
+    step                show task steps
+    comment             show, add, or edit task comments
+
+  Change:
+    done                complete a task or step
+    reopen              reopen a task or step
+    due                 set or clear due date for a task or step
+    wait                mark a task waiting
+    resume              clear task waiting state
+    move                move a task to a category
+    priority            set task priority
+    rename              rename a task or step
+    delete              delete a task or step
+
+  Inspect:
+    task                show task details
+    category            list or add categories
+    report              generate weekly report draft
+
+  Setup:
+    init                initialize Todoist project, categories, label, and local config
+
+aliases:
+  close, closed         done
+  unclose, undone       reopen
+  schedule              due
+
+examples:
+  todo now
+  todo add operations "Deliver release" "check dashboard table" "close build"
+  todo add step "Deliver release" "check dashboard table"
+  todo add comment "Deliver release" "dashboard looked good"
+  todo rename "review" "send review"
+  todo done "send review"
+  todo due "GK call" "friday 11:00"
+  todo reopen "send review"
+  todo wait "REVIEW-123" "waiting for review"
+  todo report --final
+"""
+
+
 TASK_USAGE = """usage: todo task TASK
        todo task --add|--new|--create [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo task --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
@@ -102,7 +161,8 @@ TASK_USAGE = """usage: todo task TASK
        todo task --comment TASK TEXT [TEXT ...]
        todo task --step TASK STEP [STEP ...]
 
-Show a task, or perform one task operation.
+Show a task. Legacy task mutation modes are still accepted for compatibility,
+but the verb commands are the recommended interface.
 """
 
 
@@ -133,7 +193,9 @@ STEP_USAGE = """usage: todo step TASK
        todo step --rename TASK STEP NEW_NAME
        todo step --reminder OFFSET TASK STEP
 
-Show task steps, add steps, or mark one step done.
+Show task steps. Legacy step mutation modes are still accepted for
+compatibility; prefer `todo add step`, `todo done`, `todo reopen`,
+`todo rename`, `todo delete`, `todo due`, and `todo add --due step ...`.
 """
 
 
@@ -171,15 +233,15 @@ Rename a task or direct step. If ITEM matches multiple tasks or steps, choose
 one interactively.
 """
 
-DONE_USAGE = """usage: todo done|close ITEM [TEXT]
+DONE_USAGE = """usage: todo done ITEM [TEXT]
 
 Complete a task or direct step. Optional TEXT is stored as a completion
-comment when ITEM resolves to a task.
+comment when ITEM resolves to a task. Aliases: close, closed.
 """
 
-UNCLOSE_USAGE = """usage: todo unclose|undone ITEM
+REOPEN_USAGE = """usage: todo reopen ITEM
 
-Reopen a completed task or direct step.
+Reopen a completed task or direct step. Aliases: unclose, undone.
 """
 
 DELETE_USAGE = """usage: todo delete [--yes] ITEM
@@ -187,11 +249,11 @@ DELETE_USAGE = """usage: todo delete [--yes] ITEM
 Delete a task or direct step. Use --yes for non-interactive deletion.
 """
 
-DUE_USAGE = """usage: todo due|schedule [--reminder OFFSET] ITEM DATE
+DUE_USAGE = """usage: todo due [--reminder OFFSET] ITEM DATE
 
 Set or clear the due date for a task or direct step. If ITEM matches multiple
 tasks or steps, choose one interactively. Use DATE clear to remove the due
-date. `todo schedule` is accepted as an alias.
+date. Alias: schedule.
 
 examples:
   todo due "GK call" "tomorrow 11:00"
@@ -347,7 +409,9 @@ Edit all comments on TASK in one editor buffer.
     "search": SEARCH_USAGE,
     "rename": RENAME_USAGE,
     "done": DONE_USAGE,
-    "unclose": UNCLOSE_USAGE,
+    "reopen": REOPEN_USAGE,
+    "unclose": REOPEN_USAGE,
+    "undone": REOPEN_USAGE,
     "delete": DELETE_USAGE,
     "due": DUE_USAGE,
     "wait": WAIT_USAGE,
@@ -2782,7 +2846,7 @@ def cmd_done_shortcut(args):
 
 
 def cmd_unclose_shortcut(args):
-    require_arg_count("unclose", args.values, 1)
+    require_arg_count("reopen", args.values, 1)
     return cmd_unclose_any(argparse.Namespace(item=args.values[0]))
 
 
@@ -3361,8 +3425,8 @@ def build_parser():
   todo rename "review" "send review"
   todo done "send review"
   todo due "GK call" "friday 11:00"
-  todo step --done "Deliver release" "check dashboard table"
-  todo task --wait "REVIEW-123" "waiting for review"
+  todo reopen "send review"
+  todo wait "REVIEW-123" "waiting for review"
   todo report --final""",
     )
     parser.add_argument("--color", choices=("auto", "always", "never"), default="auto",
@@ -3423,7 +3487,7 @@ def build_parser():
     add_task.add_argument("-p2", dest="add_priority", action="store_const", const=2, help="set task priority 2")
     add_task.add_argument("-p3", dest="add_priority", action="store_const", const=3, help="set task priority 3")
     add_task.add_argument("-p4", dest="add_priority", action="store_const", const=4, help="set task priority 4")
-    add_task.add_argument("values", nargs="*", help="CATEGORY TASK [STEP ...]")
+    add_task.add_argument("values", nargs="*", metavar="CATEGORY", help="CATEGORY TASK [STEP ...]")
     add_task.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
 
     add_step = add_sub.add_parser("step", help="create one or more steps",
@@ -3435,121 +3499,129 @@ def build_parser():
     add_step.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date")
     add_step.add_argument("--reminder", action="append", metavar="OFFSET",
                           help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
-    add_step.add_argument("values", nargs="*", help="TASK STEP [STEP ...]")
+    add_step.add_argument("values", nargs="*", metavar="TASK", help="TASK STEP [STEP ...]")
     add_step.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
 
     add_comment = add_sub.add_parser("comment", help="create one or more comments",
                                      usage="todo add comment TASK TEXT [TEXT ...]",
                                      description=ADD_USAGE,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    add_comment.add_argument("values", nargs="*", help="TASK TEXT [TEXT ...]")
+    add_comment.add_argument("values", nargs="*", metavar="TASK", help="TASK TEXT [TEXT ...]")
     add_comment.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
 
     add_category = add_sub.add_parser("category", help="create a category",
                                       usage="todo add category NAME",
                                       description=ADD_USAGE,
                                       formatter_class=argparse.RawDescriptionHelpFormatter)
-    add_category.add_argument("values", nargs="*", help="NAME")
+    add_category.add_argument("values", nargs="*", metavar="NAME", help="NAME")
     add_category.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
 
     p = sub.add_parser(
         "rename",
+        usage="todo rename ITEM NEW_NAME",
         help="rename a task or step",
         description=RENAME_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("values", nargs="*", help="ITEM NEW_NAME")
+    p.add_argument("values", nargs="*", metavar="ITEM", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_rename_shortcut)
 
     p = sub.add_parser(
         "done",
         aliases=["close", "closed"],
+        usage="todo done ITEM [TEXT]",
         help="complete a task or step",
         description=DONE_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("values", nargs="*", help="ITEM [TEXT]")
+    p.add_argument("values", nargs="*", metavar="ITEM", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_done_shortcut)
 
     p = sub.add_parser(
-        "unclose",
-        aliases=["undone"],
+        "reopen",
+        aliases=["unclose", "undone"],
+        usage="todo reopen ITEM",
         help="reopen a task or step",
-        description=UNCLOSE_USAGE,
+        description=REOPEN_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("values", nargs="*", help="ITEM")
+    p.add_argument("values", nargs="*", metavar="ITEM", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_unclose_shortcut)
 
     p = sub.add_parser(
         "delete",
+        usage="todo delete [--yes] ITEM",
         help="delete a task or step",
         description=DELETE_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--yes", action="store_true", help="skip delete confirmation")
-    p.add_argument("values", nargs="*", help="ITEM")
+    p.add_argument("values", nargs="*", metavar="ITEM", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_delete_shortcut)
 
     p = sub.add_parser(
         "due",
         aliases=["schedule"],
-        usage="todo due|schedule [--reminder OFFSET] ITEM DATE",
+        usage="todo due [--reminder OFFSET] ITEM DATE",
         help="set or clear due date for a task or step",
         description=DUE_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--reminder", action="append", metavar="OFFSET",
                    help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
-    p.add_argument("values", nargs="*", help="ITEM DATE")
+    p.add_argument("values", nargs="*", metavar="ITEM", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_schedule_shortcut)
 
     p = sub.add_parser(
         "wait",
+        usage="todo wait [--due DATE] TASK REASON",
         help="mark a task waiting",
         description=WAIT_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set waiting follow-up date")
-    p.add_argument("values", nargs="*", help="TASK REASON")
+    p.add_argument("values", nargs="*", metavar="TASK", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_wait_shortcut)
 
     p = sub.add_parser(
         "resume",
+        usage="todo resume TASK TEXT",
         help="clear task waiting state",
         description=RESUME_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("values", nargs="*", help="TASK TEXT")
+    p.add_argument("values", nargs="*", metavar="TASK", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_resume_shortcut)
 
     p = sub.add_parser(
         "move",
+        usage="todo move TASK CATEGORY",
         help="move a task to a category",
         description=MOVE_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("values", nargs="*", help="TASK CATEGORY")
+    p.add_argument("values", nargs="*", metavar="TASK", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_move_shortcut)
 
     p = sub.add_parser(
         "priority",
+        usage="todo priority TASK P",
         help="set task priority",
         description=PRIORITY_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("values", nargs="*", help="TASK P")
+    p.add_argument("values", nargs="*", metavar="TASK", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_priority_shortcut)
 
     p = sub.add_parser(
         "task",
-        help="show or change tasks",
-        description="""Show a task, or perform one task operation.
+        help="show task details",
+        description="""Show a task.
 
 display:
   todo task TASK
 
-modes:
+compatibility modes:
   --add|--new|--create [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --add|--new|--create --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
   --done|--close TASK [TEXT]
@@ -3564,7 +3636,10 @@ modes:
   --move TASK CATEGORY
   --rename TASK NEW_NAME
   --comment TASK TEXT [TEXT ...]
-  --step TASK STEP [STEP ...]""",
+  --step TASK STEP [STEP ...]
+
+Prefer the verb commands for changes: add, done, reopen, due, wait, resume,
+move, priority, rename, delete, comment, and add step.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--add", "--new", "--create", dest="add", action="store_true",
@@ -3594,25 +3669,28 @@ modes:
                    help="set priority 3, or set initial priority when adding a task")
     p.add_argument("-p4", dest="add_priority", action="store_const", const=4,
                    help="set priority 4, or set initial priority when adding a task")
-    p.add_argument("values", nargs="*", help="arguments for the selected mode")
+    p.add_argument("values", nargs="*", metavar="ARGS", help="arguments for the selected mode")
     p.set_defaults(func=cmd_task)
 
     p = sub.add_parser(
         "step",
-        help="show or change task steps",
-        description="""Show task steps, add steps, or mark one step done.
+        help="show task steps",
+        description="""Show task steps.
 
 display:
   todo step TASK
 
-modes:
+compatibility modes:
   --add|--new|--create [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]
   --add|--new|--create --done|--close [--due DATE] TASK STEP [STEP ...]
   --done|--close TASK STEP
   --delete [--yes] TASK STEP
   --undone|--unclose TASK STEP
   --rename TASK STEP NEW_NAME
-  --reminder OFFSET TASK STEP""",
+  --reminder OFFSET TASK STEP
+
+Prefer the verb commands for changes: add step, done, reopen, due, rename, and
+delete.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--add", "--new", "--create", dest="add", action="store_true", help="add one or more steps")
@@ -3626,7 +3704,7 @@ modes:
     p.add_argument("--reminder", action="append", metavar="OFFSET",
                    help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing steps")
-    p.add_argument("values", nargs="*", help="arguments for the selected mode")
+    p.add_argument("values", nargs="*", metavar="ARGS", help="arguments for the selected mode")
     p.set_defaults(func=cmd_step_noun)
 
     p = sub.add_parser(
@@ -3651,7 +3729,7 @@ multiple comments.""",
     p.add_argument("--add", "--create", dest="add", action="store_true", help="create one comment per TEXT argument")
     p.add_argument("--edit", action="store_true", help="edit all comments in one file")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing comments")
-    p.add_argument("values", nargs="*", help="arguments for the selected mode")
+    p.add_argument("values", nargs="*", metavar="ARGS", help="arguments for the selected mode")
     p.set_defaults(func=cmd_comment_noun)
 
     p = sub.add_parser(
@@ -3660,7 +3738,7 @@ multiple comments.""",
         description="Search tasks, descriptions, waiting reasons, steps, and comments.",
     )
     p.add_argument("--refresh", action="store_true", help="sync Todoist before searching the local cache")
-    p.add_argument("values", nargs="*", help="search text")
+    p.add_argument("values", nargs="*", metavar="TEXT", help="search text")
     p.set_defaults(func=cmd_search)
 
     p = sub.add_parser(
@@ -3763,6 +3841,11 @@ def expand_add_command(argv):
 
 
 class TodoArgumentParser(argparse.ArgumentParser):
+    def format_help(self):
+        if self.prog == "todo":
+            return TOP_LEVEL_HELP
+        return super().format_help()
+
     def parse_args(self, args=None, namespace=None):
         return super().parse_args(expand_add_command(args), namespace)
 

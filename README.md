@@ -74,8 +74,7 @@ todo add comment website "fixed test failure; staging deploy still running"
 todo add category training
 todo rename review "send review"
 todo done review
-todo close review
-todo unclose review
+todo reopen review
 todo delete --yes review
 todo wait --due 2d website "waiting for review"
 todo resume website "review returned"
@@ -89,14 +88,21 @@ todo comment website "fixed test failure; staging deploy still running"
 
 `todo add CATEGORY TASK [STEP ...]` creates a task by default. `todo add task`,
 `todo add step`, `todo add comment`, and `todo add category` are explicit
-forms for the corresponding creation commands. `rename`, `done`/`close`,
-`unclose`, `delete`, and `due` search task and direct step titles. If multiple
-items match, an interactive terminal shows numbered choices. `schedule` is an
-alias for `due`. `wait`, `resume`, `move`, `priority`, and `comment` are
-task-only shortcuts.
+forms for the corresponding creation commands. `rename`, `done`, `reopen`,
+`delete`, and `due` search task and direct step titles. If multiple items
+match, an interactive terminal shows numbered choices. Accepted aliases:
+`close`/`closed` for `done`, `unclose`/`undone` for `reopen`, and `schedule`
+for `due`. `wait`, `resume`, `move`, `priority`, and `comment` are task-only
+shortcuts.
 
 ```sh
 todo task "website"
+```
+
+`todo task` is primarily for inspection. Legacy task mutation modes remain
+accepted for compatibility:
+
+```sh
 todo task --refresh "website"
 todo task --add --due "friday 11:00" --reminder 10m -p1 engineering "Update website dependencies" "build/test" "review"
 todo task --add -p1 engineering "Update website dependencies" "build/test" "review"
@@ -120,7 +126,7 @@ todo task --move website engineering
 todo task --rename website "Website dependency update"
 ```
 
-Show, add, complete, wait/resume, prioritize, set due dates, or move tasks.
+Show task details, or use compatibility modes for older scripts.
 New tasks default to P2; pass `-p1`, `-p2`, `-p3`, or `-p4` with `--add` to
 override that initial priority.
 `--new` is accepted as an alias for `--add`; `--close` and `--closed` are
@@ -156,6 +162,12 @@ date with a time. It accepts offsets such as `0`, `10m`, `2h`, `1d`, and
 
 ```sh
 todo step website
+```
+
+`todo step` is primarily for inspection. Legacy step mutation modes remain
+accepted for compatibility:
+
+```sh
 todo step --refresh website
 todo step --add --due "friday 11:00" --reminder 10m website "build/test"
 todo step --add --due ask website "publish the release notes"
@@ -168,8 +180,7 @@ todo step --delete --yes website review
 todo step --rename website review "send review"
 ```
 
-Show steps, add one or more steps, mark one step done, rename one step, or
-delete one step.
+Show steps, or use compatibility modes for older scripts.
 Step commands accept the same `--new`, `--close`, and `--closed` aliases.
 `--unclose` is accepted as an alias for `--undone`.
 

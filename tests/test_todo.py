@@ -292,7 +292,8 @@ class TodoPureTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as cm:
                 todo.main(["help", "schedule"])
         self.assertEqual(cm.exception.code, 0)
-        self.assertIn("usage: todo due|schedule", out.getvalue())
+        self.assertIn("usage: todo due", out.getvalue())
+        self.assertIn("Alias: schedule", out.getvalue())
 
     def test_schedule_shortcut_passes_due_arguments(self):
         calls = []
@@ -1452,7 +1453,9 @@ created two
         self.assertIn("now", text)
         self.assertIn("show actionable tasks", text)
         self.assertIn("task", text)
-        self.assertIn("show or change tasks", text)
+        self.assertIn("show task details", text)
+        self.assertIn("Work queue:", text)
+        self.assertIn("Change:", text)
         self.assertIn("report", text)
         self.assertIn("generate weekly report draft", text)
 
@@ -1532,8 +1535,9 @@ created two
             (["comment"], "usage: todo comment TASK"),
             (["search"], "usage: todo search TEXT"),
             (["rename"], "usage: todo rename ITEM NEW_NAME"),
-            (["done"], "usage: todo done|close ITEM [TEXT]"),
-            (["unclose"], "usage: todo unclose|undone ITEM"),
+            (["done"], "usage: todo done ITEM [TEXT]"),
+            (["reopen"], "usage: todo reopen ITEM"),
+            (["unclose"], "usage: todo reopen ITEM"),
             (["delete"], "usage: todo delete [--yes] ITEM"),
             (["wait"], "usage: todo wait [--due DATE] TASK REASON"),
             (["resume"], "usage: todo resume TASK TEXT"),
@@ -1650,6 +1654,7 @@ created two
         rename_args = parser.parse_args(["rename", "review", "send review"])
         done_args = parser.parse_args(["done", "review"])
         close_args = parser.parse_args(["close", "review", "sent"])
+        reopen_args = parser.parse_args(["reopen", "review"])
         unclose_args = parser.parse_args(["unclose", "review"])
         undone_args = parser.parse_args(["undone", "review"])
         delete_args = parser.parse_args(["delete", "--yes", "review"])
@@ -1662,6 +1667,7 @@ created two
         self.assertEqual(rename_args.values, ["review", "send review"])
         self.assertEqual(done_args.values, ["review"])
         self.assertEqual(close_args.values, ["review", "sent"])
+        self.assertEqual(reopen_args.values, ["review"])
         self.assertEqual(unclose_args.values, ["review"])
         self.assertEqual(undone_args.values, ["review"])
         self.assertTrue(delete_args.yes)
@@ -1709,7 +1715,7 @@ created two
         try:
             todo.cmd_rename_any = lambda args: calls.append(("rename", args.item, args.new_name)) or 0
             todo.cmd_done_any = lambda args: calls.append(("done", args.item, args.text)) or 0
-            todo.cmd_unclose_any = lambda args: calls.append(("unclose", args.item)) or 0
+            todo.cmd_unclose_any = lambda args: calls.append(("reopen", args.item)) or 0
             todo.cmd_delete_any = lambda args: calls.append(("delete", args.item, args.yes)) or 0
             todo.cmd_due_any = lambda args: calls.append(("due", args.item, args.date, args.reminders)) or 0
             todo.cmd_wait = lambda args: calls.append(("wait", args.task, args.text, args.due)) or 0
@@ -1718,7 +1724,7 @@ created two
             todo.cmd_priority = lambda args: calls.append(("priority", args.task, args.priority)) or 0
             parser.parse_args(["rename", "vim", "vim update"]).func(parser.parse_args(["rename", "vim", "vim update"]))
             parser.parse_args(["done", "vim", "delivered"]).func(parser.parse_args(["done", "vim", "delivered"]))
-            parser.parse_args(["unclose", "vim"]).func(parser.parse_args(["unclose", "vim"]))
+            parser.parse_args(["reopen", "vim"]).func(parser.parse_args(["reopen", "vim"]))
             parser.parse_args(["delete", "--yes", "vim"]).func(parser.parse_args(["delete", "--yes", "vim"]))
             parser.parse_args(["due", "--reminder", "10m", "vim", "friday 11:00"]).func(parser.parse_args(["due", "--reminder", "10m", "vim", "friday 11:00"]))
             parser.parse_args(["schedule", "vim", "friday 11:00"]).func(parser.parse_args(["schedule", "vim", "friday 11:00"]))
@@ -1739,7 +1745,7 @@ created two
         self.assertEqual(calls, [
             ("rename", "vim", "vim update"),
             ("done", "vim", "delivered"),
-            ("unclose", "vim"),
+            ("reopen", "vim"),
             ("delete", "vim", True),
             ("due", "vim", "friday 11:00", ["10m"]),
             ("due", "vim", "friday 11:00", []),
