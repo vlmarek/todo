@@ -182,6 +182,18 @@ DELETE_USAGE = """usage: todo delete [--yes] ITEM
 Delete a task or direct step. Use --yes for non-interactive deletion.
 """
 
+DUE_USAGE = """usage: todo due|schedule [--reminder OFFSET] ITEM DATE
+
+Set or clear the due date for a task or direct step. If ITEM matches multiple
+tasks or steps, choose one interactively. Use DATE clear to remove the due
+date. `todo schedule` is accepted as an alias.
+
+examples:
+  todo due "GK call" "tomorrow 11:00"
+  todo due --reminder 10m "GK call" "friday 11:00"
+  todo due "send review" clear
+"""
+
 WAIT_USAGE = """usage: todo wait [--due DATE] TASK REASON
 
 Mark TASK waiting. This shortcut searches tasks only.
@@ -192,10 +204,9 @@ RESUME_USAGE = """usage: todo resume TASK TEXT
 Clear waiting state from TASK. This shortcut searches tasks only.
 """
 
-SCHEDULE_USAGE = """usage: todo schedule [--reminder OFFSET] TASK TIME
+SCHEDULE_USAGE = """usage: todo schedule [--reminder OFFSET] ITEM TIME
 
-Schedule TASK for a specific date/time. This shortcut searches tasks only and
-uses the same date parser as `todo task --due`.
+Alias for `todo due`. Set a timed due date for a task or direct step.
 
 examples:
   todo schedule "GK call" "tomorrow 11:00"
@@ -333,6 +344,7 @@ Edit all comments on TASK in one editor buffer.
     "done": DONE_USAGE,
     "unclose": UNCLOSE_USAGE,
     "delete": DELETE_USAGE,
+    "due": DUE_USAGE,
     "wait": WAIT_USAGE,
     "resume": RESUME_USAGE,
     "schedule": SCHEDULE_USAGE,
@@ -2233,17 +2245,39 @@ def cmd_due(args):
         cfg, client, cache = load_runtime()
         sync_or_fail(client, cache)
         task = resolve_task(cache, cfg, args.task)
-        due_value = resolve_due_value(args.date)
-        if due_value is None:
-            if getattr(args, "reminders", None):
-                raise TodoError("Cannot add reminders after clearing the due date.")
-            update_item(client, cache, task.get("id"), due=None)
-            print(f"Cleared due date: {content_of(task)}")
+        apply_due_to_item(client, cache, task.get("id"), content_of(task), args.date, getattr(args, "reminders", None))
+        return 0
+
+
+def apply_due_to_item(client, cache, item_id, display_name, date, reminders=None):
+    due_value = resolve_due_value(date)
+    if due_value is None:
+        if reminders:
+            raise TodoError("Cannot add reminders after clearing the due date.")
+        update_item(client, cache, item_id, due=None)
+        print(f"Cleared due date: {display_name}")
+        return
+    update_item(client, cache, item_id, due={"string": due_value})
+    if reminders:
+        add_relative_reminders(client, cache, item_id, reminders)
+    print(f"Due {format_due_value_for_display(due_value)}: {display_name}")
+
+
+def cmd_due_any(args):
+    with lock_state():
+        cfg, client, cache = load_runtime()
+        sync_or_fail(client, cache)
+        target = resolve_task_or_step(cache, cfg, args.item, include_completed=False)
+        if target["kind"] == "task":
+            task = target["task"]
+            display_name = content_of(task)
+            item_id = task.get("id")
         else:
-            update_item(client, cache, task.get("id"), due={"string": due_value})
-            if getattr(args, "reminders", None):
-                add_relative_reminders(client, cache, task.get("id"), args.reminders)
-            print(f"Due {format_due_value_for_display(due_value)}: {content_of(task)}")
+            task = target["task"]
+            step = target["step"]
+            display_name = f"{content_of(task)} / {content_of(step)}"
+            item_id = step.get("id")
+        apply_due_to_item(client, cache, item_id, display_name, args.date, args.reminders)
         return 0
 
 
@@ -2757,8 +2791,9 @@ def cmd_resume_shortcut(args):
 
 
 def cmd_schedule_shortcut(args):
-    require_arg_count("schedule", args.values, 2)
-    return cmd_due(argparse.Namespace(task=args.values[0], date=args.values[1], reminders=args.reminder or []))
+    command = getattr(args, "cmd", "due")
+    require_arg_count(command, args.values, 2)
+    return cmd_due_any(argparse.Namespace(item=args.values[0], date=args.values[1], reminders=args.reminder or []))
 
 
 def cmd_move_shortcut(args):
@@ -3313,7 +3348,7 @@ def build_parser():
   todo add comment "Deliver release" "dashboard looked good"
   todo rename "review" "send review"
   todo done "send review"
-  todo schedule "GK call" "friday 11:00"
+  todo due "GK call" "friday 11:00"
   todo step --done "Deliver release" "check dashboard table"
   todo task --wait "REVIEW-123" "waiting for review"
   todo report --final""",
@@ -3422,6 +3457,19 @@ def build_parser():
     p.set_defaults(func=cmd_delete_shortcut)
 
     p = sub.add_parser(
+        "due",
+        aliases=["schedule"],
+        usage="todo due|schedule [--reminder OFFSET] ITEM DATE",
+        help="set or clear due date for a task or step",
+        description=DUE_USAGE,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--reminder", action="append", metavar="OFFSET",
+                   help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
+    p.add_argument("values", nargs="*", help="ITEM DATE")
+    p.set_defaults(func=cmd_schedule_shortcut)
+
+    p = sub.add_parser(
         "wait",
         help="mark a task waiting",
         description=WAIT_USAGE,
@@ -3439,17 +3487,6 @@ def build_parser():
     )
     p.add_argument("values", nargs="*", help="TASK TEXT")
     p.set_defaults(func=cmd_resume_shortcut)
-
-    p = sub.add_parser(
-        "schedule",
-        help="schedule a task for a specific time",
-        description=SCHEDULE_USAGE,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    p.add_argument("--reminder", action="append", metavar="OFFSET",
-                   help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
-    p.add_argument("values", nargs="*", help="TASK TIME")
-    p.set_defaults(func=cmd_schedule_shortcut)
 
     p = sub.add_parser(
         "move",

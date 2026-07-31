@@ -41,6 +41,7 @@ This creates or validates the `Work` project, default categories, and the
 ```sh
 todo help
 todo help task
+todo help due
 todo help schedule
 ```
 
@@ -76,8 +77,9 @@ todo unclose review
 todo delete --yes review
 todo wait --due 2d website "waiting for review"
 todo resume website "review returned"
-todo schedule website "tomorrow 11:00"
-todo schedule --reminder 10m website "friday 11:00"
+todo due website 2d
+todo due website "tomorrow 11:00"
+todo due --reminder 10m website "friday 11:00"
 todo move website engineering
 todo priority website 1
 todo comment website "fixed test failure; staging deploy still running"
@@ -85,9 +87,10 @@ todo comment website "fixed test failure; staging deploy still running"
 
 `todo add task`, `todo add step`, and `todo add comment` are shorter forms
 for the corresponding creation commands. `rename`, `done`/`close`, `unclose`,
-and `delete` search task and direct step titles. If multiple items match, an
-interactive terminal shows numbered choices. `wait`, `resume`, `schedule`,
-`move`, `priority`, and `comment` are task-only shortcuts.
+`delete`, and `due` search task and direct step titles. If multiple items
+match, an interactive terminal shows numbered choices. `schedule` is an alias
+for `due`. `wait`, `resume`, `move`, `priority`, and `comment` are task-only
+shortcuts.
 
 ```sh
 todo task "website"
@@ -114,7 +117,7 @@ todo task --move website engineering
 todo task --rename website "Website dependency update"
 ```
 
-Show, add, complete, wait/resume, prioritize, schedule, or move tasks.
+Show, add, complete, wait/resume, prioritize, set due dates, or move tasks.
 New tasks default to P2; pass `-p1`, `-p2`, `-p3`, or `-p4` with `--add` to
 override that initial priority.
 `--new` is accepted as an alias for `--add`; `--close` and `--closed` are
@@ -129,9 +132,16 @@ excluding today.
 the default is `default_wait_due` from `~/.todo/config`, falling back to
 `2bd`. The value uses the same syntax as `--due`, so `1d` means one calendar
 day and `1bd` means one business day. `clear` is rejected for waiting tasks.
-`todo schedule TASK TIME` is a shortcut for setting a timed task due date:
+`todo due ITEM DATE` sets or clears the due date for either a task or a direct
+step. If ITEM matches multiple tasks or steps, an interactive terminal prompts
+for a choice. `todo schedule` is accepted as an alias:
 
 ```sh
+todo due website 2d
+todo due website clear
+todo due "send review" friday
+todo due website "tomorrow 11:00"
+todo due --reminder 10m website "friday 11:00"
 todo schedule website "tomorrow 11:00"
 todo schedule --reminder 10m website "friday 11:00"
 ```

@@ -165,7 +165,11 @@ class TodoPureTests(unittest.TestCase):
 
     def test_schedule_parser_flag(self):
         parser = todo.build_parser()
+        due_args = parser.parse_args(["due", "--reminder", "10m", "meeting", "tomorrow 11:00"])
         args = parser.parse_args(["schedule", "--reminder", "10m", "meeting", "tomorrow 11:00"])
+        self.assertIs(due_args.func, todo.cmd_schedule_shortcut)
+        self.assertEqual(due_args.reminder, ["10m"])
+        self.assertEqual(due_args.values, ["meeting", "tomorrow 11:00"])
         self.assertIs(args.func, todo.cmd_schedule_shortcut)
         self.assertEqual(args.reminder, ["10m"])
         self.assertEqual(args.values, ["meeting", "tomorrow 11:00"])
@@ -240,18 +244,18 @@ class TodoPureTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as cm:
                 todo.main(["help", "schedule"])
         self.assertEqual(cm.exception.code, 0)
-        self.assertIn("usage: todo schedule", out.getvalue())
+        self.assertIn("usage: todo due|schedule", out.getvalue())
 
     def test_schedule_shortcut_passes_due_arguments(self):
         calls = []
-        old_cmd_due = todo.cmd_due
+        old_cmd_due_any = todo.cmd_due_any
         try:
-            todo.cmd_due = lambda args: calls.append(args) or 0
-            args = todo.argparse.Namespace(values=["meeting", "tomorrow 11:00"], reminder=["10m"])
+            todo.cmd_due_any = lambda args: calls.append(args) or 0
+            args = todo.argparse.Namespace(cmd="schedule", values=["meeting", "tomorrow 11:00"], reminder=["10m"])
             self.assertEqual(todo.cmd_schedule_shortcut(args), 0)
         finally:
-            todo.cmd_due = old_cmd_due
-        self.assertEqual(calls[0].task, "meeting")
+            todo.cmd_due_any = old_cmd_due_any
+        self.assertEqual(calls[0].item, "meeting")
         self.assertEqual(calls[0].date, "tomorrow 11:00")
         self.assertEqual(calls[0].reminders, ["10m"])
 
@@ -1003,6 +1007,63 @@ class TodoPureTests(unittest.TestCase):
             todo.rename_task_item = old_rename_task_item
         self.assertEqual(calls, [("old", False), ("rename", "task1", "new")])
 
+    def test_due_shortcut_resolves_task_or_step(self):
+        calls = []
+        old_lock_state = todo.lock_state
+        old_load_runtime = todo.load_runtime
+        old_sync_or_fail = todo.sync_or_fail
+        old_resolve_task_or_step = todo.resolve_task_or_step
+        old_apply_due_to_item = todo.apply_due_to_item
+        try:
+            todo.lock_state = contextlib.nullcontext
+            todo.load_runtime = lambda: (object(), object(), todo.Cache(todo.Cache.empty()))
+            todo.sync_or_fail = lambda client, cache: None
+
+            def fake_resolve(cache, cfg, selector, include_completed=False):
+                calls.append((selector, include_completed))
+                return {
+                    "kind": "step",
+                    "task": {"id": "task1", "content": "website"},
+                    "step": {"id": "step1", "content": "send review"},
+                }
+
+            def fake_apply(client, cache, item_id, display_name, date, reminders=None):
+                calls.append(("apply", item_id, display_name, date, reminders))
+
+            todo.resolve_task_or_step = fake_resolve
+            todo.apply_due_to_item = fake_apply
+            self.assertEqual(todo.cmd_due_any(todo.argparse.Namespace(
+                item="review",
+                date="clear",
+                reminders=[],
+            )), 0)
+        finally:
+            todo.lock_state = old_lock_state
+            todo.load_runtime = old_load_runtime
+            todo.sync_or_fail = old_sync_or_fail
+            todo.resolve_task_or_step = old_resolve_task_or_step
+            todo.apply_due_to_item = old_apply_due_to_item
+        self.assertEqual(calls, [
+            ("review", False),
+            ("apply", "step1", "website / send review", "clear", []),
+        ])
+
+    def test_apply_due_to_item_clears_due_date(self):
+        calls = []
+        old_update_item = todo.update_item
+        try:
+            todo.update_item = lambda client, cache, item_id, **kwargs: calls.append((item_id, kwargs))
+            with contextlib.redirect_stdout(io.StringIO()):
+                todo.apply_due_to_item(object(), todo.Cache(todo.Cache.empty()), "step1", "website / send review", "clear")
+        finally:
+            todo.update_item = old_update_item
+        self.assertEqual(calls, [("step1", {"due": None})])
+
+    def test_apply_due_to_item_rejects_reminder_when_clearing_due_date(self):
+        with self.assertRaises(todo.TodoError) as cm:
+            todo.apply_due_to_item(object(), todo.Cache(todo.Cache.empty()), "step1", "step", "clear", ["10m"])
+        self.assertIn("Cannot add reminders after clearing", str(cm.exception))
+
     def test_task_list_prints_all_open_steps(self):
         cache = todo.Cache(todo.Cache.empty())
         cache.data["projects"] = [{"id": "gate", "name": "Operations"}]
@@ -1544,6 +1605,8 @@ created two
         unclose_args = parser.parse_args(["unclose", "review"])
         undone_args = parser.parse_args(["undone", "review"])
         delete_args = parser.parse_args(["delete", "--yes", "review"])
+        due_args = parser.parse_args(["due", "--reminder", "10m", "review", "friday 11:00"])
+        schedule_args = parser.parse_args(["schedule", "review", "friday 11:00"])
         wait_args = parser.parse_args(["wait", "--due", "2d", "vim", "waiting for review"])
         resume_args = parser.parse_args(["resume", "vim", "review returned"])
         move_args = parser.parse_args(["move", "vim", "Engineering"])
@@ -1555,6 +1618,9 @@ created two
         self.assertEqual(undone_args.values, ["review"])
         self.assertTrue(delete_args.yes)
         self.assertEqual(delete_args.values, ["review"])
+        self.assertEqual(due_args.reminder, ["10m"])
+        self.assertEqual(due_args.values, ["review", "friday 11:00"])
+        self.assertEqual(schedule_args.values, ["review", "friday 11:00"])
         self.assertEqual(wait_args.due, "2d")
         self.assertEqual(wait_args.values, ["vim", "waiting for review"])
         self.assertEqual(resume_args.values, ["vim", "review returned"])
@@ -1587,6 +1653,7 @@ created two
         old_cmd_done_any = todo.cmd_done_any
         old_cmd_unclose_any = todo.cmd_unclose_any
         old_cmd_delete_any = todo.cmd_delete_any
+        old_cmd_due_any = todo.cmd_due_any
         old_cmd_wait = todo.cmd_wait
         old_cmd_resume = todo.cmd_resume
         old_cmd_move = todo.cmd_move
@@ -1596,6 +1663,7 @@ created two
             todo.cmd_done_any = lambda args: calls.append(("done", args.item, args.text)) or 0
             todo.cmd_unclose_any = lambda args: calls.append(("unclose", args.item)) or 0
             todo.cmd_delete_any = lambda args: calls.append(("delete", args.item, args.yes)) or 0
+            todo.cmd_due_any = lambda args: calls.append(("due", args.item, args.date, args.reminders)) or 0
             todo.cmd_wait = lambda args: calls.append(("wait", args.task, args.text, args.due)) or 0
             todo.cmd_resume = lambda args: calls.append(("resume", args.task, args.text)) or 0
             todo.cmd_move = lambda args: calls.append(("move", args.task, args.category)) or 0
@@ -1604,6 +1672,8 @@ created two
             parser.parse_args(["done", "vim", "delivered"]).func(parser.parse_args(["done", "vim", "delivered"]))
             parser.parse_args(["unclose", "vim"]).func(parser.parse_args(["unclose", "vim"]))
             parser.parse_args(["delete", "--yes", "vim"]).func(parser.parse_args(["delete", "--yes", "vim"]))
+            parser.parse_args(["due", "--reminder", "10m", "vim", "friday 11:00"]).func(parser.parse_args(["due", "--reminder", "10m", "vim", "friday 11:00"]))
+            parser.parse_args(["schedule", "vim", "friday 11:00"]).func(parser.parse_args(["schedule", "vim", "friday 11:00"]))
             parser.parse_args(["wait", "--due", "2d", "vim", "waiting"]).func(parser.parse_args(["wait", "--due", "2d", "vim", "waiting"]))
             parser.parse_args(["resume", "vim", "review returned"]).func(parser.parse_args(["resume", "vim", "review returned"]))
             parser.parse_args(["move", "vim", "Engineering"]).func(parser.parse_args(["move", "vim", "Engineering"]))
@@ -1613,6 +1683,7 @@ created two
             todo.cmd_done_any = old_cmd_done_any
             todo.cmd_unclose_any = old_cmd_unclose_any
             todo.cmd_delete_any = old_cmd_delete_any
+            todo.cmd_due_any = old_cmd_due_any
             todo.cmd_wait = old_cmd_wait
             todo.cmd_resume = old_cmd_resume
             todo.cmd_move = old_cmd_move
@@ -1622,6 +1693,8 @@ created two
             ("done", "vim", "delivered"),
             ("unclose", "vim"),
             ("delete", "vim", True),
+            ("due", "vim", "friday 11:00", ["10m"]),
+            ("due", "vim", "friday 11:00", []),
             ("wait", "vim", "waiting", "2d"),
             ("resume", "vim", "review returned"),
             ("move", "vim", "Engineering"),
@@ -2353,7 +2426,7 @@ created two
 
     def test_old_verb_commands_removed(self):
         parser = todo.build_parser()
-        for command in ("show", "check", "due"):
+        for command in ("show", "check"):
             with self.subTest(command=command):
                 with contextlib.redirect_stderr(io.StringIO()):
                     with self.assertRaises(SystemExit):
