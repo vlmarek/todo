@@ -67,9 +67,11 @@ List or add categories. Categories are Todoist child projects under `Work`.
 Shortcut commands cover common edits:
 
 ```sh
+todo add engineering "Update website dependencies" "build/test" "review"
 todo add task engineering "Update website dependencies" "build/test" "review"
 todo add step website "send review"
 todo add comment website "fixed test failure; staging deploy still running"
+todo add category training
 todo rename review "send review"
 todo done review
 todo close review
@@ -85,12 +87,13 @@ todo priority website 1
 todo comment website "fixed test failure; staging deploy still running"
 ```
 
-`todo add task`, `todo add step`, and `todo add comment` are shorter forms
-for the corresponding creation commands. `rename`, `done`/`close`, `unclose`,
-`delete`, and `due` search task and direct step titles. If multiple items
-match, an interactive terminal shows numbered choices. `schedule` is an alias
-for `due`. `wait`, `resume`, `move`, `priority`, and `comment` are task-only
-shortcuts.
+`todo add CATEGORY TASK [STEP ...]` creates a task by default. `todo add task`,
+`todo add step`, `todo add comment`, and `todo add category` are explicit
+forms for the corresponding creation commands. `rename`, `done`/`close`,
+`unclose`, `delete`, and `due` search task and direct step titles. If multiple
+items match, an interactive terminal shows numbered choices. `schedule` is an
+alias for `due`. `wait`, `resume`, `move`, `priority`, and `comment` are
+task-only shortcuts.
 
 ```sh
 todo task "website"

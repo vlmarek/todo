@@ -176,29 +176,46 @@ class TodoPureTests(unittest.TestCase):
 
     def test_add_parser_task_flag(self):
         parser = todo.build_parser()
+        bare_args = parser.parse_args(["add", "-p2", "--due", "2d", "engineering", "new task"])
         args = parser.parse_args(["add", "task", "-p1", "--due", "2d", "engineering", "new task"])
+        category_args = parser.parse_args(["add", "category", "training"])
         self.assertIs(args.func, todo.cmd_add_shortcut)
+        self.assertEqual(bare_args.kind, "task")
+        self.assertEqual(bare_args.add_priority, 2)
+        self.assertEqual(bare_args.due, "2d")
+        self.assertEqual(bare_args.values, ["engineering", "new task"])
         self.assertEqual(args.kind, "task")
         self.assertEqual(args.add_priority, 1)
         self.assertEqual(args.due, "2d")
         self.assertEqual(args.values, ["engineering", "new task"])
+        self.assertEqual(category_args.kind, "category")
+        self.assertEqual(category_args.values, ["training"])
 
     def test_add_shortcut_dispatches_task(self):
         calls = []
         old_cmd_add = todo.cmd_add
         try:
             todo.cmd_add = lambda args: calls.append(args) or 0
+            bare_args = todo.argparse.Namespace(kind=None, values=["engineering", "bare task", "step1"],
+                                                done=False, due="2d", reminder=["10m"], add_priority=2)
             args = todo.argparse.Namespace(kind="task", values=["engineering", "new task", "step1"],
                                            done=False, due="2d", reminder=["10m"], add_priority=1)
+            self.assertEqual(todo.cmd_add_shortcut(bare_args), 0)
             self.assertEqual(todo.cmd_add_shortcut(args), 0)
         finally:
             todo.cmd_add = old_cmd_add
         self.assertEqual(calls[0].category, "engineering")
-        self.assertEqual(calls[0].task, "new task")
+        self.assertEqual(calls[0].task, "bare task")
         self.assertEqual(calls[0].steps, ["step1"])
-        self.assertEqual(calls[0].priority, 1)
+        self.assertEqual(calls[0].priority, 2)
         self.assertEqual(calls[0].due, "2d")
         self.assertEqual(calls[0].reminders, ["10m"])
+        self.assertEqual(calls[1].category, "engineering")
+        self.assertEqual(calls[1].task, "new task")
+        self.assertEqual(calls[1].steps, ["step1"])
+        self.assertEqual(calls[1].priority, 1)
+        self.assertEqual(calls[1].due, "2d")
+        self.assertEqual(calls[1].reminders, ["10m"])
 
     def test_add_shortcut_dispatches_step(self):
         calls = []
@@ -227,6 +244,19 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(calls[0].task, "vim")
         self.assertEqual(calls[0].texts, ["bug", "review"])
 
+    def test_add_shortcut_dispatches_category(self):
+        calls = []
+        old_cmd_category = todo.cmd_category
+        try:
+            todo.cmd_category = lambda args: calls.append(args) or 0
+            args = todo.argparse.Namespace(kind=None, values=["category", "training"],
+                                           done=False, due=None, reminder=[], add_priority=None)
+            self.assertEqual(todo.cmd_add_shortcut(args), 0)
+        finally:
+            todo.cmd_category = old_cmd_category
+        self.assertEqual(calls[0].add, "training")
+        self.assertFalse(calls[0].refresh)
+
     def test_add_shortcut_rejects_comment_due(self):
         with self.assertRaises(todo.TodoError):
             todo.cmd_add_shortcut(todo.argparse.Namespace(kind="comment", values=["vim", "note"],
@@ -237,6 +267,24 @@ class TodoPureTests(unittest.TestCase):
         self.assertEqual(todo.expand_help_command(["help", "task"]), ["task", "--help"])
         self.assertEqual(todo.expand_help_command(["help", "task", "--due"]), ["task", "--due", "--help"])
         self.assertEqual(todo.expand_help_command(["task", "website"]), ["task", "website"])
+
+    def test_add_command_expansion(self):
+        self.assertEqual(
+            todo.expand_add_command(["add", "engineering", "new task"]),
+            ["add", "task", "engineering", "new task"],
+        )
+        self.assertEqual(
+            todo.expand_add_command(["add", "--due", "2d", "engineering", "new task"]),
+            ["add", "task", "--due", "2d", "engineering", "new task"],
+        )
+        self.assertEqual(
+            todo.expand_add_command(["add", "--due", "2d", "step", "website", "review"]),
+            ["add", "step", "--due", "2d", "website", "review"],
+        )
+        self.assertEqual(
+            todo.expand_add_command(["--color=never", "add", "engineering", "new task"]),
+            ["--color=never", "add", "task", "engineering", "new task"],
+        )
 
     def test_help_command_prints_subcommand_help(self):
         out = io.StringIO()

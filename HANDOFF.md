@@ -129,9 +129,11 @@ argparse parses the command.
 Common shortcut commands:
 
 ```sh
+todo add CATEGORY TASK [STEP ...]
 todo add task CATEGORY TASK [STEP ...]
 todo add step TASK STEP [STEP ...]
 todo add comment TASK TEXT [TEXT ...]
+todo add category CATEGORY
 todo rename ITEM NEW_NAME
 todo done ITEM
 todo close ITEM
@@ -146,13 +148,17 @@ todo priority TASK P
 todo comment TASK TEXT [TEXT ...]
 ```
 
-`todo add task`, `todo add step`, and `todo add comment` delegate to the
-existing task, step, and comment creation paths. `rename`, `done`/`close`,
-`unclose`, and `delete` search both parent task titles and direct step titles.
-Ambiguous matches print a numbered choice list in an interactive terminal and
-refuse to guess non-interactively. `wait`, `resume`, `move`, `priority`, and
-`comment` are task-only shortcuts. `due` searches both parent task titles and
-direct step titles; `schedule` is an alias for `due`.
+`todo add CATEGORY TASK [STEP ...]` creates a task by default. `todo add task`,
+`todo add step`, `todo add comment`, and `todo add category` delegate to the
+existing task, step, comment, and category creation paths. `rename`,
+`done`/`close`, `unclose`, and `delete` search both parent task titles and
+direct step titles. Ambiguous matches print a numbered choice list in an
+interactive terminal and refuse to guess non-interactively. `wait`, `resume`,
+`move`, `priority`, and `comment` are task-only shortcuts. `due` searches both
+parent task titles and direct step titles; `schedule` is an alias for `due`.
+If the first argument after `todo add` is `task`, `step`, `comment`, or
+`category`, it is treated as an explicit kind; otherwise it is treated as the
+task category.
 
 Rename commands update Todoist item titles:
 

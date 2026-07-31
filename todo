@@ -23,6 +23,7 @@ import urllib.request
 import uuid
 
 
+ADD_EXPLICIT_KINDS = {"task", "step", "comment", "category"}
 APP_DIR = os.path.expanduser("~/.todo")
 CONFIG_PATH = os.path.join(APP_DIR, "config")
 CACHE_PATH = os.path.join(APP_DIR, "cache.json")
@@ -145,13 +146,17 @@ Show task comments, add comments, or edit all comments.
 """
 
 
-ADD_USAGE = """usage: todo add task [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+ADD_USAGE = """usage: todo add [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo add --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
+       todo add task [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo add task --done|--close [--due DATE] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
        todo add step [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]
        todo add step --done|--close [--due DATE] TASK STEP [STEP ...]
        todo add comment TASK TEXT [TEXT ...]
+       todo add category NAME
 
-Create a task, step, or comment.
+Create a task, step, comment, or category. Without an explicit kind, creates a
+task.
 """
 
 
@@ -2716,10 +2721,12 @@ def cmd_comment_noun(args):
 def cmd_add_shortcut(args):
     values = list(getattr(args, "values", []) or [])
     kind = getattr(args, "kind", None)
-    if kind is None and values:
+    if kind is None and values and values[0].lower() in ADD_EXPLICIT_KINDS:
         kind = values.pop(0).lower()
     if kind is None:
-        raise TodoUsage(ADD_USAGE)
+        if not values:
+            raise TodoUsage(ADD_USAGE)
+        kind = "task"
     kind = kind.lower()
     done = bool(getattr(args, "done", False))
     due_arg = getattr(args, "due", None)
@@ -2753,7 +2760,12 @@ def cmd_add_shortcut(args):
             raise TodoError("Use --done, --due, --reminder, and -pN only with `todo add task` or `todo add step`.")
         require_arg_count("comment --add", values, 2, 9999)
         return cmd_comment(argparse.Namespace(task=values[0], texts=values[1:], edit=False, refresh=False))
-    raise TodoError("Expected `task`, `step`, or `comment` after `todo add`.")
+    if kind == "category":
+        if done or due_arg is not None or reminder_offsets or add_priority is not None:
+            raise TodoError("Use --done, --due, --reminder, and -pN only when creating tasks or steps.")
+        require_arg_count("add", values, 1, 1)
+        return cmd_category(argparse.Namespace(add=values[0], refresh=False))
+    raise TodoError("Expected `task`, `step`, `comment`, or `category` after `todo add`.")
 
 
 def cmd_rename_shortcut(args):
@@ -3337,13 +3349,13 @@ def load_cached_runtime(refresh=False):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(
+    parser = TodoArgumentParser(
         prog="todo",
         description="Command-line helper for Todoist tasks.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""examples:
   todo now
-  todo add task operations "Deliver release" "check dashboard table" "close build"
+  todo add operations "Deliver release" "check dashboard table" "close build"
   todo add step "Deliver release" "check dashboard table"
   todo add comment "Deliver release" "dashboard looked good"
   todo rename "review" "send review"
@@ -3381,14 +3393,26 @@ def build_parser():
 
     p = sub.add_parser(
         "add",
-        help="create a task, step, or comment",
+        usage="todo add [task|step|comment|category] ...",
+        help="create a task, step, comment, or category",
         description=ADD_USAGE,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    p.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
+                   help="create the task or step already completed")
+    p.add_argument("--due", nargs="?", const=True, metavar="DATE", help="set initial due date")
+    p.add_argument("--reminder", action="append", metavar="OFFSET",
+                   help="add relative reminder: 0, 10m, 2h, 1d, or 'at due'; repeat for multiple reminders")
+    p.add_argument("-p1", dest="add_priority", action="store_const", const=1, help="set task priority 1")
+    p.add_argument("-p2", dest="add_priority", action="store_const", const=2, help="set task priority 2")
+    p.add_argument("-p3", dest="add_priority", action="store_const", const=3, help="set task priority 3")
+    p.add_argument("-p4", dest="add_priority", action="store_const", const=4, help="set task priority 4")
     p.set_defaults(func=cmd_add_shortcut, kind=None, values=[], done=False, due=None, reminder=[], add_priority=None)
     add_sub = p.add_subparsers(dest="kind", metavar="KIND")
 
-    add_task = add_sub.add_parser("task", help="create a task", description=ADD_USAGE,
+    add_task = add_sub.add_parser("task", help="create a task",
+                                  usage="todo add task [--due DATE] [--reminder OFFSET] [-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]",
+                                  description=ADD_USAGE,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     add_task.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
                           help="create the task already completed")
@@ -3402,7 +3426,9 @@ def build_parser():
     add_task.add_argument("values", nargs="*", help="CATEGORY TASK [STEP ...]")
     add_task.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
 
-    add_step = add_sub.add_parser("step", help="create one or more steps", description=ADD_USAGE,
+    add_step = add_sub.add_parser("step", help="create one or more steps",
+                                  usage="todo add step [--due DATE] [--reminder OFFSET] TASK STEP [STEP ...]",
+                                  description=ADD_USAGE,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     add_step.add_argument("--done", "--close", "--closed", dest="done", action="store_true",
                           help="create the step already completed")
@@ -3412,10 +3438,19 @@ def build_parser():
     add_step.add_argument("values", nargs="*", help="TASK STEP [STEP ...]")
     add_step.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
 
-    add_comment = add_sub.add_parser("comment", help="create one or more comments", description=ADD_USAGE,
+    add_comment = add_sub.add_parser("comment", help="create one or more comments",
+                                     usage="todo add comment TASK TEXT [TEXT ...]",
+                                     description=ADD_USAGE,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     add_comment.add_argument("values", nargs="*", help="TASK TEXT [TEXT ...]")
     add_comment.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
+
+    add_category = add_sub.add_parser("category", help="create a category",
+                                      usage="todo add category NAME",
+                                      description=ADD_USAGE,
+                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    add_category.add_argument("values", nargs="*", help="NAME")
+    add_category.set_defaults(func=cmd_add_shortcut, done=False, due=None, reminder=[], add_priority=None)
 
     p = sub.add_parser(
         "rename",
@@ -3674,6 +3709,62 @@ def expand_help_command(argv):
             return ["--help"]
         return values[1:] + ["--help"]
     return values
+
+
+def expand_add_command(argv):
+    values = list(sys.argv[1:] if argv is None else argv)
+    index = 0
+    while index < len(values):
+        token = values[index]
+        if token in ("-h", "--help"):
+            return values
+        if token == "--color":
+            index += 2
+            continue
+        if token.startswith("--color="):
+            index += 1
+            continue
+        break
+    if index >= len(values) or values[index] != "add":
+        return values
+    rest = values[index + 1:]
+    if not rest or rest[0] in ("-h", "--help"):
+        return values
+
+    pos = 0
+    while pos < len(rest):
+        token = rest[pos]
+        if token in ("-h", "--help"):
+            return values
+        if token == "--":
+            pos += 1
+            break
+        if token in ("--done", "--close", "--closed", "-p1", "-p2", "-p3", "-p4"):
+            pos += 1
+            continue
+        if token.startswith("--due=") or token.startswith("--reminder="):
+            pos += 1
+            continue
+        if token in ("--due", "--reminder"):
+            pos += 2
+            continue
+        if token.startswith("-"):
+            return values
+        break
+    if pos >= len(rest):
+        return values
+
+    first_value = rest[pos].lower()
+    if first_value in ADD_EXPLICIT_KINDS:
+        rewritten_rest = [rest[pos]] + rest[:pos] + rest[pos + 1:]
+    else:
+        rewritten_rest = ["task"] + rest
+    return values[:index + 1] + rewritten_rest
+
+
+class TodoArgumentParser(argparse.ArgumentParser):
+    def parse_args(self, args=None, namespace=None):
+        return super().parse_args(expand_add_command(args), namespace)
 
 
 def main(argv=None):
