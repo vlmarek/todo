@@ -286,6 +286,40 @@ class TodoPureTests(unittest.TestCase):
             ["--color=never", "add", "task", "engineering", "new task"],
         )
 
+    def test_task_lookup_command_expansion(self):
+        self.assertEqual(
+            todo.expand_task_lookup_command(["todo"]),
+            ["task", "--_implicit-task-selector", "todo", "todo"],
+        )
+        self.assertEqual(
+            todo.expand_task_lookup_command(["--color=never", "release", "prep"]),
+            ["--color=never", "task", "--_implicit-task-selector", "release prep", "release prep"],
+        )
+        self.assertEqual(todo.expand_task_lookup_command(["now"]), ["now"])
+        self.assertEqual(todo.expand_task_lookup_command(["unknown", "--refresh"]), ["unknown", "--refresh"])
+
+    def test_unknown_top_level_command_parses_as_task_lookup(self):
+        parser = todo.build_parser()
+        args = parser.parse_args(["todo"])
+        self.assertIs(args.func, todo.cmd_task)
+        self.assertEqual(args.values, ["todo"])
+        self.assertEqual(args.implicit_task_selector, "todo")
+
+    def test_implicit_task_lookup_prints_warning(self):
+        calls = []
+        old_cmd_task = todo.cmd_task
+        try:
+            todo.cmd_task = lambda args: calls.append(args) or 0
+            out = io.StringIO()
+            err = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                self.assertEqual(todo.main(["todo"]), 0)
+        finally:
+            todo.cmd_task = old_cmd_task
+        self.assertEqual(calls[0].values, ["todo"])
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("todo: no command 'todo'; listing tasks matching 'todo'.", err.getvalue())
+
     def test_help_command_prints_subcommand_help(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

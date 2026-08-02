@@ -24,6 +24,37 @@ import uuid
 
 
 ADD_EXPLICIT_KINDS = {"task", "step", "comment", "category"}
+TOP_LEVEL_COMMANDS = {
+    "add",
+    "categories",
+    "category",
+    "check",
+    "close",
+    "closed",
+    "comment",
+    "delete",
+    "done",
+    "due",
+    "help",
+    "init",
+    "move",
+    "now",
+    "priority",
+    "rename",
+    "reopen",
+    "report",
+    "resume",
+    "schedule",
+    "search",
+    "show",
+    "someday",
+    "step",
+    "task",
+    "unclose",
+    "undone",
+    "wait",
+    "waiting",
+}
 APP_DIR = os.path.expanduser("~/.todo")
 CONFIG_PATH = os.path.join(APP_DIR, "config")
 CACHE_PATH = os.path.join(APP_DIR, "cache.json")
@@ -3661,6 +3692,7 @@ move, priority, rename, delete, comment, and add step.""",
     p.add_argument("--comment", action="store_true", help="add one or more comments to a task")
     p.add_argument("--step", action="store_true", help="add one or more steps to a task")
     p.add_argument("--refresh", action="store_true", help="sync Todoist before showing a task")
+    p.add_argument("--_implicit-task-selector", dest="implicit_task_selector", help=argparse.SUPPRESS)
     p.add_argument("-p1", dest="add_priority", action="store_const", const=1,
                    help="set priority 1, or set initial priority when adding a task")
     p.add_argument("-p2", dest="add_priority", action="store_const", const=2,
@@ -3840,6 +3872,39 @@ def expand_add_command(argv):
     return values[:index + 1] + rewritten_rest
 
 
+def split_global_options(values):
+    index = 0
+    while index < len(values):
+        token = values[index]
+        if token in ("-h", "--help"):
+            return values, index
+        if token == "--color":
+            index += 2
+            continue
+        if token.startswith("--color="):
+            index += 1
+            continue
+        break
+    return values[:index], index
+
+
+def expand_task_lookup_command(argv):
+    values = list(sys.argv[1:] if argv is None else argv)
+    prefix, index = split_global_options(values)
+    if index >= len(values):
+        return values
+    command = values[index]
+    rest = values[index + 1:]
+    if command.startswith("-") or command.lower() in TOP_LEVEL_COMMANDS:
+        return values
+    if any(token.startswith("-") for token in rest):
+        return values
+    selector = " ".join([command] + rest).strip()
+    if not selector:
+        return values
+    return prefix + ["task", "--_implicit-task-selector", selector, selector]
+
+
 class TodoArgumentParser(argparse.ArgumentParser):
     def format_help(self):
         if self.prog == "todo":
@@ -3847,7 +3912,9 @@ class TodoArgumentParser(argparse.ArgumentParser):
         return super().format_help()
 
     def parse_args(self, args=None, namespace=None):
-        return super().parse_args(expand_add_command(args), namespace)
+        values = expand_add_command(args)
+        values = expand_task_lookup_command(values)
+        return super().parse_args(values, namespace)
 
 
 def main(argv=None):
@@ -3858,6 +3925,12 @@ def main(argv=None):
         parser.print_help()
         return 0
     try:
+        if getattr(args, "implicit_task_selector", None):
+            print(
+                f"todo: no command {args.implicit_task_selector!r}; "
+                f"listing tasks matching {args.implicit_task_selector!r}.",
+                file=sys.stderr,
+            )
         return args.func(args)
     except TodoUsage as e:
         print(str(e).rstrip(), file=sys.stderr)
