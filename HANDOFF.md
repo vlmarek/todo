@@ -160,6 +160,12 @@ If the first argument after `todo add` is `task`, `step`, `comment`, or
 `category`, it is treated as an explicit kind; otherwise it is treated as the
 task category.
 
+Unknown top-level non-option commands are treated as implicit task lookups.
+For example, `todo todo` behaves like `todo task todo` and prints a warning
+that no command was found before listing matching tasks. Known commands,
+options, help forms, and intentionally removed command names still parse
+strictly.
+
 `todo task --...` and `todo step --...` mutation modes are compatibility forms
 for older usage and scripts. Prefer the verb commands in help examples and
 documentation.
