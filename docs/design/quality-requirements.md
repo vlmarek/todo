@@ -258,6 +258,10 @@ automatically retried.
   the parent and leave every inline step unscheduled.
 - Multi-step creation with any scheduling option must fail before creating any
   step; multiple unscheduled steps remain supported.
+- Task- and single-step creation must support `--hide REASON`, persist the
+  waiting label and nonempty reason metadata, and enforce the normal hiding
+  invariants before creation. Multi-step creation with `--hide` must fail before
+  mutation.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before

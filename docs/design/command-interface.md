@@ -171,8 +171,9 @@ A successful reopen always adds a progress comment. Task comments use
 
 ```console
 todo add [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
-         [--reminder OFFSET ...] CATEGORY TASK [STEP ...]
-todo add step [--due DATE] [--reminder OFFSET ...]
+         [--reminder OFFSET ...] [--hide REASON]
+         CATEGORY TASK [STEP ...]
+todo add step [--due DATE] [--reminder OFFSET ...] [--hide REASON]
               TASK STEP [STEP ...]
 todo rename ITEM NEW_NAME
 todo priority ITEM P
@@ -197,14 +198,19 @@ the same date parsing, timed-date requirement, offset syntax, and pre-mutation
 validation as `todo wait`/`todo due`/`todo schedule`. A reminder cannot be
 created without a timed attention value.
 
+Task and step creation accept `--hide REASON`. The new item receives the
+Todoist `waiting` label and a nonempty hiding-reason metadata block, and is
+subject to the same attention-date and parent/step visibility invariants as
+`todo wait --hide`. A missing or whitespace-only reason fails before creation.
+
 On `todo add ... CATEGORY TASK [STEP ...]`, `--due` and `--reminder` apply only
 to the new parent task. Inline-created steps receive their normal inherited
 priority but no attention value or reminders.
 
-`todo add step` may create multiple unscheduled steps in one invocation. If
-`--due` or any `--reminder` is supplied, exactly one step title is allowed;
-combining scheduling options with multiple new steps is an error before any
-step is created.
+`todo add step` may create multiple ordinary unscheduled steps in one
+invocation. If `--due`, any `--reminder`, or `--hide` is supplied, exactly one
+step title is allowed; combining any of these item-specific options with
+multiple new steps is an error before any step is created.
 
 `todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
 `P` case-insensitive) as equivalent forms. It can select either an open parent
