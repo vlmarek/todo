@@ -424,8 +424,9 @@ normal commands fail with a clear configuration/model error until the Todoist
 project or local configuration is corrected. The CLI does not silently select
 or create a replacement during ordinary operation.
 
-There is no built-in root-project name. Fresh initialization requires the user
-to choose and persist one explicitly.
+There is no built-in root-project or category configuration. The user must
+create a complete local config before initialization; `todo init` consumes that
+config rather than choosing settings.
 
 If synchronization discovers a project nested beneath a category, model
 validation fails. Read commands print the hierarchy error to stderr, exit

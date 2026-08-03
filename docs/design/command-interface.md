@@ -78,18 +78,18 @@ not an error because search does not promise to select an item.
 ## Initialization
 
 ```console
-todo init [--token TOKEN] [--project NAME]
+todo init [--token TOKEN]
 ```
 
-`todo init` creates local configuration as needed and provisions the configured
-root project, configured initial category projects, and Todoist `waiting` label
-when absent. Provisioning is explicit to `init`; ordinary commands never create
-missing structural objects implicitly.
+Before running `todo init`, the user creates `~/.todo/config` and specifies the
+root project, initial categories, and hidden categories. Init reads and validates
+that configuration, then provisions the configured root project, configured
+initial category projects, and Todoist `waiting` label when absent. It does not
+invent defaults or prompt for structural settings. A missing, malformed, or
+incomplete config fails before Todoist synchronization or provisioning.
 
-A fresh configuration has no default root-project name and requires
-`--project NAME`. A later `todo init` may omit the option and reuse the
-configured name. If neither the option nor an existing configured name is
-available, init fails before synchronization or provisioning.
+Provisioning is explicit to `init`; ordinary commands never create missing
+structural objects implicitly.
 
 At runtime, `TODOIST_TOKEN` overrides any Todoist token stored in
 `~/.todo/config`. The configured token is used only when the environment

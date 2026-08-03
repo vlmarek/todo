@@ -58,10 +58,11 @@ variable is absent.
 
 ## Initialization flow
 
-`todo init` creates or updates local configuration, synchronizes Todoist, and
-provisions a missing configured root project, configured initial categories,
-and the `waiting` label. Ordinary command flows only validate these structures
-and never provision them implicitly.
+The user creates local configuration before initialization. `todo init`
+validates it, synchronizes Todoist, and provisions a missing configured root
+project, configured initial categories, and the `waiting` label. It does not
+choose structural settings or create a default config. Ordinary command flows
+only validate these structures and never provision them implicitly.
 
 ## Read-only flow
 
