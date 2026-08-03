@@ -11,9 +11,10 @@ parts established so far; omitted commands still require documentation.
 todo now
 todo now --all
 todo now --refresh
-todo waiting
-todo someday
-todo task SELECTOR
+todo waiting [--refresh]
+todo someday [--refresh]
+todo task [--refresh] SELECTOR
+todo category [--refresh]
 ```
 
 `todo waiting` is the focused view of currently suppressed temporary-hidden
@@ -23,6 +24,11 @@ whose attention day has arrived.
 
 `todo someday` is the focused view of every open task and open step in all
 configured hidden categories. Completed items remain excluded.
+
+Every read view (`now`, `waiting`, `someday`, `task`, and `category`) accepts
+`--refresh`. Without it the command reads the local cache. With it the command
+synchronizes from Todoist before validating and displaying the result. A failed
+refresh exits nonzero and prints no normal view output.
 
 ## Initialization
 
@@ -64,7 +70,7 @@ todo add CATEGORY TASK [STEP ...]
 todo add step TASK STEP [STEP ...]
 todo rename ITEM NEW_NAME
 todo delete [--yes] ITEM
-todo category
+todo category [--refresh]
 ```
 
 `todo category` lists categories alphabetically using lowercase comparison.

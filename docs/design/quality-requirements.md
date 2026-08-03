@@ -71,6 +71,8 @@ Status: Proposed
 - Todoist is the source of truth for task data.
 - Read-only commands must work from the local cache without network access.
 - Cache deletion must be recoverable through refresh.
+- Every cached read command must support `--refresh`; refresh failure must exit
+  nonzero without printing partial or stale normal output.
 - Local persistent writes must not leave partially written state.
 - Concurrent invocations must not corrupt local state.
 

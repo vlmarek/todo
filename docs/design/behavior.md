@@ -370,6 +370,11 @@ All managed task data is cached so read-only operations can run without
 Todoist access. State-changing commands and `todo report` synchronize first.
 A failed synchronization prevents mutation.
 
+Every cached read command (`todo now`, `todo waiting`, `todo someday`, `todo
+task`, and `todo category`) accepts `--refresh`. The option synchronizes from
+Todoist before the view is evaluated. If refresh fails, the command exits
+nonzero without printing an actionable list, detail view, or category list.
+
 Changes made on a phone are observed on the next synchronization because
 Todoist is authoritative.
 
