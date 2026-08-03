@@ -52,8 +52,10 @@ a notification. An item may have multiple reminders.
 
 ### Own hiding policy
 
-An item configured with `--hide` is suppressed before its local attention day.
-The stored policy remains after that day, even though the item is then visible.
+An item configured with `--hide` carries the Todoist `waiting` label and is
+suppressed before its local attention day. The label remains after that day,
+even though the item is then visible. Todoist is authoritative for the label,
+so label changes made on the phone are observed after synchronization.
 
 ### Effective visibility
 

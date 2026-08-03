@@ -21,6 +21,10 @@ Visibility before the attention day is controlled independently by `--hide`.
 A hidden item becomes visible at the beginning of its local attention day. An
 exact time remains relevant to display, urgency ordering, and reminders.
 
+The policy is persisted using the Todoist `waiting` label so it synchronizes
+across clients. Effective visibility is derived from that label and the current
+attention day; reaching the day does not remove the label.
+
 Tasks and steps provide separate levels at which attention values may be set.
 A step may not have an attention day before the attention day of a hidden
 parent task.
@@ -33,4 +37,3 @@ parent task.
 - A task and its steps can express multiple dates.
 - Parent/step validation is required before mutations.
 - Exact times and list visibility use related but different comparisons.
-

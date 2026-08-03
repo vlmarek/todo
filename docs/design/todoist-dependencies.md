@@ -18,6 +18,7 @@ Todoist stores:
 - project/category membership
 - due/attention values and recurrence definitions
 - reminders
+- the `waiting` label used as the persisted own hiding policy
 - creation, update, and completion timestamps
 
 A replacement backend needs durable storage and stable object identity. The
@@ -141,4 +142,3 @@ These are primarily `todo` behavior and can survive a backend replacement:
 
 Some of these currently encode Todoist identifiers and data shapes and would
 need an adapter-neutral domain representation before replacing the backend.
-

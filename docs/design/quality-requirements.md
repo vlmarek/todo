@@ -34,6 +34,8 @@ Status: Proposed
   both succeed.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
+- Hiding-policy tests must verify `waiting` label addition, removal, phone-side
+  synchronization, and persistence after the attention day arrives.
 - Moving work into a configured hidden category must not implicitly discard
   dates, recurrence, reminders, or hiding policies.
 - Invalid scheduling data discovered inside a configured hidden category must
