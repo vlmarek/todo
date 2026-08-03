@@ -3,17 +3,6 @@
 Only genuinely unresolved behavior belongs here. Implementation must not choose
 an answer silently.
 
-## Reminder replacement semantics
-
-Status: Open
-
-When one or more `--reminder OFFSET` arguments are supplied for an item that
-already has reminders, should they replace the complete reminder set or be
-added to it?
-
-`--reminder clear ITEM` is intended to remove all reminders without changing
-the attention value.
-
 ## Exact tie-breaking within a task group
 
 Status: Open

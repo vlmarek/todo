@@ -96,8 +96,10 @@ An item may have multiple relative reminders. Reminder offsets are relative to
 the exact occurrence time and are handled by Todoist so notifications appear
 on the phone.
 
-Reminder behavior when new offsets are supplied to an item that already has
-reminders remains an open question.
+When one or more `--reminder OFFSET` arguments are supplied, they replace the
+item's complete existing reminder set. They are not added to the previous set.
+Repeating `--reminder` within one invocation defines multiple values in the new
+set.
 
 ## Reporting
 

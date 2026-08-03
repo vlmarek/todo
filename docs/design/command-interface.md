@@ -51,6 +51,11 @@ Supplying a date without `--hide` removes the item's own hiding policy.
 Supplying `--hide` enables it. Clearing the item removes attention, recurrence,
 reminders, and its own hiding policy.
 
+One or more supplied `--reminder OFFSET` arguments replace the complete
+existing reminder set. Repeating the option defines multiple reminders in the
+replacement set. `--reminder clear ITEM` removes the complete set without
+changing the attention value.
+
 ## Reporting
 
 ```console
@@ -73,4 +78,3 @@ until Todoist has accepted the mutation.
 
 Warnings and errors go to stderr. Normal results and successful change details
 go to stdout.
-
