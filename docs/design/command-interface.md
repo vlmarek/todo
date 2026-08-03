@@ -261,6 +261,11 @@ completion marker and shows its own priority and attention value, but those
 values do not affect ordering. Completing a step changes its marker in this
 view; it does not add a separate task-detail history record.
 
+Every history entry displays the timestamp that determines its position: the
+step's creation timestamp or the comment's current posting timestamp. A
+completed step still displays its creation timestamp in this timeline; its
+completion state is conveyed by the marker.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a

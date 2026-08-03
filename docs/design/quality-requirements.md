@@ -186,6 +186,7 @@ automatically retried.
   timestamps and step creation timestamps. Step priority and attention must not
   affect this order, and completion must change the marker rather than create a
   second history record.
+- Every task-history entry must display the timestamp used for its position.
 
 ## Testability
 
