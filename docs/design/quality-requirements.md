@@ -135,6 +135,9 @@ automatically retried.
 - Hidden-report tests must nest independently hidden steps with their reasons
   under the parent while excluding steps hidden solely through inheritance,
   and order those steps by lowercase title.
+- Waiting-view tests must use the same effective-hiding membership and ordering
+  as the report snapshot while excluding configured hidden categories and
+  arrived waiting labels.
 - Report tests must verify that optional task-completion text becomes a normal
   `Done: TEXT` progress comment in the same reporting period.
 - Report tests must verify that deleting a task before generation removes all

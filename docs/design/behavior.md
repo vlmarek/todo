@@ -20,6 +20,14 @@ completed work.
 
 Completed steps are visible in `todo task SELECTOR` with a checked square.
 
+## `todo waiting`
+
+`todo waiting` shows the same current temporary-hiding snapshot used by the
+report's `Hidden` section, including independently hidden steps nested under
+their parents. It does not include configured hidden categories or items whose
+attention day has arrived. Tasks and nested steps use the same alphabetical
+ordering established for the report snapshot.
+
 ### Urgency ordering
 
 Task groups are sorted using these keys in order:

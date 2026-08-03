@@ -11,8 +11,14 @@ parts established so far; omitted commands still require documentation.
 todo now
 todo now --all
 todo now --refresh
+todo waiting
 todo task SELECTOR
 ```
+
+`todo waiting` is the focused view of currently suppressed temporary-hidden
+tasks and independently hidden steps. It excludes configured hidden categories
+such as `Someday` and excludes items whose stored `waiting` label remains but
+whose attention day has arrived.
 
 ## Initialization
 
