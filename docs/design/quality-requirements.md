@@ -10,6 +10,8 @@ Status: Proposed
   match the selector.
 - Acceptance tests must distinguish a quoted contiguous-phrase selector from
   multiple all-terms selectors, including reversed and non-contiguous terms.
+- Selection tests must distinguish task-only noun commands from implicit
+  task-and-step selection, including a matching step under a nonmatching parent.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.

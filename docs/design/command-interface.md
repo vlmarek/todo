@@ -88,6 +88,17 @@ Quoting controls selector structure:
 Shell quoting therefore affects matching semantics and is not merely a way to
 preserve spaces in one equivalent selector string.
 
+Candidate type depends on the command form:
+
+- `todo task SELECTOR` searches parent tasks only. A matching step is not
+  returned as the selected item.
+- An implicit top-level selector such as `todo review` searches tasks and steps
+  as independent candidates. A step may match even when its parent task title
+  does not contain the selector.
+
+If an implicit selector matches both tasks and steps, all matching candidates
+participate in normal ambiguity handling.
+
 ## Mutation output
 
 After a successful attention or reminder change, print previous values when
