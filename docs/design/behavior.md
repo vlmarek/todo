@@ -297,7 +297,8 @@ its parent task with its own hiding reason, even when the parent itself is
 visible. A step suppressed only because it inherits a hidden parent policy is
 not listed as a separate hidden entry. When both parent and step have effective
 own hiding policies, the parent is listed once and the step is nested beneath
-it.
+it. Independently hidden steps beneath one parent are ordered alphabetically by
+lowercase step title.
 
 `Hidden` is a current-state snapshot rather than a cursor-bounded event list.
 It includes every currently suppressed temporary-hidden task even when the task
