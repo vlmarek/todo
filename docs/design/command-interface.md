@@ -70,6 +70,10 @@ ambiguous in an interactive terminal, the command displays matching choices
 and asks the user to select one. A non-interactive mutating command must refuse
 to guess.
 
+An exact title match does not take precedence over other matching results. For
+example, selector `Deploy` remains ambiguous when both `Deploy` and
+`Deploy staging` match, and both are presented for selection.
+
 ## Mutation output
 
 After a successful attention or reminder change, print previous values when

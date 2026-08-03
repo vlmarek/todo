@@ -6,6 +6,8 @@ Status: Proposed
 
 - Validation must complete before any Todoist mutation.
 - An ambiguous mutation must not guess which task or step to change.
+- Exact title equality must not bypass ambiguity handling when other items also
+  match the selector.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
