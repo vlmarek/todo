@@ -132,6 +132,11 @@ Deleting an existing comment requires removing its entire header-and-body block.
 Removing only its header is not a deletion instruction and must not cause the
 orphaned body to be merged into another comment.
 
+The complete saved buffer is parsed and validated before any comment mutation.
+Text outside a marked block, malformed or unknown headers, duplicate existing
+IDs, or an existing ID that was not present in the generated buffer causes a
+nonzero error with no Todoist changes.
+
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
 confirmation, no item is completed.

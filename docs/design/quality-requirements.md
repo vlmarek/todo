@@ -73,6 +73,9 @@ Status: Proposed
 - Comment-editor deletion tests must require removal of the complete marked
   block and must never merge text left after a removed header into an adjacent
   comment.
+- Malformed comment-editor buffers must fail validation before mutation,
+  including orphan text, malformed or unknown headers, duplicate IDs, and IDs
+  not present in the generated buffer.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side
