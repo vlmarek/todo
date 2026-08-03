@@ -58,6 +58,8 @@ When the selected item is a parent task, the confirmation preview lists the
 parent and all of its open and completed steps with their completion markers.
 The prompt makes clear that confirming deletion removes the entire displayed
 task tree. Confirmation is requested only after the complete scope is printed.
+`--yes` skips only the confirmation prompt; it does not suppress this deletion
+scope output, which is printed before the mutation in all modes.
 
 ## Attention and reminders
 
