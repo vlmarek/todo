@@ -61,6 +61,9 @@ Status: Proposed
   newest.
 - Comment creation with multiple text arguments must create one comment per
   argument in command-line order.
+- A partial multi-comment creation failure must retain accepted comments, stop
+  further creation, report the accepted and failed arguments, exit nonzero, and
+  send no compensating deletion.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side

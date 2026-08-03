@@ -102,6 +102,11 @@ boundary between comments. Steps cannot own comments, so both forms select
 parent tasks only. Displayed comments are ordered chronologically from oldest to
 newest.
 
+Multiple comments are created sequentially. If Todoist accepts one or more and
+a later creation fails, the accepted comments remain. The command stops, reports
+which comments were created and which creation failed, and exits nonzero without
+compensating deletion.
+
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
 confirmation, no item is completed.
