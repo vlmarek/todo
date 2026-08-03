@@ -99,6 +99,11 @@ Candidate type depends on the command form:
 If an implicit selector matches both tasks and steps, all matching candidates
 participate in normal ambiguity handling.
 
+Normal item selection matches titles only. Task descriptions, waiting metadata,
+and comments do not make a task or step match a selector. A dedicated search
+command may have broader searchable fields, but does not change targeting
+semantics for mutation and inspection commands.
+
 ## Mutation output
 
 After a successful attention or reminder change, print previous values when

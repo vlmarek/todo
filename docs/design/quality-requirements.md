@@ -12,6 +12,8 @@ Status: Proposed
   multiple all-terms selectors, including reversed and non-contiguous terms.
 - Selection tests must distinguish task-only noun commands from implicit
   task-and-step selection, including a matching step under a nonmatching parent.
+- Mutation and inspection selector tests must prove that descriptions and
+  comments cannot cause an item to be targeted.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
