@@ -114,6 +114,20 @@ comment edits, deletions, and additions to Todoist. An unchanged buffer performs
 no mutation and exits successfully. Steps and completed parent tasks are not
 editable through this command.
 
+The editor buffer uses marked blocks:
+
+```text
+[id: COMMENT_ID posted: TIMESTAMP]
+existing comment text
+
+[new]
+new comment text
+```
+
+Each existing block carries its stable Todoist comment ID and displayed posting
+timestamp. Each `[new]` block represents one new comment. Multiple existing and
+new blocks may appear in the same buffer.
+
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
 confirmation, no item is completed.
