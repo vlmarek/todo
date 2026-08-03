@@ -18,6 +18,10 @@ task and step selector matching is independently case-insensitive.
 Category names are unique under case-insensitive comparison even though normal
 category selection is case-sensitive.
 
+The supported project hierarchy is exactly two levels: the configured root and
+its direct category children. A deeper descendant project is invalid model
+state rather than another category.
+
 ### Hidden category
 
 A category configured to be excluded from normal `todo now` output. `Someday`
@@ -114,6 +118,7 @@ it is not an independently stored state.
     be resolved by commands that reopen or delete them; editing requires
     reopening first. Normal parent-task inspection remains open-only.
 17. Every item carrying an own hiding policy has a non-empty hiding reason.
+18. No project may be nested below a category within the configured root tree.
 
 ## Derived task urgency
 

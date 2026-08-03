@@ -46,6 +46,8 @@ Status: Proposed
   be reported during reads without exposing the category or modifying Todoist.
 - Read output is atomic with respect to model validation: an invalid model must
   produce no partial normal output and must return a nonzero status.
+- Model validation must reject any project deeper than a direct category child
+  beneath the configured root and abort normal read output.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 

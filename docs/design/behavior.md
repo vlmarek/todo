@@ -342,3 +342,8 @@ The following local state cannot be reconstructed solely from Todoist:
 `todo category` lists current child projects of the configured root project in
 alphabetical order using lowercase name comparison. Todoist's manual project
 order does not affect this view.
+
+If synchronization discovers a project nested beneath a category, model
+validation fails. Read commands print the hierarchy error to stderr, exit
+nonzero, and produce no normal output. The CLI does not flatten, ignore, or
+silently reinterpret the deeper project.
