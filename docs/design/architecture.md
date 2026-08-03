@@ -100,7 +100,11 @@ must not be reopened merely to make them deletable.
 
 1. Load the report cursor without changing it.
 2. Synchronize current Todoist data and relevant activity.
-3. Generate Finished, Progress, and Hidden sections.
-4. Print the report.
-5. If and only if `--final` was requested and all previous steps succeeded,
+3. Retrieve every comment set required to evaluate and render the report.
+4. Generate Finished, Progress, and Hidden sections entirely in memory.
+5. Print the report.
+6. If and only if `--final` was requested and all previous steps succeeded,
    advance the cursor.
+
+Any required synchronization, activity, or comment failure aborts before
+normal report output and leaves the cursor unchanged.

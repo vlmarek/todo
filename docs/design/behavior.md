@@ -236,6 +236,13 @@ user does not mistake the operation for an unchanged failure.
 `todo report` synchronizes Todoist and creates a report beginning at the stored
 report cursor. It does not change the cursor.
 
+Report generation requires a successful current-state synchronization,
+complete activity-history retrieval for the interval, and every comment lookup
+needed to evaluate or render report entries. Failure of any required source
+aborts generation: no report is printed, the command exits nonzero, and the
+cursor remains unchanged. A report is never intentionally produced from a
+partial event or comment set.
+
 `todo report --final` advances the cursor only after synchronization and report
 generation succeed. A report period is start-exclusive and end-inclusive:
 `(previous cursor, report end]`. An event exactly at the previous cursor is not

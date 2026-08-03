@@ -32,6 +32,8 @@ Status: Proposed
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
+- Missing current state, activity history, or required comments must abort the
+  entire report before normal output; partial reports are forbidden.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side
