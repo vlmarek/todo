@@ -15,6 +15,7 @@ todo waiting [--refresh]
 todo someday [--refresh]
 todo task [--refresh] SELECTOR
 todo category [--refresh]
+todo search [--refresh] TEXT
 ```
 
 `todo waiting` is the focused view of currently suppressed temporary-hidden
@@ -25,10 +26,17 @@ whose attention day has arrived.
 `todo someday` is the focused view of every open task and open step in all
 configured hidden categories. Completed items remain excluded.
 
-Every read view (`now`, `waiting`, `someday`, `task`, and `category`) accepts
-`--refresh`. Without it the command reads the local cache. With it the command
-synchronizes from Todoist before validating and displaying the result. A failed
-refresh exits nonzero and prints no normal view output.
+Every read view (`now`, `waiting`, `someday`, `task`, `category`, and `search`)
+accepts `--refresh`. Without it the command reads the local cache. With it the
+command synchronizes from Todoist before validating and displaying the result.
+A failed refresh exits nonzero and prints no normal view output.
+
+## Discovery
+
+`todo search TEXT` searches broadly across task titles, step titles, ordinary
+descriptions, temporary-waiting reasons, and task comments. It only displays
+matches and never selects an item or changes state. Its searchable fields do
+not affect the title-only selector rules used by other commands.
 
 ## Initialization
 
@@ -220,9 +228,9 @@ If an implicit selector matches both tasks and steps, all matching candidates
 participate in normal ambiguity handling.
 
 Normal item selection matches titles only. Task descriptions, waiting metadata,
-and comments do not make a task or step match a selector. A dedicated search
-command may have broader searchable fields, but does not change targeting
-semantics for mutation and inspection commands.
+and comments do not make a task or step match a selector. `todo search` has
+broader searchable fields, but does not change targeting semantics for mutation
+and inspection commands.
 
 ## Mutation output
 

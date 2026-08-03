@@ -29,6 +29,8 @@ Status: Proposed
   task-and-step selection, including a matching step under a nonmatching parent.
 - Mutation and inspection selector tests must prove that descriptions and
   comments cannot cause an item to be targeted.
+- Search tests must cover titles, descriptions, waiting reasons, and comments,
+  and must prove that search results cannot implicitly select or mutate items.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
