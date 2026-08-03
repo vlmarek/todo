@@ -44,6 +44,10 @@ needed because hidden-category items cannot have attention values.
 also includes completed tasks and steps in the result population. Search remains
 a read-only discovery operation in either mode.
 
+Search visibility is independent of work-queue visibility. Open items hidden by
+temporary waiting and open items in configured hidden categories remain in the
+default search population.
+
 Search task groups are ordered by priority, lowercase category, and lowercase
 task title. Matching steps within a group are ordered by their own priority and
 lowercase title. Search ordering does not use attention dates.

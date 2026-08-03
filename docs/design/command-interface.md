@@ -41,6 +41,9 @@ not affect the title-only selector rules used by other commands.
 Search examines open tasks and steps by default. `todo search --all TEXT`
 expands the same search to completed tasks and steps as well; it does not mean
 completed-only. Comments associated with an included task remain searchable.
+The default open population includes items currently suppressed by `--hide` and
+items in configured hidden categories. Search is not limited to actionable
+work.
 
 Search results are grouped by parent task. Task groups are sorted by priority
 (P1 through P4), lowercase category name, and lowercase task title. Matching
