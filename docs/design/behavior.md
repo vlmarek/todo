@@ -232,6 +232,11 @@ earlier comments, completed steps, task completion, and temporary-hidden state
 are omitted even when their events occurred inside the report period. Deleting
 a parent likewise removes report entries belonging to its deleted steps.
 
+The same rule applies to an individually deleted step or comment while its
+parent survives: all report events belonging to the deleted object are omitted.
+For reporting purposes, deletion makes the object behave as though it never
+existed.
+
 ## Synchronization and cache
 
 All managed task data is cached so read-only operations can run without

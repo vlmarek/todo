@@ -105,6 +105,8 @@ automatically retried.
   `Done: TEXT` progress comment in the same reporting period.
 - Report tests must verify that deleting a task before generation removes all
   of that task tree's Finished, Progress, and Hidden entries.
+- Report tests must verify the same erasure semantics when only a step or
+  comment is deleted while its parent remains.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
