@@ -18,13 +18,16 @@ todo task SELECTOR
 
 ```console
 todo comment TASK COMMENT
-todo done ITEM
+todo done ITEM [TEXT]
 todo reopen ITEM
 ```
 
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
 confirmation, no item is completed.
+
+Optional `TEXT` is supported when the selected item is a task and is stored as
+a task comment prefixed with `Done: `. It is not valid for a step.
 
 ## Creation and maintenance
 

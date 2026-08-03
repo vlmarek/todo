@@ -103,6 +103,11 @@ Any other answer, cancellation, end of input, or non-interactive invocation
 leaves the parent and every step unchanged and returns a failure. A task with no
 open steps is completed without this confirmation.
 
+`todo done TASK TEXT` accepts optional completion text. Before completing the
+task, it adds a task comment with the content `Done: TEXT`. That comment is a
+normal progress event and is eligible for the report period. Steps do not
+accept completion comments because steps cannot have comments.
+
 ## Moving to a hidden category
 
 Before moving a task into a configured hidden category, validate the task and

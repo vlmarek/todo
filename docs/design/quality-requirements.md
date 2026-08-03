@@ -88,6 +88,8 @@ automatically retried.
   category of the non-event-based `Hidden` section.
 - Report tests must verify that the `Hidden` snapshot includes currently
   suppressed tasks with no activity inside the report period.
+- Report tests must verify that optional task-completion text becomes a normal
+  `Done: TEXT` progress comment in the same reporting period.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
