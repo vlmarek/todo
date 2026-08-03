@@ -3,14 +3,6 @@
 Only genuinely unresolved behavior belongs here. Implementation must not choose
 an answer silently.
 
-## Report cursor boundary
-
-Status: Open
-
-Events exactly at the stored cursor are included. Confirm how duplicate events
-are prevented across two finalized reports when the next interval begins at
-the same timestamp.
-
 ## Comment modification history
 
 Status: Open

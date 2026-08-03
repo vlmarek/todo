@@ -112,9 +112,11 @@ set.
 report cursor. It does not change the cursor.
 
 `todo report --final` advances the cursor only after synchronization and report
-generation succeed. A later report includes qualifying events at or after the
-stored cursor. The reporting time zone is the local time zone of the executing
-machine.
+generation succeed. A report period is start-exclusive and end-inclusive:
+`(previous cursor, report end]`. An event exactly at the previous cursor is not
+repeated, while an event exactly at the new report end belongs to the report
+being generated. The reporting time zone is the local time zone of the
+executing machine.
 
 If no cursor exists, the effective beginning is infinitely in the past.
 
