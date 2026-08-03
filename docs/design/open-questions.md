@@ -3,13 +3,6 @@
 Only genuinely unresolved behavior belongs here. Implementation must not choose
 an answer silently.
 
-## Moving dated work into a hidden category
-
-Status: Open
-
-Hidden-category tasks and steps cannot be dated. Decide whether moving a dated
-task into such a category is rejected or requires an explicit clearing action.
-
 ## Deleted or renamed categories
 
 Status: Open

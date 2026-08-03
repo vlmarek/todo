@@ -10,6 +10,8 @@ Status: Proposed
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
 - A task must not be hidden beyond the attention day of any open step.
+- Moving work into a configured hidden category must not implicitly discard
+  dates, recurrence, reminders, or hiding policies.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 

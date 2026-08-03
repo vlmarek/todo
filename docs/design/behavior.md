@@ -87,6 +87,13 @@ Completing a recurring task or step through `todo done` causes Todoist to move
 its attention value to the next occurrence. The completion is included in the
 report. A retained hiding policy applies to the next occurrence.
 
+## Moving to a hidden category
+
+Before moving a task into a configured hidden category, validate the task and
+all of its steps. If any has an attention value, reminder, or own hiding policy,
+reject the complete move without mutation. The command never clears scheduling
+information implicitly to make the move valid.
+
 ## Clearing
 
 `ITEM clear` removes the item's attention value, recurrence, reminders, and own

@@ -65,6 +65,9 @@ it is not an independently stored state.
 5. Relative reminders require an attention value containing an exact time.
 6. A task in a hidden category, and all of its steps, cannot have attention
    values, reminders, or own hiding policies.
+   Moving a task into a hidden category is rejected if the task or any of its
+   steps violates this invariant; scheduling information is never cleared
+   implicitly.
 7. A hidden task hides all of its steps until the task's local attention day.
 8. The local attention day of a step must not precede the local attention day
    of its hidden parent task.
