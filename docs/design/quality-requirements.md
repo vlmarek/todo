@@ -127,6 +127,8 @@ automatically retried.
   warn on stderr and proceed with creation.
 - Step creation must reject a case-insensitive duplicate open title under the
   same parent while allowing it under another parent.
+- Step creation that reuses only completed titles under the same parent must
+  warn on stderr and proceed.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
