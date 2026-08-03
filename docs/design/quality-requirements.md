@@ -125,6 +125,9 @@ Status: Proposed
   credentials.
 - Configuration tests must parse INI syntax and produce clean distinct errors
   for a missing file, malformed INI, and absent or invalid required settings.
+- Configuration compatibility tests must retain `[todoist] token` and `[main]`
+  keys `project`, `default_sections`, and `hidden_from_now`, preserve category
+  name case, and reject reliance on `default_wait_due`.
 
 ## Reliability
 

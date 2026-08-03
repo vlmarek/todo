@@ -71,6 +71,24 @@ only validate these structures and never provision them implicitly.
 file, malformed INI, and missing or invalid required settings and reports each
 as a concise user-facing error rather than exposing parser exceptions.
 
+The schema retains these keys:
+
+```ini
+[todoist]
+token = ...
+
+[main]
+project = Oracle
+default_sections = ai, gatekeeper, engineer, Someday
+hidden_from_now = Someday
+```
+
+`token` may be omitted when `TODOIST_TOKEN` supplies authentication. `project`,
+`default_sections`, and `hidden_from_now` are the structural settings consumed
+by init and ordinary commands. Comma-separated names are trimmed but preserve
+their case. `default_wait_due` is not a supported setting because hiding always
+requires an explicit date.
+
 ## Read-only flow
 
 Read-only commands load configuration and cached task data, validate the
