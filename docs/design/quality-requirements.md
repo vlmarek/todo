@@ -8,6 +8,8 @@ Status: Proposed
 - An ambiguous mutation must not guess which task or step to change.
 - Exact title equality must not bypass ambiguity handling when other items also
   match the selector.
+- Acceptance tests must distinguish a quoted contiguous-phrase selector from
+  multiple all-terms selectors, including reversed and non-contiguous terms.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.

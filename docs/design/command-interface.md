@@ -77,6 +77,17 @@ example, selector `Deploy` remains ambiguous when both `Deploy` and
 Task and step selectors are case-insensitive. This does not change category
 matching, which remains case-sensitive.
 
+Quoting controls selector structure:
+
+- A single argument such as `todo task "deploy staging"` is one phrase and
+  matches that contiguous phrase.
+- Multiple arguments such as `todo task deploy staging` are independent terms.
+  Every term must match, but the terms may occur in any order and need not be
+  contiguous.
+
+Shell quoting therefore affects matching semantics and is not merely a way to
+preserve spaces in one equivalent selector string.
+
 ## Mutation output
 
 After a successful attention or reminder change, print previous values when
