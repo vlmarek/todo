@@ -110,7 +110,7 @@ A successful reopen always adds a progress comment. Task comments use
 ## Creation and maintenance
 
 ```console
-todo add CATEGORY TASK [STEP ...]
+todo add [--priority P|-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
 todo add step TASK STEP [STEP ...]
 todo rename ITEM NEW_NAME
 todo priority ITEM P
@@ -122,6 +122,12 @@ A newly created parent task has P2 unless the creation command explicitly sets
 another priority. A newly created step always receives its parent task's
 effective priority at creation time. Step creation has no separate priority
 override; `todo priority` may change the step afterward.
+
+Task creation accepts both `--priority 1` through `--priority 4` and
+`--priority P1` through `--priority P4`, with the `P` case-insensitive. The
+convenience flags `-p1`, `-p2`, `-p3`, and `-p4` are equivalent. Supplying more
+than one priority form in the same invocation is an option conflict and fails
+before mutation.
 
 `todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
 `P` case-insensitive) as equivalent forms. It can select either an open parent

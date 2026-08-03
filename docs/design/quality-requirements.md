@@ -201,6 +201,9 @@ automatically retried.
 - Task creation must default to P2 when no priority is supplied. Step creation
   must copy the parent's effective priority at that moment, after which the
   priorities remain independently mutable.
+- Task-creation priority tests must accept numeric and case-insensitive
+  `P`-prefixed `--priority` values plus `-p1` through `-p4`, and reject
+  conflicting priority options before mutation.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before
