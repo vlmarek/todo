@@ -29,6 +29,8 @@ Status: Proposed
   task-and-step selection, including a matching step under a nonmatching parent.
 - Step-inspection tests must search only open steps across all managed parents,
   exclude parent tasks, and apply normal ambiguity handling across parents.
+- A selected step detail view must display its parent task and inherited
+  category.
 - Mutation and inspection selector tests must prove that descriptions and
   comments cannot cause an item to be targeted.
 - Search tests must cover titles, descriptions, waiting reasons, and comments,

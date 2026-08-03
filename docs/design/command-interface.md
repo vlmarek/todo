@@ -341,7 +341,9 @@ Candidate type depends on the command form:
   returned as the selected item.
 - `todo step SELECTOR` searches open steps only across every managed parent
   task. Parent tasks are not candidates. Steps with the same or similar titles
-  under different parents participate in normal ambiguity handling.
+  under different parents participate in normal ambiguity handling. The
+  selected step's detail view shows its parent task title and inherited category
+  as context.
 - An implicit top-level selector such as `todo review` searches tasks and steps
   as independent candidates. A step may match even when its parent task title
   does not contain the selector.
