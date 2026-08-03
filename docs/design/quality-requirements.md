@@ -140,6 +140,8 @@ automatically retried.
 - Priority-command tests must select open tasks and steps, reject completed
   items and invalid priorities, and recalculate the affected task's effective
   priority.
+- Priority parsing tests must treat numeric and case-insensitive `P`-prefixed
+  forms as equivalent.
 
 ## Testability
 

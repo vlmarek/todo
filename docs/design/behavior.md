@@ -69,8 +69,9 @@ The effective attention value and priority include the parent task and all its
 open steps as defined in `domain-model.md`.
 
 Priority is independently mutable on an open parent task or open step through
-`todo priority ITEM P`. P must be P1, P2, P3, or P4. The displayed effective
-task priority is recalculated from the current open task tree after the change.
+`todo priority ITEM P`. P may be `1`/`P1`, `2`/`P2`, `3`/`P3`, or `4`/`P4`,
+with either case accepted for the letter. The displayed effective task priority
+is recalculated from the current open task tree after the change.
 
 For the effective-attention sort key, an absent attention value is treated as
 infinitely far in the past. Consequently, among items in the same due bucket

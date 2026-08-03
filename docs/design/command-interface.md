@@ -118,11 +118,12 @@ todo delete [--yes] ITEM
 todo category [--refresh]
 ```
 
-`todo priority ITEM P` accepts P1 through P4 and can select either an open
-parent task or an open step. Tasks and steps participate together in normal
-ambiguity handling. Changing a step priority also changes its parent task's
-effective priority when that step becomes or ceases to be the highest-priority
-open member of the task tree.
+`todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
+`P` case-insensitive) as equivalent forms. It can select either an open parent
+task or an open step. Tasks and steps participate together in normal ambiguity
+handling. Changing a step priority also changes its parent task's effective
+priority when that step becomes or ceases to be the highest-priority open member
+of the task tree.
 
 `todo category` lists categories alphabetically using lowercase comparison.
 Creating a category fails before mutation when any existing category name is
