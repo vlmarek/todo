@@ -47,6 +47,11 @@ Search results are grouped by parent task. Task groups are sorted by priority
 steps within a task are sorted by their own priority and lowercase step title.
 Attention dates do not participate in search-result ordering.
 
+Search uses the same argument structure as selectors: one quoted argument is a
+contiguous phrase, while multiple unquoted arguments are independent terms that
+must all match but may occur in any order and need not be contiguous. Matching
+is case-insensitive.
+
 ## Initialization
 
 ```console
