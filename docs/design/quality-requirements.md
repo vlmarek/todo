@@ -137,6 +137,9 @@ automatically retried.
   of their attention day.
 - Ordering tests must verify that priority outranks exact date/time within each
   due bucket, including overdue items with substantially different dates.
+- Priority-command tests must select open tasks and steps, reject completed
+  items and invalid priorities, and recalculate the affected task's effective
+  priority.
 
 ## Testability
 
