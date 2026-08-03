@@ -64,6 +64,9 @@ Status: Proposed
 - A partial multi-comment creation failure must retain accepted comments, stop
   further creation, report the accepted and failed arguments, exit nonzero, and
   send no compensating deletion.
+- Comment-editor tests must restrict editing to open parent tasks, synchronize
+  before opening the editor, perform no mutation for an unchanged buffer, and
+  support editing, deleting, and adding comments from a changed valid buffer.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side

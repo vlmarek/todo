@@ -90,6 +90,7 @@ missing structural objects implicitly.
 ```console
 todo comment [--refresh] TASK
 todo comment TASK COMMENT [COMMENT ...]
+todo comment --edit TASK
 todo done ITEM [TEXT]
 todo reopen ITEM [TEXT]
 ```
@@ -106,6 +107,12 @@ Multiple comments are created sequentially. If Todoist accepts one or more and
 a later creation fails, the accepted comments remain. The command stops, reports
 which comments were created and which creation failed, and exits nonzero without
 compensating deletion.
+
+`todo comment --edit TASK` synchronizes first, resolves an open parent task, and
+opens its current comments in `$EDITOR`. Saving a valid changed buffer applies
+comment edits, deletions, and additions to Todoist. An unchanged buffer performs
+no mutation and exits successfully. Steps and completed parent tasks are not
+editable through this command.
 
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
