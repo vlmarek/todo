@@ -73,6 +73,9 @@ Status: Proposed
 - Cache deletion must be recoverable through refresh.
 - Every cached read command must support `--refresh`; refresh failure must exit
   nonzero without printing partial or stale normal output.
+- Missing, unreadable, malformed, and unusable cache tests must verify a clean
+  nonzero error that suggests `--refresh`, emits no normal view, and exposes no
+  traceback.
 - Local persistent writes must not leave partially written state.
 - Concurrent invocations must not corrupt local state.
 

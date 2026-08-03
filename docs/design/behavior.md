@@ -375,6 +375,12 @@ task`, and `todo category`) accepts `--refresh`. The option synchronizes from
 Todoist before the view is evaluated. If refresh fails, the command exits
 nonzero without printing an actionable list, detail view, or category list.
 
+If a read command is used without `--refresh` and the cache is missing,
+unreadable, malformed, or otherwise unusable, the command exits nonzero with a
+concise error that identifies the cache problem and suggests rerunning the same
+command with `--refresh`. It must not treat a missing cache as an empty Todoist
+account, misreport a missing root project, or expose a traceback.
+
 Changes made on a phone are observed on the next synchronization because
 Todoist is authoritative.
 
