@@ -134,9 +134,10 @@ it eligible for a later report. Deleted comments are not shown.
 
 ### Hidden
 
-Lists tasks carrying the temporary attention-date hiding policy established by
-`--hide`. Tasks are not included merely because they belong to a configured
-hidden category such as `Someday`.
+Lists tasks currently suppressed by the temporary attention-date hiding policy
+established by `--hide`. A task leaves this section when its local attention day
+arrives, even though its stored hiding policy remains. Tasks are not included
+merely because they belong to a configured hidden category such as `Someday`.
 
 Report entries use each task's current category, including when it moved after
 the recorded activity.

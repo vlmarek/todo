@@ -3,14 +3,6 @@
 Only genuinely unresolved behavior belongs here. Implementation must not choose
 an answer silently.
 
-## Hidden report section meaning
-
-Status: Open
-
-Confirm whether the report's Hidden section includes:
-
-- tasks whose hiding day has arrived but whose stored hidden flag remains
-
 ## Report cursor boundary
 
 Status: Open
