@@ -92,7 +92,8 @@ it is not an independently stored state.
     Requesting either transition when the item is already in the target state
     is a user error, not an idempotent success.
 14. Open task titles are unique within one category under case-insensitive
-    comparison. The same title may exist in different categories.
+    comparison. The same title may exist in different categories. A completed
+    title may be reused in its category with a warning.
 
 ## Derived task urgency
 

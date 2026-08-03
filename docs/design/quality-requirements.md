@@ -123,6 +123,8 @@ automatically retried.
 - Task-creation tests must reject case-insensitive duplicate open titles within
   the target category before mutation while allowing that title in another
   category.
+- Task creation that reuses only completed titles in the target category must
+  warn on stderr and proceed with creation.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
