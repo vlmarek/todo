@@ -254,6 +254,8 @@ automatically retried.
 - Task- and step-creation tests must support initial attention values and
   repeatable reminders, reuse normal parsing and validation, and reject a
   reminder without a timed attention value before mutation.
+- Combined task-and-inline-step creation must apply scheduling options only to
+  the parent and leave every inline step unscheduled.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before

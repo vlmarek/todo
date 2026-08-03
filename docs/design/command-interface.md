@@ -197,6 +197,10 @@ the same date parsing, timed-date requirement, offset syntax, and pre-mutation
 validation as `todo wait`/`todo due`/`todo schedule`. A reminder cannot be
 created without a timed attention value.
 
+On `todo add ... CATEGORY TASK [STEP ...]`, `--due` and `--reminder` apply only
+to the new parent task. Inline-created steps receive their normal inherited
+priority but no attention value or reminders.
+
 `todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
 `P` case-insensitive) as equivalent forms. It can select either an open parent
 task or an open step. Tasks and steps participate together in normal ambiguity
