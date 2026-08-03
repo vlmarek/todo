@@ -192,6 +192,10 @@ merely because they belong to a configured hidden category such as `Someday`.
 Within a category, hidden tasks are ordered alphabetically using lowercase task
 title comparison rather than by attention date.
 
+`Hidden` is a current-state snapshot rather than a cursor-bounded event list.
+It includes every currently suppressed temporary-hidden task even when the task
+was hidden before the report cursor and had no activity during the period.
+
 Report entries use each task's current category, including when it moved after
 the recorded activity.
 
