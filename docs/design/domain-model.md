@@ -9,6 +9,8 @@ Status: Proposed
 The configurable Todoist project containing all work managed by `todo`.
 Currently named `Oracle`.
 
+Exactly one current Todoist project must match the configured root name.
+
 ### Category
 
 A direct child project of the configured root project. Category names and
@@ -125,6 +127,7 @@ it is not an independently stored state.
     directly in the configured root project are invalid.
 20. Every step is a direct child of a parent task. A step with its own child is
     invalid model state.
+21. The configured root project must exist uniquely in Todoist.
 
 ## Derived task urgency
 

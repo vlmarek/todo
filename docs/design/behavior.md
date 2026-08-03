@@ -343,6 +343,11 @@ The following local state cannot be reconstructed solely from Todoist:
 alphabetical order using lowercase name comparison. Todoist's manual project
 order does not affect this view.
 
+If the configured root project is missing or not unique after synchronization,
+normal commands fail with a clear configuration/model error until the Todoist
+project or local configuration is corrected. The CLI does not silently select
+or create a replacement during ordinary operation.
+
 If synchronization discovers a project nested beneath a category, model
 validation fails. Read commands print the hierarchy error to stderr, exit
 nonzero, and produce no normal output. The CLI does not flatten, ignore, or

@@ -52,6 +52,8 @@ Status: Proposed
   rather than ignoring or implicitly categorizing them.
 - Model validation must reject any step that has a child, preserving the
   two-level parent-task/direct-step hierarchy.
+- Normal commands must fail clearly when the configured root project is missing
+  or ambiguous and must not silently select or create a replacement.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 
