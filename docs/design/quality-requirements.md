@@ -256,6 +256,8 @@ automatically retried.
   reminder without a timed attention value before mutation.
 - Combined task-and-inline-step creation must apply scheduling options only to
   the parent and leave every inline step unscheduled.
+- Multi-step creation with any scheduling option must fail before creating any
+  step; multiple unscheduled steps remain supported.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before

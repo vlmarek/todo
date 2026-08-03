@@ -201,6 +201,11 @@ On `todo add ... CATEGORY TASK [STEP ...]`, `--due` and `--reminder` apply only
 to the new parent task. Inline-created steps receive their normal inherited
 priority but no attention value or reminders.
 
+`todo add step` may create multiple unscheduled steps in one invocation. If
+`--due` or any `--reminder` is supplied, exactly one step title is allowed;
+combining scheduling options with multiple new steps is an error before any
+step is created.
+
 `todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
 `P` case-insensitive) as equivalent forms. It can select either an open parent
 task or an open step. Tasks and steps participate together in normal ambiguity
