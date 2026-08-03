@@ -89,16 +89,18 @@ missing structural objects implicitly.
 
 ```console
 todo comment [--refresh] TASK
-todo comment TASK COMMENT
+todo comment TASK COMMENT [COMMENT ...]
 todo done ITEM [TEXT]
 todo reopen ITEM [TEXT]
 ```
 
 `todo comment TASK` displays the selected open parent task's existing comments
 without changing state and accepts `--refresh` like the other cached read views.
-`todo comment TASK COMMENT` creates one new task comment. Steps cannot own
-comments, so both forms select parent tasks only. Displayed comments are ordered
-chronologically from oldest to newest.
+`todo comment TASK COMMENT [COMMENT ...]` creates one new task comment for each
+trailing comment argument, in command-line order. Shell quoting defines the
+boundary between comments. Steps cannot own comments, so both forms select
+parent tasks only. Displayed comments are ordered chronologically from oldest to
+newest.
 
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
