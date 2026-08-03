@@ -117,6 +117,9 @@ Status: Proposed
   or test fixtures.
 - Authentication tests must prefer a nonempty `TODOIST_TOKEN` over the
   configured token and fall back to configuration when the variable is absent.
+- Fresh initialization must require an explicit root-project name, while later
+  initialization may reuse the persisted name; no built-in root name is
+  allowed.
 
 ## Reliability
 
