@@ -65,6 +65,10 @@ Renaming an open task or step is subject to the same uniqueness rules as
 creation. A rename that would collide case-insensitively with another open task
 in the category or open step under the parent fails before Todoist mutation.
 
+`todo rename` supports open tasks and steps only. Completed items are not
+reopened temporarily for editing; attempting to rename one fails without
+mutation.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a

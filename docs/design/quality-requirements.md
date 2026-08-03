@@ -131,6 +131,8 @@ automatically retried.
   warn on stderr and proceed.
 - Rename tests must enforce the same case-insensitive open-sibling uniqueness
   invariants as creation and reject collisions before mutation.
+- Rename tests must reject completed tasks and steps without reopen/recomplete
+  workaround mutations.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
