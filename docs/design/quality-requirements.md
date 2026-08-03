@@ -132,6 +132,8 @@ Status: Proposed
   invalid recognized settings must still fail validation.
 - An explicitly empty `hidden_from_now` must be valid and produce a successful
   empty `todo someday` view.
+- An empty or whitespace-only `default_sections` value must fail configuration
+  validation before network access or provisioning.
 
 ## Reliability
 

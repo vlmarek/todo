@@ -95,6 +95,7 @@ invalid. Recognized settings are still validated strictly.
 
 `hidden_from_now` is required as a recognized setting but may have an empty
 value, meaning that no category is hidden from `todo now` by category policy.
+`default_sections` must contain at least one nonempty category name.
 
 ## Read-only flow
 
