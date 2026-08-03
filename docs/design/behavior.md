@@ -273,7 +273,8 @@ first.
 ### Finished
 
 Lists completed tasks. Tasks cannot be completed until all their steps are
-complete.
+complete. A Finished entry does not append the task's comments; comments belong
+to `Progress` in the period when they were added or edited.
 
 A non-recurring task completion is included only if the task is still completed
 when the report is generated. If it was reopened, its earlier completion event
@@ -289,6 +290,10 @@ it eligible for a later report. Semantically, an edit deletes the old comment
 and creates a new comment containing the edited text. The report presents that
 new text like any other added comment and does not label it as edited. Deleted
 comments are not shown.
+
+A surviving comment is included only when its add/edit timestamp falls inside
+the current report interval. Completing its task does not repeat comments from
+earlier finalized periods.
 
 A non-recurring step completion is likewise ignored if that step is currently
 open because it was reopened after completion. This current-state check does
