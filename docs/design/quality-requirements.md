@@ -39,6 +39,8 @@ Status: Proposed
   case-insensitive all-terms arguments in different orders and positions.
 - Search tests must require one individual field to satisfy every term and
   reject matches assembled across fields or across separate comments.
+- Search-output tests must display each matching task or step once by title and
+  must not expose matching-field excerpts or explanations.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.

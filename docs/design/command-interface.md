@@ -56,6 +56,10 @@ One individual searchable field must satisfy the complete query. Terms cannot
 be combined across a title, description, waiting reason, and comment, or across
 multiple comments. Each comment is a separate searchable field.
 
+Search output shows only the matching task or step title, within its task group;
+it does not print the matching description, waiting reason, comment, excerpt, or
+field name. An item that matches through multiple fields is displayed once.
+
 ## Initialization
 
 ```console
