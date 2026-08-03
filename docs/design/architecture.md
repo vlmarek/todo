@@ -95,6 +95,7 @@ invalid. Recognized settings are still validated strictly.
 
 `hidden_from_now` is required as a recognized setting but may have an empty
 value, meaning that no category is hidden from `todo now` by category policy.
+Its nonempty names must be unique under case-insensitive comparison.
 `default_sections` must contain at least one nonempty category name.
 Names in `default_sections` must be unique under case-insensitive comparison;
 exact or case-only duplicates make the configuration invalid.
