@@ -120,6 +120,9 @@ automatically retried.
 - Mutation tests must reject complete no-op proposals before any Todoist
   request, while allowing operations that preserve one field but change
   another and allowing creation of distinct duplicate-text comments.
+- Task-creation tests must reject case-insensitive duplicate open titles within
+  the target category before mutation while allowing that title in another
+  category.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and

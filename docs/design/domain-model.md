@@ -91,6 +91,8 @@ it is not an independently stored state.
 13. Completion requires an open item; reopening requires a completed item.
     Requesting either transition when the item is already in the target state
     is a user error, not an idempotent success.
+14. Open task titles are unique within one category under case-insensitive
+    comparison. The same title may exist in different categories.
 
 ## Derived task urgency
 

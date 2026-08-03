@@ -46,6 +46,10 @@ todo delete [--yes] ITEM
 todo category
 ```
 
+Creating a task fails if the target category already contains an open task with
+the same case-insensitive title. The duplicate check occurs before Todoist
+mutation. This rule does not prohibit the same title in a different category.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a
