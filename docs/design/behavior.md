@@ -94,6 +94,13 @@ all of its steps. If any has an attention value, reminder, or own hiding policy,
 reject the complete move without mutation. The command never clears scheduling
 information implicitly to make the move valid.
 
+Configured hidden categories are resolved by their current case-sensitive
+Todoist names. If a configured name no longer exists because its project was
+renamed or deleted in Todoist, it matches no category and produces no warning.
+A renamed project is treated as an ordinary visible category unless its new
+name is also configured as hidden. Todoist remains authoritative for the
+project and for the disposition of its tasks.
+
 ## Clearing
 
 `ITEM clear` removes the item's attention value, recurrence, reminders, and own

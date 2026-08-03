@@ -18,6 +18,9 @@ membership come dynamically from Todoist. Category matching is case-sensitive.
 
 A category configured to be excluded from normal `todo now` output. `Someday`
 is the conventional example. More than one hidden category may be configured.
+Configuration identifies hidden categories by their current case-sensitive
+Todoist names. A configured name that matches no current category has no effect
+and is not an error.
 
 ### Task
 
