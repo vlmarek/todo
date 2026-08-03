@@ -51,6 +51,13 @@ performs mutations, handles idempotency and retries, and manages reminders.
 
 Stores configuration, cache, report cursor, and runtime lock safely.
 
+## Initialization flow
+
+`todo init` creates or updates local configuration, synchronizes Todoist, and
+provisions a missing configured root project, configured initial categories,
+and the `waiting` label. Ordinary command flows only validate these structures
+and never provision them implicitly.
+
 ## Read-only flow
 
 Read-only commands load configuration and cached task data, validate the

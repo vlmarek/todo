@@ -14,6 +14,17 @@ todo now --refresh
 todo task SELECTOR
 ```
 
+## Initialization
+
+```console
+todo init [--token TOKEN]
+```
+
+`todo init` creates local configuration as needed and provisions the configured
+root project, configured initial category projects, and Todoist `waiting` label
+when absent. Provisioning is explicit to `init`; ordinary commands never create
+missing structural objects implicitly.
+
 ## Progress and completion
 
 ```console

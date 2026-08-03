@@ -54,6 +54,8 @@ Status: Proposed
   two-level parent-task/direct-step hierarchy.
 - Normal commands must fail clearly when the configured root project is missing
   or ambiguous and must not silently select or create a replacement.
+- Initialization tests must provision only missing root/category/label objects
+  and verify that ordinary commands perform no implicit provisioning.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 
