@@ -121,6 +121,8 @@ Status: Proposed
   initial categories, and hidden categories. Missing, malformed, or incomplete
   configuration must fail before network access or provisioning, and init must
   not invent structural defaults.
+- Init must reject a `--token` option and must never write authentication
+  credentials.
 
 ## Reliability
 

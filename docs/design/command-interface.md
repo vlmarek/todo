@@ -78,7 +78,7 @@ not an error because search does not promise to select an item.
 ## Initialization
 
 ```console
-todo init [--token TOKEN]
+todo init
 ```
 
 Before running `todo init`, the user creates `~/.todo/config` and specifies the
@@ -90,6 +90,9 @@ incomplete config fails before Todoist synchronization or provisioning.
 
 Provisioning is explicit to `init`; ordinary commands never create missing
 structural objects implicitly.
+
+Init has no token option and does not write credentials. Authentication must
+already be available from `~/.todo/config` or `TODOIST_TOKEN`.
 
 At runtime, `TODOIST_TOKEN` overrides any Todoist token stored in
 `~/.todo/config`. The configured token is used only when the environment

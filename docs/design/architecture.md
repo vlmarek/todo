@@ -56,6 +56,9 @@ Todoist authentication resolves the token at command start. A nonempty
 `~/.todo/config`; the configured token is the fallback when the environment
 variable is absent.
 
+`todo init` consumes these existing credentials and never accepts or persists a
+token argument.
+
 ## Initialization flow
 
 The user creates local configuration before initialization. `todo init`
