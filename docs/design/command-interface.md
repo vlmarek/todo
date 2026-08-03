@@ -42,6 +42,11 @@ Search examines open tasks and steps by default. `todo search --all TEXT`
 expands the same search to completed tasks and steps as well; it does not mean
 completed-only. Comments associated with an included task remain searchable.
 
+Search results are grouped by parent task. Task groups are sorted by priority
+(P1 through P4), lowercase category name, and lowercase task title. Matching
+steps within a task are sorted by their own priority and lowercase step title.
+Attention dates do not participate in search-result ordering.
+
 ## Initialization
 
 ```console

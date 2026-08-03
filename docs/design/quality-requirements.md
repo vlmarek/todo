@@ -33,6 +33,8 @@ Status: Proposed
   and must prove that search results cannot implicitly select or mutate items.
 - Search visibility tests must exclude completed items by default and include
   both open and completed items with `--all`.
+- Search-order tests must sort task groups by priority/category/title and their
+  matching steps by priority/title, without attention-date sorting.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
