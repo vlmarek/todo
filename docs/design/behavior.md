@@ -388,10 +388,11 @@ Todoist access. State-changing commands and `todo report` synchronize first.
 A failed synchronization prevents mutation.
 
 Every cached read command (`todo now`, `todo waiting`, `todo someday`, `todo
-task`, `todo category`, `todo search`, and the display form of `todo comment`)
-accepts `--refresh`. The option synchronizes from Todoist before the view is
-evaluated. If refresh fails, the command exits nonzero without printing an
-actionable list, detail view, category list, comments, or search results.
+task`, `todo step`, `todo category`, `todo search`, and the display form of
+`todo comment`) accepts `--refresh`. The option synchronizes from Todoist before
+the view is evaluated. If refresh fails, the command exits nonzero without
+printing an actionable list, detail view, category list, comments, or search
+results.
 
 If a read command is used without `--refresh` and the cache is missing,
 unreadable, malformed, or otherwise unusable, the command exits nonzero with a

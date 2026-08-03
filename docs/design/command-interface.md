@@ -14,6 +14,7 @@ todo now --refresh
 todo waiting [--refresh]
 todo someday [--refresh]
 todo task [--refresh] SELECTOR
+todo step [--refresh] SELECTOR
 todo category [--refresh]
 todo search [--all] [--refresh] TEXT
 ```
@@ -26,10 +27,10 @@ whose attention day has arrived.
 `todo someday` is the focused view of every open task and open step in all
 configured hidden categories. Completed items remain excluded.
 
-Every read view (`now`, `waiting`, `someday`, `task`, `category`, and `search`)
-accepts `--refresh`. Without it the command reads the local cache. With it the
-command synchronizes from Todoist before validating and displaying the result.
-A failed refresh exits nonzero and prints no normal view output.
+Every read view (`now`, `waiting`, `someday`, `task`, `step`, `category`, and
+`search`) accepts `--refresh`. Without it the command reads the local cache.
+With it the command synchronizes from Todoist before validating and displaying
+the result. A failed refresh exits nonzero and prints no normal view output.
 
 ## Discovery
 
@@ -338,6 +339,9 @@ Candidate type depends on the command form:
 
 - `todo task SELECTOR` searches parent tasks only. A matching step is not
   returned as the selected item.
+- `todo step SELECTOR` searches open steps only across every managed parent
+  task. Parent tasks are not candidates. Steps with the same or similar titles
+  under different parents participate in normal ambiguity handling.
 - An implicit top-level selector such as `todo review` searches tasks and steps
   as independent candidates. A step may match even when its parent task title
   does not contain the selector.
