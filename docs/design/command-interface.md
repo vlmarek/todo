@@ -136,6 +136,10 @@ handling. Changing a step priority also changes its parent task's effective
 priority when that step becomes or ceases to be the highest-priority open member
 of the task tree.
 
+After a successful priority change, the command prints the selected item title,
+its previous priority, and its resulting priority. Setting the stored priority
+to its existing value is a no-op error under the normal mutation rules.
+
 `todo category` lists categories alphabetically using lowercase comparison.
 Creating a category fails before mutation when any existing category name is
 equal under case-insensitive comparison.
@@ -289,8 +293,8 @@ and inspection commands.
 
 ## Mutation output
 
-After a successful attention or reminder change, print previous values when
-present and print the resulting values. Do not print successful-change output
+After a successful attention, reminder, or priority change, print previous
+values when present and print the resulting values. Do not print successful-change output
 until Todoist has accepted the mutation.
 
 Warnings and errors go to stderr. Normal results and successful change details

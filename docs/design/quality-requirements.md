@@ -142,6 +142,8 @@ automatically retried.
   priority.
 - Priority parsing tests must treat numeric and case-insensitive `P`-prefixed
   forms as equivalent.
+- Priority mutation output must identify the item and print both its previous
+  and resulting stored priority.
 
 ## Testability
 
