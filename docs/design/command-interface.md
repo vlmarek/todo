@@ -88,6 +88,8 @@ initial category projects, and Todoist `waiting` label when absent. It does not
 invent defaults or prompt for structural settings. A missing, malformed, or
 incomplete config fails before Todoist synchronization or provisioning.
 
+The configuration file uses INI syntax.
+
 Provisioning is explicit to `init`; ordinary commands never create missing
 structural objects implicitly.
 

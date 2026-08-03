@@ -123,6 +123,8 @@ Status: Proposed
   not invent structural defaults.
 - Init must reject a `--token` option and must never write authentication
   credentials.
+- Configuration tests must parse INI syntax and produce clean distinct errors
+  for a missing file, malformed INI, and absent or invalid required settings.
 
 ## Reliability
 

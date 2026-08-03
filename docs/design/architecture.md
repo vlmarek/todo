@@ -67,6 +67,10 @@ project, configured initial categories, and the `waiting` label. It does not
 choose structural settings or create a default config. Ordinary command flows
 only validate these structures and never provision them implicitly.
 
+`~/.todo/config` uses INI syntax. Configuration loading distinguishes a missing
+file, malformed INI, and missing or invalid required settings and reports each
+as a concise user-facing error rather than exposing parser exceptions.
+
 ## Read-only flow
 
 Read-only commands load configuration and cached task data, validate the
