@@ -52,6 +52,10 @@ contiguous phrase, while multiple unquoted arguments are independent terms that
 must all match but may occur in any order and need not be contiguous. Matching
 is case-insensitive.
 
+One individual searchable field must satisfy the complete query. Terms cannot
+be combined across a title, description, waiting reason, and comment, or across
+multiple comments. Each comment is a separate searchable field.
+
 ## Initialization
 
 ```console

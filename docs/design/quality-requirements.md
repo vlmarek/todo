@@ -37,6 +37,8 @@ Status: Proposed
   matching steps by priority/title, without attention-date sorting.
 - Search tests must distinguish a quoted contiguous phrase from multiple
   case-insensitive all-terms arguments in different orders and positions.
+- Search tests must require one individual field to satisfy every term and
+  reject matches assembled across fields or across separate comments.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
