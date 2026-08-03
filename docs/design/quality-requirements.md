@@ -117,6 +117,9 @@ automatically retried.
   failed comment creation.
 - State-transition tests must reject already-satisfied completion and reopening
   requests without mutation or audit comments.
+- Mutation tests must reject complete no-op proposals before any Todoist
+  request, while allowing operations that preserve one field but change
+  another and allowing creation of distinct duplicate-text comments.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and

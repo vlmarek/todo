@@ -134,6 +134,19 @@ Reopening an already open item fails with a nonzero status, performs no
 mutation, and adds no comment. Symmetrically, completing an already completed
 item fails rather than reporting an unchanged success.
 
+## No-op mutations
+
+Every mutation compares its complete proposed result with current state after
+selection and validation. If the operation would make no observable state
+change, it fails before contacting Todoist. Examples include setting P1 on an
+already-P1 item, moving a task to its current category, renaming to the current
+title, and clearing an already-empty reminder set.
+
+The comparison covers the complete operation. Keeping an attention date while
+changing reminders or the own hiding policy is a real mutation and is allowed.
+Creating another comment with identical text is also a real mutation because it
+creates a distinct comment.
+
 ## Moving to a hidden category
 
 Before moving a task into a configured hidden category, validate the task and

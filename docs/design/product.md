@@ -53,6 +53,8 @@ are treated as work categories. The root project name is configurable.
 - A command expressing a state transition must fail when the selected item is
   not in the required source state. Treating an already-satisfied transition as
   success can conceal a mistaken selection or command.
+- More generally, a mutation whose complete proposed result equals current
+  state must fail as a likely user mistake rather than report success.
 - The design favors the actual personal workflow over general-purpose Todoist
   client behavior.
 - Prefer the simplest implementation that satisfies the established workflow,
