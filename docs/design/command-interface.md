@@ -69,6 +69,10 @@ in the category or open step under the parent fails before Todoist mutation.
 reopened temporarily for editing; attempting to rename one fails without
 mutation.
 
+`todo move TASK CATEGORY` supports open parent tasks only. Completed tasks are
+not reopened temporarily for moving, and steps inherit their parent category
+rather than being moved independently.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a

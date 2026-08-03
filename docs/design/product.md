@@ -60,6 +60,9 @@ are treated as work categories. The root project name is configurable.
 - Prefer the simplest implementation that satisfies the established workflow,
   safety rules, and observable behavior. Do not add state reconstruction or
   automation without a demonstrated need.
+- Feature completeness is not a goal by itself. Do not implement uncommon
+  mutations or Todoist quirks merely for symmetry when they add complexity and
+  are not part of the normal workflow.
 
 ## Scope
 

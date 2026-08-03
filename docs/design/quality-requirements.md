@@ -133,6 +133,8 @@ automatically retried.
   invariants as creation and reject collisions before mutation.
 - Rename tests must reject completed tasks and steps without reopen/recomplete
   workaround mutations.
+- Move tests must reject completed tasks and step targets without workaround
+  mutations.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
