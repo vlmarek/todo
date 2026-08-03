@@ -14,13 +14,6 @@ added to it?
 `--reminder clear ITEM` is intended to remove all reminders without changing
 the attention value.
 
-## Undated task ordering
-
-Status: Open
-
-Undated tasks belong to the third urgency bucket with future-dated tasks, but
-their position relative to dated items has not been specified.
-
 ## Exact tie-breaking within a task group
 
 Status: Open
@@ -66,4 +59,3 @@ Status: Open
 
 Category behavior follows Todoist, but the CLI behavior when a configured
 hidden category is renamed or deleted has not been specified.
-

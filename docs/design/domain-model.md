@@ -88,6 +88,10 @@ For ordering in `todo now`, a task represents itself and its open steps.
 
 Completed steps do not contribute to these derived values.
 
+For urgency sorting, an absent effective attention value is treated as
+infinitely far in the past. This rule is applied only after the due bucket and
+effective-priority keys.
+
 ## Visibility
 
 An undated open task is normally actionable unless it is in a hidden category
@@ -100,4 +104,3 @@ start of its local attention day and stays visible afterward.
 A task's hiding policy applies to its entire task tree. A step may extend its
 own hiding beyond the parent's visibility day, but cannot have an attention day
 before the hidden parent's attention day.
-

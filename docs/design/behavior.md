@@ -36,8 +36,10 @@ Task groups are sorted using these keys in order:
 The effective attention value and priority include the parent task and all its
 open steps as defined in `domain-model.md`.
 
-The placement of undated values within the third due bucket remains an open
-question.
+For the effective-attention sort key, an absent attention value is treated as
+infinitely far in the past. Consequently, among items in the same due bucket
+and with the same effective priority, an undated item sorts before every dated
+item.
 
 ## Attention values and hiding
 
@@ -148,4 +150,3 @@ The following local state cannot be reconstructed solely from Todoist:
 - `~/.todo/report-cursor`
 
 `~/.todo/lock` is runtime coordination state and need not be reconstructed.
-
