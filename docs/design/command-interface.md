@@ -54,6 +54,11 @@ reopen the selected item or its parent before deletion and does not implement
 local-only deletion. If Todoist rejects the operation, the command reports the
 API failure and leaves local state consistent with Todoist.
 
+When the selected item is a parent task, the confirmation preview lists the
+parent and all of its open and completed steps with their completion markers.
+The prompt makes clear that confirming deletion removes the entire displayed
+task tree. Confirmation is requested only after the complete scope is printed.
+
 ## Attention and reminders
 
 `wait`, `due`, and `schedule` are equivalent aliases.

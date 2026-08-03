@@ -15,6 +15,9 @@ Status: Proposed
   match the selector.
 - Deletion must require either interactive affirmative confirmation or the
   explicit `--yes` option; otherwise no mutation may be sent.
+- Interactive deletion of a parent must display every open and completed step
+  before requesting confirmation, so no cascade target is omitted from the
+  preview.
 - Integration tests must verify direct deletion of an open task, completed
   task, open step, and completed step under a completed parent without
   reopen/reclose mutations.
