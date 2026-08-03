@@ -134,7 +134,9 @@ it eligible for a later report. Deleted comments are not shown.
 
 ### Hidden
 
-Lists all currently hidden tasks.
+Lists tasks carrying the temporary attention-date hiding policy established by
+`--hide`. Tasks are not included merely because they belong to a configured
+hidden category such as `Someday`.
 
 Report entries use each task's current category, including when it moved after
 the recorded activity.

@@ -9,8 +9,6 @@ Status: Open
 
 Confirm whether the report's Hidden section includes:
 
-- only items hidden through an attention-date hiding policy
-- configured hidden categories as well
 - tasks whose hiding day has arrived but whose stored hidden flag remains
 
 ## Report cursor boundary
