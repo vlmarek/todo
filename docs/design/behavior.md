@@ -155,6 +155,12 @@ The report contains three sections:
 Within every section, categories are ordered alphabetically using lowercase
 comparison. Todoist's manual project order does not affect report ordering.
 
+Within the event-based `Finished` and `Progress` sections, content is ordered
+chronologically from the oldest qualifying event to the newest. When multiple
+progress events are grouped under one task, the task's position is determined
+by its oldest qualifying event and its displayed events are ordered oldest
+first.
+
 ### Finished
 
 Lists completed tasks. Tasks cannot be completed until all their steps are
