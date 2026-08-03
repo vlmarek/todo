@@ -41,6 +41,8 @@ Status: Proposed
   reject matches assembled across fields or across separate comments.
 - Search-output tests must display each matching task or step once by title and
   must not expose matching-field excerpts or explanations.
+- A step-only search match must display its nonmatching parent as context while
+  omitting nonmatching sibling steps.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.

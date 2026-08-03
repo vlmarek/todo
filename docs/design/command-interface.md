@@ -60,6 +60,10 @@ Search output shows only the matching task or step title, within its task group;
 it does not print the matching description, waiting reason, comment, excerpt, or
 field name. An item that matches through multiple fields is displayed once.
 
+When a step matches but its parent task does not, the parent task title is still
+shown as grouping context. The parent is not thereby considered a match, and
+nonmatching sibling steps are omitted.
+
 ## Initialization
 
 ```console
