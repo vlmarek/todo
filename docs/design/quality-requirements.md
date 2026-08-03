@@ -107,6 +107,8 @@ automatically retried.
   of that task tree's Finished, Progress, and Hidden entries.
 - Report tests must verify the same erasure semantics when only a step or
   comment is deleted while its parent remains.
+- Report tests must verify that renames and category moves are reflected using
+  current Todoist titles and category names rather than event-time values.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and

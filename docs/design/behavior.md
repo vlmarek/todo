@@ -224,8 +224,9 @@ title comparison rather than by attention date.
 It includes every currently suppressed temporary-hidden task even when the task
 was hidden before the report cursor and had no activity during the period.
 
-Report entries use each task's current category, including when it moved after
-the recorded activity.
+Report entries use each task's and step's current title and the task's current
+category, including when an item was renamed or moved after the recorded
+activity.
 
 A task deleted before report generation contributes no report entries. Its
 earlier comments, completed steps, task completion, and temporary-hidden state
