@@ -46,6 +46,10 @@ step priority, step attention value, and lowercase title. A step has no separate
 category key because it inherits its parent task's category. This ordering
 replaces Todoist's manual step order in `todo now`.
 
+Priority precedes the exact attention value within a bucket. For example, when
+both items are due today, a P1 item due at 17:00 sorts before a P2 item due at
+09:00.
+
 ## Attention values and hiding
 
 `wait`, `due`, and `schedule` are intended to be equivalent aliases.
