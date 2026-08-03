@@ -187,6 +187,8 @@ automatically retried.
   affect this order, and completion must change the marker rather than create a
   second history record.
 - Every task-history entry must display the timestamp used for its position.
+- Task-history timestamps must be displayed in the executing machine's local
+  timezone.
 
 ## Testability
 
