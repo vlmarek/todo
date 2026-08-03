@@ -68,6 +68,9 @@ When a parent task matches, its nonmatching steps are not shown. Thus parent
 context is added only upward for a matching step, never downward from a matching
 parent to its steps.
 
+An empty search prints `No matches.` and exits successfully. Finding no match is
+not an error because search does not promise to select an item.
+
 ## Initialization
 
 ```console

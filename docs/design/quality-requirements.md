@@ -44,6 +44,7 @@ Status: Proposed
 - A step-only search match must display its nonmatching parent as context while
   omitting nonmatching sibling steps.
 - A parent-only search match must omit all nonmatching steps.
+- An empty search must print `No matches.`, exit zero, and perform no mutation.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
