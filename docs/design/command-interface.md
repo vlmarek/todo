@@ -147,6 +147,11 @@ non-whitespace body. An empty block invalidates the complete edit; it is never
 interpreted as deletion and is never silently ignored. Deletion remains the
 removal of the complete existing block.
 
+After full local validation, the required Todoist comment operations are sent
+sequentially. The command stops on the first API failure. Operations Todoist
+already accepted remain in effect; the command reports the accepted operations
+and the failed operation, exits nonzero, and performs no rollback.
+
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
 confirmation, no item is completed.

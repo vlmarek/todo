@@ -80,6 +80,9 @@ Status: Proposed
   not present in the generated buffer.
 - An empty or whitespace-only existing or `[new]` comment block must reject the
   complete edit before mutation.
+- A partial comment-editor application failure must stop further operations,
+  retain and report accepted operations, report the failure, exit nonzero, and
+  send no compensating mutations.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side
