@@ -12,7 +12,8 @@ Currently named `Oracle`.
 ### Category
 
 A direct child project of the configured root project. Category names and
-membership come dynamically from Todoist. Category matching is case-sensitive.
+membership come dynamically from Todoist. Category matching is case-sensitive;
+task and step selector matching is independently case-insensitive.
 
 ### Hidden category
 

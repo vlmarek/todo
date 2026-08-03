@@ -74,6 +74,9 @@ An exact title match does not take precedence over other matching results. For
 example, selector `Deploy` remains ambiguous when both `Deploy` and
 `Deploy staging` match, and both are presented for selection.
 
+Task and step selectors are case-insensitive. This does not change category
+matching, which remains case-sensitive.
+
 ## Mutation output
 
 After a successful attention or reminder change, print previous values when
