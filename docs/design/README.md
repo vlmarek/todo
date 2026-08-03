@@ -16,6 +16,8 @@ the current program is expected to change. Unresolved matters belong in
 - `behavior.md` — detailed rules, decision tables, and acceptance examples
 - `quality-requirements.md` — safety, reliability, synchronization, and testing
 - `architecture.md` — system context and responsibility boundaries
+- `todoist-dependencies.md` — capabilities supplied by Todoist and replacement
+  requirements for another backend
 - `open-questions.md` — decisions that remain unresolved
 - `decisions/` — accepted design decisions and their rationale
 
@@ -28,4 +30,3 @@ the current program is expected to change. Unresolved matters belong in
 
 Passing tests do not override these documents. If implementation, tests, and
 design disagree, the discrepancy must be resolved explicitly.
-

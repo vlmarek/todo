@@ -11,6 +11,9 @@ The user invokes `todo` from a shell. `todo` communicates with:
 - the terminal, used for output and ambiguous-match selection
 - the user's phone indirectly through Todoist synchronization and reminders
 
+Capabilities delegated to Todoist and the implications of replacing it are
+catalogued in `todoist-dependencies.md`.
+
 ## Responsibility boundaries
 
 ```text

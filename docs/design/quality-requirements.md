@@ -84,6 +84,8 @@ automatically retried.
   before mutation. Unknown-shape expressions must be reconciled after Todoist
   parsing, with warnings for changed reminders or a date-only/reminder
   inconsistency.
+- A post-mutation reminder reconciliation warning must return nonzero while
+  clearly reporting that Todoist already accepted the date change.
 - Errors must identify the conflicting item and rule in user terminology.
 - Exact appointment times must not prevent items from appearing on the morning
   of their attention day.

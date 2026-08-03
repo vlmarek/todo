@@ -209,6 +209,11 @@ Todoist changed or removed any reminder, or if the resulting item is date-only
 while relative reminders still exist. It does not attempt to roll back an
 accepted Todoist update.
 
+Such a reconciliation warning makes the command exit nonzero even though
+Todoist accepted the attention-value change. The output must state that the
+date mutation succeeded and identify the resulting reminder discrepancy so the
+user does not mistake the operation for an unchanged failure.
+
 ## Reporting
 
 `todo report` synchronizes Todoist and creates a report beginning at the stored
