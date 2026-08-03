@@ -264,6 +264,8 @@ automatically retried.
   mutation.
 - Creation-time `--hide` without an explicit `--due` must fail before mutation
   and must not consult or apply the configured default wait date.
+- Every attention-change alias used with `--hide` must require an explicit date
+  and reason before mutation; the design has no default wait-date setting.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before

@@ -323,9 +323,12 @@ scope output, which is printed before the mutation in all modes.
 `wait`, `due`, and `schedule` are equivalent aliases.
 
 ```console
-todo wait [--hide] [--reminder OFFSET ...] ITEM DATE
-todo due [--hide] [--reminder OFFSET ...] ITEM DATE
-todo schedule [--hide] [--reminder OFFSET ...] ITEM DATE
+todo wait [--reminder OFFSET ...] ITEM DATE
+todo wait --hide [--reminder OFFSET ...] ITEM DATE REASON
+todo due [--reminder OFFSET ...] ITEM DATE
+todo due --hide [--reminder OFFSET ...] ITEM DATE REASON
+todo schedule [--reminder OFFSET ...] ITEM DATE
+todo schedule --hide [--reminder OFFSET ...] ITEM DATE REASON
 
 todo wait ITEM clear
 todo wait --reminder clear ITEM
@@ -336,7 +339,8 @@ The equivalent `due` and `schedule` clearing forms are also accepted.
 Every temporary-hiding form requires a non-empty reason after the item and
 date. The reason is stored in a marked block inside the selected task or step
 description and is shown in details and reports. Missing or whitespace-only
-reasons fail before mutation.
+reasons fail before mutation. `--hide` always requires an explicit date; there
+is no implicit or configured default wait date.
 
 Supplying a date without `--hide` removes the item's own hiding policy.
 Supplying `--hide` enables it. Clearing the item removes attention, recurrence,
