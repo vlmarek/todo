@@ -38,6 +38,8 @@ Status: Proposed
   synchronization, and persistence after the attention day arrives.
 - Hiding-reason tests must verify marked-block replacement/removal, preservation
   of ordinary description text, and display in task details and reports.
+- Hiding operations must reject missing or whitespace-only reasons for both
+  tasks and steps before mutation.
 - Moving work into a configured hidden category must not implicitly discard
   dates, recurrence, reminders, or hiding policies.
 - Invalid scheduling data discovered inside a configured hidden category must

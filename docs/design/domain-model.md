@@ -62,7 +62,8 @@ so label changes made on the phone are observed after synchronization.
 Human-readable context explaining why a task is temporarily hidden. It is
 stored in a marked metadata block inside the Todoist task description so it
 synchronizes across clients while remaining separable from ordinary
-description text. Steps do not have independent reasons.
+description text. A step may store its own reason in the same kind of marked
+block in its own description.
 
 ### Effective visibility
 
@@ -109,6 +110,7 @@ it is not an independently stored state.
 16. Completed items are immutable through ordinary editing commands. They may
     be resolved by commands that reopen or delete them; editing requires
     reopening first. Normal parent-task inspection remains open-only.
+17. Every item carrying an own hiding policy has a non-empty hiding reason.
 
 ## Derived task urgency
 

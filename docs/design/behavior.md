@@ -63,10 +63,11 @@ attention value without `--hide` removes that label; setting it with `--hide`
 adds it. Clearing the attention state also removes it. The label remains after
 the attention day arrives and is removed only by an explicit later mutation.
 
-A hidden task may store a hiding reason in a marked metadata block in its
-Todoist description. Setting or changing temporary hiding updates that block
-without replacing ordinary description text. Removing the hiding policy also
-removes the metadata block while preserving the ordinary description.
+A hidden task or step must store a non-empty hiding reason in a marked metadata
+block in its Todoist description. Setting or changing temporary hiding updates
+that block without replacing ordinary description text. Removing the hiding
+policy also removes the metadata block while preserving the ordinary
+description.
 
 For a hidden item, list visibility begins at the start of its local attention
 day, not at an exact attention time. Exact time remains relevant to display,
