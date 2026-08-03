@@ -51,6 +51,11 @@ performs mutations, handles idempotency and retries, and manages reminders.
 
 Stores configuration, cache, report cursor, and runtime lock safely.
 
+Todoist authentication resolves the token at command start. A nonempty
+`TODOIST_TOKEN` environment variable takes precedence over the token stored in
+`~/.todo/config`; the configured token is the fallback when the environment
+variable is absent.
+
 ## Initialization flow
 
 `todo init` creates or updates local configuration, synchronizes Todoist, and

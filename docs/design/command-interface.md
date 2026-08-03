@@ -86,6 +86,10 @@ root project, configured initial category projects, and Todoist `waiting` label
 when absent. Provisioning is explicit to `init`; ordinary commands never create
 missing structural objects implicitly.
 
+At runtime, `TODOIST_TOKEN` overrides any Todoist token stored in
+`~/.todo/config`. The configured token is used only when the environment
+variable is absent.
+
 ## Progress and completion
 
 ```console

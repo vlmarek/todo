@@ -115,6 +115,8 @@ Status: Proposed
   make unrelated commands fail. The error must direct the user to `todo init`.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
+- Authentication tests must prefer a nonempty `TODOIST_TOKEN` over the
+  configured token and fall back to configuration when the variable is absent.
 
 ## Reliability
 
