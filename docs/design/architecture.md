@@ -93,6 +93,9 @@ Unknown INI sections and keys are ignored for compatibility. This includes an
 old `default_wait_due` entry: it has no effect and does not make the config
 invalid. Recognized settings are still validated strictly.
 
+`hidden_from_now` is required as a recognized setting but may have an empty
+value, meaning that no category is hidden from `todo now` by category policy.
+
 ## Read-only flow
 
 Read-only commands load configuration and cached task data, validate the
