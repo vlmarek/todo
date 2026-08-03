@@ -46,6 +46,8 @@ todo delete [--yes] ITEM
 todo category
 ```
 
+`todo category` lists categories alphabetically using lowercase comparison.
+
 Creating a task fails if the target category already contains an open task with
 the same case-insensitive title. The duplicate check occurs before Todoist
 mutation. This rule does not prohibit the same title in a different category.

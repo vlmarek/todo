@@ -336,3 +336,9 @@ The following local state cannot be reconstructed solely from Todoist:
 - `~/.todo/report-cursor`
 
 `~/.todo/lock` is runtime coordination state and need not be reconstructed.
+
+## Category listing
+
+`todo category` lists current child projects of the configured root project in
+alphabetical order using lowercase name comparison. Todoist's manual project
+order does not affect this view.

@@ -146,6 +146,8 @@ automatically retried.
   same parent while allowing it under another parent.
 - Step creation that reuses only completed titles under the same parent must
   warn on stderr and proceed.
+- Category-list tests must verify lowercase alphabetical ordering independently
+  of Todoist's manual project order.
 - Rename tests must enforce the same case-insensitive open-sibling uniqueness
   invariants as creation and reject collisions before mutation.
 - Rename tests must reject completed tasks and steps without reopen/recomplete
