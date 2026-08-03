@@ -292,6 +292,13 @@ title comparison rather than by attention date.
 
 Each hidden task displays its hiding reason when one is stored.
 
+A currently suppressed step with its own `--hide` policy is displayed beneath
+its parent task with its own hiding reason, even when the parent itself is
+visible. A step suppressed only because it inherits a hidden parent policy is
+not listed as a separate hidden entry. When both parent and step have effective
+own hiding policies, the parent is listed once and the step is nested beneath
+it.
+
 `Hidden` is a current-state snapshot rather than a cursor-bounded event list.
 It includes every currently suppressed temporary-hidden task even when the task
 was hidden before the report cursor and had no activity during the period.

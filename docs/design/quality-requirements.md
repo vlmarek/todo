@@ -115,6 +115,8 @@ automatically retried.
   category of the non-event-based `Hidden` section.
 - Report tests must verify that the `Hidden` snapshot includes currently
   suppressed tasks with no activity inside the report period.
+- Hidden-report tests must nest independently hidden steps with their reasons
+  under the parent while excluding steps hidden solely through inheritance.
 - Report tests must verify that optional task-completion text becomes a normal
   `Done: TEXT` progress comment in the same reporting period.
 - Report tests must verify that deleting a task before generation removes all
