@@ -57,6 +57,8 @@ Status: Proposed
   comments in `Finished`.
 - Comment-command tests must distinguish the no-text cached display form from
   the text-supplied mutation form and restrict both to parent tasks.
+- Comment display tests must order comments chronologically from oldest to
+  newest.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side
