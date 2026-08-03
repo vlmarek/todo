@@ -342,6 +342,10 @@ description and is shown in details and reports. Missing or whitespace-only
 reasons fail before mutation. `--hide` always requires an explicit date; there
 is no implicit or configured default wait date.
 
+After Todoist accepts a `--hide` change, output includes the previous and
+resulting attention values and the previous and resulting hiding reasons. If no
+previous hiding reason existed, that absence is stated explicitly.
+
 Supplying a date without `--hide` removes the item's own hiding policy.
 Supplying `--hide` enables it. Clearing the item removes attention, recurrence,
 reminders, and its own hiding policy.
@@ -419,9 +423,10 @@ and inspection commands.
 
 ## Mutation output
 
-After a successful attention, reminder, priority, title, or category change,
-print previous values when present and print the resulting values. Do not print
-successful-change output until Todoist has accepted the mutation.
+After a successful attention, reminder, hiding-reason, priority, title, or
+category change, print previous values when present and print the resulting
+values. Do not print successful-change output until Todoist has accepted the
+mutation.
 
 Warnings and errors go to stderr. Normal results and successful change details
 go to stdout.
