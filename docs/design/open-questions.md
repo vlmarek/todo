@@ -3,13 +3,6 @@
 Only genuinely unresolved behavior belongs here. Implementation must not choose
 an answer silently.
 
-## Comment modification history
-
-Status: Open
-
-Confirm whether Todoist supplies only the latest comment timestamp/content or
-whether the report can distinguish an edit from a newly added comment.
-
 ## Moving dated work into a hidden category
 
 Status: Open

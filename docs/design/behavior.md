@@ -132,7 +132,10 @@ complete.
 Lists completed steps and task comments that were added or modified during the
 period. A completed step is presented in the context of its parent task.
 Steps cannot have comments. Editing a comment resets its comment date, making
-it eligible for a later report. Deleted comments are not shown.
+it eligible for a later report. Semantically, an edit deletes the old comment
+and creates a new comment containing the edited text. The report presents that
+new text like any other added comment and does not label it as edited. Deleted
+comments are not shown.
 
 ### Hidden
 
