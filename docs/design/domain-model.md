@@ -48,6 +48,12 @@ A child item belonging to a task. A step inherits the task's category. Steps
 can have their own priority, completion state, attention value, hiding policy,
 and reminders. Steps do not have comments.
 
+At creation, a parent task defaults to P2 unless another priority is explicitly
+requested. A new step copies its parent task's effective priority, including any
+elevation contributed by existing open steps. The copied value then belongs to
+the new step independently; later priority changes do not propagate
+automatically.
+
 Only one step level is supported. A step cannot itself be a parent.
 
 ### Attention value

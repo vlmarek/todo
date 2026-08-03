@@ -118,6 +118,11 @@ todo delete [--yes] ITEM
 todo category [--refresh]
 ```
 
+A newly created parent task has P2 unless the creation command explicitly sets
+another priority. A newly created step always receives its parent task's
+effective priority at creation time. Step creation has no separate priority
+override; `todo priority` may change the step afterward.
+
 `todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
 `P` case-insensitive) as equivalent forms. It can select either an open parent
 task or an open step. Tasks and steps participate together in normal ambiguity

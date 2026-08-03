@@ -198,6 +198,9 @@ automatically retried.
   same parent while allowing it under another parent.
 - Step creation that reuses only completed titles under the same parent must
   warn on stderr and proceed.
+- Task creation must default to P2 when no priority is supplied. Step creation
+  must copy the parent's effective priority at that moment, after which the
+  priorities remain independently mutable.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before
