@@ -170,8 +170,10 @@ A successful reopen always adds a progress comment. Task comments use
 ## Creation and maintenance
 
 ```console
-todo add [--priority P|-p1|-p2|-p3|-p4] CATEGORY TASK [STEP ...]
-todo add step TASK STEP [STEP ...]
+todo add [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
+         [--reminder OFFSET ...] CATEGORY TASK [STEP ...]
+todo add step [--due DATE] [--reminder OFFSET ...]
+              TASK STEP [STEP ...]
 todo rename ITEM NEW_NAME
 todo priority ITEM P
 todo delete [--yes] ITEM
@@ -188,6 +190,12 @@ Task creation accepts both `--priority 1` through `--priority 4` and
 convenience flags `-p1`, `-p2`, `-p3`, and `-p4` are equivalent. Supplying more
 than one priority form in the same invocation is an option conflict and fails
 before mutation.
+
+Task and step creation accept an initial attention date/time through `--due`
+and zero or more relative reminders through repeatable `--reminder`. They use
+the same date parsing, timed-date requirement, offset syntax, and pre-mutation
+validation as `todo wait`/`todo due`/`todo schedule`. A reminder cannot be
+created without a timed attention value.
 
 `todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
 `P` case-insensitive) as equivalent forms. It can select either an open parent

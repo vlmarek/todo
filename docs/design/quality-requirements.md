@@ -251,6 +251,9 @@ automatically retried.
 - Task-creation priority tests must accept numeric and case-insensitive
   `P`-prefixed `--priority` values plus `-p1` through `-p4`, and reject
   conflicting priority options before mutation.
+- Task- and step-creation tests must support initial attention values and
+  repeatable reminders, reuse normal parsing and validation, and reject a
+  reminder without a timed attention value before mutation.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before
