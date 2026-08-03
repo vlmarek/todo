@@ -72,6 +72,10 @@ transactional. Once a mutation is accepted, a later failure is reported rather
 than automatically reversed. A subsequent synchronization reconciles the
 cache with the authoritative partial result.
 
+Deleting an open or completed item uses Todoist's direct delete operation.
+Deletion must not be emulated by removing only cached data, and completed items
+must not be reopened merely to make them deletable.
+
 ## Report flow
 
 1. Load the report cursor without changing it.

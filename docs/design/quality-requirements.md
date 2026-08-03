@@ -15,6 +15,9 @@ Status: Proposed
   match the selector.
 - Deletion must require either interactive affirmative confirmation or the
   explicit `--yes` option; otherwise no mutation may be sent.
+- Integration tests must verify direct deletion of an open task, completed
+  task, open step, and completed step under a completed parent without
+  reopen/reclose mutations.
 - Acceptance tests must distinguish a quoted contiguous-phrase selector from
   multiple all-terms selectors, including reversed and non-contiguous terms.
 - Selection tests must distinguish task-only noun commands from implicit

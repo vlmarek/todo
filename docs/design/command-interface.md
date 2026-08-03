@@ -48,6 +48,12 @@ and is required for non-interactive deletion. Cancellation, end of input, or a
 non-interactive invocation without `--yes` leaves the item unchanged and exits
 nonzero.
 
+Deletion is supported for both open and completed tasks and steps. After
+confirmation, the command uses Todoist's direct delete operation. It does not
+reopen the selected item or its parent before deletion and does not implement
+local-only deletion. If Todoist rejects the operation, the command reports the
+API failure and leaves local state consistent with Todoist.
+
 ## Attention and reminders
 
 `wait`, `due`, and `schedule` are equivalent aliases.
