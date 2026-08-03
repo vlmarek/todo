@@ -127,6 +127,10 @@ existing reminder set. Repeating the option defines multiple reminders in the
 replacement set. `--reminder clear ITEM` removes the complete set without
 changing the attention value.
 
+Changing an attention value without a reminder option preserves all existing
+reminders. The success output prints any retained reminder set as informational
+state in addition to the previous and resulting attention values.
+
 ## Reporting
 
 ```console

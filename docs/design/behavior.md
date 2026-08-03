@@ -191,6 +191,11 @@ item's complete existing reminder set. They are not added to the previous set.
 Repeating `--reminder` within one invocation defines multiple values in the new
 set.
 
+When an attention value is changed without any `--reminder` option, the
+existing reminder set is preserved. Successful output explicitly prints the
+retained reminders when the set is nonempty, even though they were not changed,
+so the user can see that they now apply relative to the new attention time.
+
 ## Reporting
 
 `todo report` synchronizes Todoist and creates a report beginning at the stored

@@ -78,6 +78,8 @@ automatically retried.
 - The public command vocabulary should remain small.
 - Successful date and reminder changes must report replaced values and the
   resulting state.
+- Date-change tests must preserve omitted reminders and display the retained
+  reminder set in successful output.
 - Errors must identify the conflicting item and rule in user terminology.
 - Exact appointment times must not prevent items from appearing on the morning
   of their attention day.
