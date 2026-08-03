@@ -202,6 +202,8 @@ Task and step creation accept `--hide REASON`. The new item receives the
 Todoist `waiting` label and a nonempty hiding-reason metadata block, and is
 subject to the same attention-date and parent/step visibility invariants as
 `todo wait --hide`. A missing or whitespace-only reason fails before creation.
+Creation-time `--hide` also requires an explicit `--due`; omitting it fails
+before creation rather than using the configured default wait date.
 
 On `todo add ... CATEGORY TASK [STEP ...]`, `--due` and `--reminder` apply only
 to the new parent task. Inline-created steps receive their normal inherited

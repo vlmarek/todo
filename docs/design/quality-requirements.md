@@ -262,6 +262,8 @@ automatically retried.
   waiting label and nonempty reason metadata, and enforce the normal hiding
   invariants before creation. Multi-step creation with `--hide` must fail before
   mutation.
+- Creation-time `--hide` without an explicit `--due` must fail before mutation
+  and must not consult or apply the configured default wait date.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before
