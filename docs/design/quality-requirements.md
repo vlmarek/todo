@@ -17,6 +17,7 @@ Status: Proposed
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
+- A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Moving work into a configured hidden category must not implicitly discard
   dates, recurrence, reminders, or hiding policies.

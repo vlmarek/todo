@@ -148,6 +148,10 @@ repeated, while an event exactly at the new report end belongs to the report
 being generated. The reporting time zone is the local time zone of the
 executing machine.
 
+Successful `--final` advances the cursor even when the event-based `Finished`
+and `Progress` sections contain no entries. An empty report is still a valid
+finalized reporting period.
+
 If no cursor exists, the effective beginning is infinitely in the past.
 
 The report contains three sections:
