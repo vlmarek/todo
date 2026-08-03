@@ -254,9 +254,11 @@ Task details include every current task comment, ordered chronologically from
 oldest to newest. `todo comment TASK` remains the focused comment-only view and
 uses the same ordering.
 
-Task details separate steps into an open group and a completed group rather
-than interleaving them. Each entry retains its open/checked completion marker,
-including completed steps that remain children of an open parent task.
+Task details show open and completed steps together as a reverse-chronological
+history. Steps are sorted by their Todoist creation timestamp (`added_at`),
+newest first. Each entry retains its open/checked completion marker and shows
+its own priority and attention value, but those values do not affect ordering in
+this view.
 
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt

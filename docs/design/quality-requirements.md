@@ -183,8 +183,9 @@ automatically retried.
   task property.
 - Task-detail tests must include all current task comments from oldest to
   newest, matching the focused comment view.
-- Task-detail tests must render open and completed steps in separate groups and
-  retain their completion markers.
+- Task-detail tests must combine open and completed steps, retain their
+  completion markers, and sort them by creation timestamp newest first without
+  priority or attention affecting the order.
 
 ## Testability
 
