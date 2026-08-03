@@ -152,6 +152,9 @@ If no cursor exists, the effective beginning is infinitely in the past.
 
 The report contains three sections:
 
+The `Finished`, `Progress`, and `Hidden` headings are always printed in that
+order, including when a section has no entries.
+
 Within every section, categories are ordered alphabetically using lowercase
 comparison. Todoist's manual project order does not affect report ordering.
 

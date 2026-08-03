@@ -83,5 +83,7 @@ automatically retried.
   event-based sections, including multiple progress events grouped by one task.
 - Report tests must verify lowercase alphabetical task ordering within each
   category of the non-event-based `Hidden` section.
+- Report tests must verify that all three section headings remain present for
+  empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
   prove that an event cannot appear in two consecutive finalized reports.
