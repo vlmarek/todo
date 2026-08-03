@@ -80,6 +80,10 @@ automatically retried.
   resulting state.
 - Date-change tests must preserve omitted reminders and display the retained
   reminder set in successful output.
+- A known date-only proposal for an item with relative reminders must fail
+  before mutation. Unknown-shape expressions must be reconciled after Todoist
+  parsing, with warnings for changed reminders or a date-only/reminder
+  inconsistency.
 - Errors must identify the conflicting item and rule in user terminology.
 - Exact appointment times must not prevent items from appearing on the morning
   of their attention day.

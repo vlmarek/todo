@@ -196,6 +196,19 @@ existing reminder set is preserved. Successful output explicitly prints the
 retained reminders when the set is nonempty, even though they were not changed,
 so the user can see that they now apply relative to the new attention time.
 
+The local attention parser classifies proposed expressions as known date-only,
+known timed, or unknown to the local parser. When an item has relative
+reminders, changing it to a known date-only value is rejected before mutation
+and instructs the user to clear or replace the reminders explicitly.
+
+For an expression whose date/time shape is unknown locally, the command lets
+Todoist parse it. Before mutation it snapshots the complete reminder set. After
+Todoist accepts the update, it synchronizes and compares the authoritative due
+value and reminders with that snapshot. It prints a warning to stderr if
+Todoist changed or removed any reminder, or if the resulting item is date-only
+while relative reminders still exist. It does not attempt to roll back an
+accepted Todoist update.
+
 ## Reporting
 
 `todo report` synchronizes Todoist and creates a report beginning at the stored

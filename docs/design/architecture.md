@@ -67,6 +67,12 @@ diagnostics and no normal result output.
 
 If synchronization, selection, or validation fails, no mutation is sent.
 
+When Todoist must interpret a due expression that the local parser cannot
+classify, the workflow snapshots reminder state, performs the update,
+synchronizes, and compares the resulting authoritative due/reminder state. Any
+unexpected reminder change or invalid date-only/reminder combination is
+reported without compensating rollback.
+
 Workflows requiring multiple Todoist mutations are not assumed to be
 transactional. Once a mutation is accepted, a later failure is reported rather
 than automatically reversed. A subsequent synchronization reconciles the
