@@ -109,6 +109,9 @@ automatically retried.
   comment is deleted while its parent remains.
 - Report tests must verify that renames and category moves are reflected using
   current Todoist titles and category names rather than event-time values.
+- Report tests must ignore non-recurring completion events for items that are
+  currently open, while retaining recurring completion events whose next
+  occurrence is open.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and

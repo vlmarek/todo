@@ -201,6 +201,11 @@ first.
 Lists completed tasks. Tasks cannot be completed until all their steps are
 complete.
 
+A non-recurring task completion is included only if the task is still completed
+when the report is generated. If it was reopened, its earlier completion event
+is ignored. A recurring completion remains reportable even though Todoist has
+advanced the item to its next occurrence and the item is open again.
+
 ### Progress
 
 Lists completed steps and task comments that were added or modified during the
@@ -210,6 +215,10 @@ it eligible for a later report. Semantically, an edit deletes the old comment
 and creates a new comment containing the edited text. The report presents that
 new text like any other added comment and does not label it as edited. Deleted
 comments are not shown.
+
+A non-recurring step completion is likewise ignored if that step is currently
+open because it was reopened after completion. This current-state check does
+not apply to a recurring step advanced by Todoist.
 
 ### Hidden
 
