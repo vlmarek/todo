@@ -134,6 +134,8 @@ Status: Proposed
   empty `todo someday` view.
 - An empty or whitespace-only `default_sections` value must fail configuration
   validation before network access or provisioning.
+- Exact and case-only duplicates in `default_sections` must fail configuration
+  validation before network access or provisioning.
 - Configuration and init tests must allow hidden category names outside
   `default_sections` and must not provision categories from `hidden_from_now`.
 

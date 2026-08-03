@@ -96,6 +96,8 @@ invalid. Recognized settings are still validated strictly.
 `hidden_from_now` is required as a recognized setting but may have an empty
 value, meaning that no category is hidden from `todo now` by category policy.
 `default_sections` must contain at least one nonempty category name.
+Names in `default_sections` must be unique under case-insensitive comparison;
+exact or case-only duplicates make the configuration invalid.
 
 The two lists are independent. `default_sections` only names category projects
 that `todo init` creates when absent. `hidden_from_now` classifies current
