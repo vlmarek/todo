@@ -81,5 +81,7 @@ automatically retried.
   independently of Todoist's manual project order.
 - Report tests must verify oldest-to-newest ordering of tasks and events in the
   event-based sections, including multiple progress events grouped by one task.
+- Report tests must verify lowercase alphabetical task ordering within each
+  category of the non-event-based `Hidden` section.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
   prove that an event cannot appear in two consecutive finalized reports.
