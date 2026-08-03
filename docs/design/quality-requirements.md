@@ -257,6 +257,8 @@ automatically retried.
   Todoist mutation while leaving ordinary category selection case-sensitive.
 - Rename tests must enforce the same case-insensitive open-sibling uniqueness
   invariants as creation and reject collisions before mutation.
+- Successful rename output must identify whether the item is a task or step and
+  print both the previous and resulting title.
 - Rename tests must reject completed tasks and steps without reopen/recomplete
   workaround mutations.
 - Move tests must reject completed tasks and step targets without workaround

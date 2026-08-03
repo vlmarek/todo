@@ -227,6 +227,10 @@ in the category or open step under the parent fails before Todoist mutation.
 reopened temporarily for editing; attempting to rename one fails without
 mutation.
 
+After Todoist accepts a rename, the command prints the selected item type and
+its previous and resulting titles. Renaming to the existing title is a no-op
+error under the normal mutation rules.
+
 `todo move TASK CATEGORY` supports open parent tasks only. Completed tasks are
 not reopened temporarily for moving, and steps inherit their parent category
 rather than being moved independently.
@@ -383,9 +387,9 @@ and inspection commands.
 
 ## Mutation output
 
-After a successful attention, reminder, or priority change, print previous
-values when present and print the resulting values. Do not print successful-change output
-until Todoist has accepted the mutation.
+After a successful attention, reminder, priority, or title change, print
+previous values when present and print the resulting values. Do not print
+successful-change output until Todoist has accepted the mutation.
 
 Warnings and errors go to stderr. Normal results and successful change details
 go to stdout.
