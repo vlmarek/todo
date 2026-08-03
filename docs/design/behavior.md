@@ -227,6 +227,11 @@ was hidden before the report cursor and had no activity during the period.
 Report entries use each task's current category, including when it moved after
 the recorded activity.
 
+A task deleted before report generation contributes no report entries. Its
+earlier comments, completed steps, task completion, and temporary-hidden state
+are omitted even when their events occurred inside the report period. Deleting
+a parent likewise removes report entries belonging to its deleted steps.
+
 ## Synchronization and cache
 
 All managed task data is cached so read-only operations can run without
