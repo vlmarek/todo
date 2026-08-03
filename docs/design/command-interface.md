@@ -128,6 +128,11 @@ Each existing block carries its stable Todoist comment ID and displayed posting
 timestamp. Each `[new]` block represents one new comment. Multiple existing and
 new blocks may appear in the same buffer.
 
+For an existing block, only `COMMENT_ID` identifies the Todoist comment. The
+`posted: TIMESTAMP` value is informational and is ignored when applying the
+buffer. Changing it does not attempt to alter Todoist history and does not by
+itself invalidate the edit.
+
 Deleting an existing comment requires removing its entire header-and-body block.
 Removing only its header is not a deletion instruction and must not cause the
 orphaned body to be merged into another comment.

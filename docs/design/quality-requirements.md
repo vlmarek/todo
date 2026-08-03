@@ -70,6 +70,8 @@ Status: Proposed
 - Comment-editor parsing tests must recognize existing
   `[id: COMMENT_ID posted: TIMESTAMP]` blocks and multiple `[new]` blocks while
   retaining stable IDs for existing comments.
+- Comment-editor application must use the stable comment ID and ignore changes
+  to the informational posted timestamp.
 - Comment-editor deletion tests must require removal of the complete marked
   block and must never merge text left after a removed header into an adjacent
   comment.
