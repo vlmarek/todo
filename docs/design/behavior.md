@@ -114,6 +114,12 @@ Todoist. The command does not attempt compensating reopens. It exits nonzero
 and reports clearly which operation failed and that earlier changes may already
 have succeeded.
 
+## Reopening
+
+`todo reopen TASK` reopens only the selected parent task. Its completed steps
+remain completed. Reopening does not attempt to reconstruct or reverse the
+state of the task tree.
+
 ## Moving to a hidden category
 
 Before moving a task into a configured hidden category, validate the task and

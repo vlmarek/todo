@@ -52,6 +52,9 @@ are treated as work categories. The root project name is configurable.
   before mutation.
 - The design favors the actual personal workflow over general-purpose Todoist
   client behavior.
+- Prefer the simplest implementation that satisfies the established workflow,
+  safety rules, and observable behavior. Do not add state reconstruction or
+  automation without a demonstrated need.
 
 ## Scope
 
@@ -82,4 +85,3 @@ From most harmful to least harmful:
 5. Losing or duplicating Todoist data
 6. Missing a configured phone reminder
 7. Showing extra non-urgent work in `todo now`
-

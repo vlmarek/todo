@@ -29,6 +29,9 @@ confirmation, no item is completed.
 Optional `TEXT` is supported when the selected item is a task and is stored as
 a task comment prefixed with `Done: `. It is not valid for a step.
 
+`todo reopen ITEM` changes only the selected task or step. Reopening a parent
+does not reopen any of its completed steps.
+
 ## Creation and maintenance
 
 ```console
