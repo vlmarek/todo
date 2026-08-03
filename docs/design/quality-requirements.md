@@ -181,6 +181,8 @@ automatically retried.
 - Task-detail tests must display the parent's own attention value and each
   step's own value without presenting derived effective attention as another
   task property.
+- Task-detail tests must include all current task comments from oldest to
+  newest, matching the focused comment view.
 
 ## Testability
 
