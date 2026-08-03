@@ -351,3 +351,6 @@ silently reinterpret the deeper project.
 The same validation behavior applies to a parent task placed directly in the
 configured root project without a category. The task is not ignored or assigned
 an implicit category.
+
+Model validation also rejects nested steps deeper than one direct level. Read
+commands abort rather than flattening, ignoring, or promoting nested items.

@@ -50,6 +50,8 @@ Status: Proposed
   beneath the configured root and abort normal read output.
 - Model validation must reject parent tasks directly in the configured root
   rather than ignoring or implicitly categorizing them.
+- Model validation must reject any step that has a child, preserving the
+  two-level parent-task/direct-step hierarchy.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 

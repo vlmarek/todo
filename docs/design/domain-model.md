@@ -46,6 +46,8 @@ A child item belonging to a task. A step inherits the task's category. Steps
 can have their own priority, completion state, attention value, hiding policy,
 and reminders. Steps do not have comments.
 
+Only one step level is supported. A step cannot itself be a parent.
+
 ### Attention value
 
 A Todoist due specification representing the date or exact date/time at which
@@ -121,6 +123,8 @@ it is not an independently stored state.
 18. No project may be nested below a category within the configured root tree.
 19. Every parent task must belong to a direct category project; parent tasks
     directly in the configured root project are invalid.
+20. Every step is a direct child of a parent task. A step with its own child is
+    invalid model state.
 
 ## Derived task urgency
 
