@@ -259,6 +259,8 @@ automatically retried.
   invariants as creation and reject collisions before mutation.
 - Successful rename output must identify whether the item is a task or step and
   print both the previous and resulting title.
+- Successful move output must identify the task and print both the previous and
+  resulting category.
 - Rename tests must reject completed tasks and steps without reopen/recomplete
   workaround mutations.
 - Move tests must reject completed tasks and step targets without workaround

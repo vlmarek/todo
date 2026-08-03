@@ -235,6 +235,9 @@ error under the normal mutation rules.
 not reopened temporarily for moving, and steps inherit their parent category
 rather than being moved independently.
 
+After Todoist accepts a move, the command prints the task title and its previous
+and resulting categories. Moving a task to its current category is a no-op error.
+
 Ordinary editing commands operate on open items only. This includes changing
 priority, attention values, hiding policy, recurrence, reminders, comments,
 titles, categories, and adding steps. Completed items may be reopened or
@@ -387,8 +390,8 @@ and inspection commands.
 
 ## Mutation output
 
-After a successful attention, reminder, priority, or title change, print
-previous values when present and print the resulting values. Do not print
+After a successful attention, reminder, priority, title, or category change,
+print previous values when present and print the resulting values. Do not print
 successful-change output until Todoist has accepted the mutation.
 
 Warnings and errors go to stderr. Normal results and successful change details
