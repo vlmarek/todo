@@ -92,6 +92,17 @@ Completing a recurring task or step through `todo done` causes Todoist to move
 its attention value to the next occurrence. The completion is included in the
 report. A retained hiding policy applies to the next occurrence.
 
+## Completing a task with open steps
+
+When `todo done TASK` targets a task with open steps, it lists every open step
+and asks whether all of them should be completed together with the parent. Only
+an explicit `y` or `yes` authorizes the operation. After confirmation, it
+completes every open step and then completes the parent task.
+
+Any other answer, cancellation, end of input, or non-interactive invocation
+leaves the parent and every step unchanged and returns a failure. A task with no
+open steps is completed without this confirmation.
+
 ## Moving to a hidden category
 
 Before moving a task into a configured hidden category, validate the task and

@@ -22,6 +22,10 @@ todo done ITEM
 todo reopen ITEM
 ```
 
+Completing a parent task that still has open steps requires interactive
+confirmation to complete all open steps first. Without explicit affirmative
+confirmation, no item is completed.
+
 ## Creation and maintenance
 
 ```console
