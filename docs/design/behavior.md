@@ -347,3 +347,7 @@ If synchronization discovers a project nested beneath a category, model
 validation fails. Read commands print the hierarchy error to stderr, exit
 nonzero, and produce no normal output. The CLI does not flatten, ignore, or
 silently reinterpret the deeper project.
+
+The same validation behavior applies to a parent task placed directly in the
+configured root project without a category. The task is not ignored or assigned
+an implicit category.

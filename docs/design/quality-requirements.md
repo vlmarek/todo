@@ -48,6 +48,8 @@ Status: Proposed
   produce no partial normal output and must return a nonzero status.
 - Model validation must reject any project deeper than a direct category child
   beneath the configured root and abort normal read output.
+- Model validation must reject parent tasks directly in the configured root
+  rather than ignoring or implicitly categorizing them.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 

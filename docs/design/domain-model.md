@@ -119,6 +119,8 @@ it is not an independently stored state.
     reopening first. Normal parent-task inspection remains open-only.
 17. Every item carrying an own hiding policy has a non-empty hiding reason.
 18. No project may be nested below a category within the configured root tree.
+19. Every parent task must belong to a direct category project; parent tasks
+    directly in the configured root project are invalid.
 
 ## Derived task urgency
 
