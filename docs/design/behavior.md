@@ -35,6 +35,11 @@ their open steps. It does not show completed tasks or steps. The view is based
 on current category membership and is not limited to a category literally named
 `Someday`.
 
+Someday task groups are sorted by priority (P1 through P4), then lowercase
+category name, then lowercase task title. Open steps within a task are sorted by
+their own priority and then lowercase step title. No attention-date ordering is
+needed because hidden-category items cannot have attention values.
+
 ### Urgency ordering
 
 Task groups are sorted using these keys in order:

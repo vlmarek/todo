@@ -140,6 +140,8 @@ automatically retried.
   arrived waiting labels.
 - Someday-view tests must include all configured hidden categories with their
   open task trees and exclude every completed item.
+- Someday-view tests must order tasks by priority/category/title and nested
+  steps by priority/title without date-related sorting.
 - Report tests must verify that optional task-completion text becomes a normal
   `Done: TEXT` progress comment in the same reporting period.
 - Report tests must verify that deleting a task before generation removes all
