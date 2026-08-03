@@ -47,6 +47,8 @@ todo category
 ```
 
 `todo category` lists categories alphabetically using lowercase comparison.
+Creating a category fails before mutation when any existing category name is
+equal under case-insensitive comparison.
 
 Creating a task fails if the target category already contains an open task with
 the same case-insensitive title. The duplicate check occurs before Todoist

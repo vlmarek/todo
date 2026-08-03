@@ -15,6 +15,9 @@ A direct child project of the configured root project. Category names and
 membership come dynamically from Todoist. Category matching is case-sensitive;
 task and step selector matching is independently case-insensitive.
 
+Category names are unique under case-insensitive comparison even though normal
+category selection is case-sensitive.
+
 ### Hidden category
 
 A category configured to be excluded from normal `todo now` output. `Someday`

@@ -148,6 +148,8 @@ automatically retried.
   warn on stderr and proceed.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
+- Category creation must reject case-insensitive name collisions before
+  Todoist mutation while leaving ordinary category selection case-sensitive.
 - Rename tests must enforce the same case-insensitive open-sibling uniqueness
   invariants as creation and reject collisions before mutation.
 - Rename tests must reject completed tasks and steps without reopen/recomplete
