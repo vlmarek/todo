@@ -61,6 +61,10 @@ task is allowed.
 If only completed steps under the selected parent have the same
 case-insensitive title, creation is allowed after printing a warning to stderr.
 
+Renaming an open task or step is subject to the same uniqueness rules as
+creation. A rename that would collide case-insensitively with another open task
+in the category or open step under the parent fails before Todoist mutation.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a
