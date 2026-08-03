@@ -156,7 +156,12 @@ state in addition to the previous and resulting attention values.
 ```console
 todo report
 todo report --final
+todo report [--since TIMESTAMP] [--until TIMESTAMP]
 ```
+
+`--since` and `--until` override report interval boundaries for debugging and
+recovery. Without them, the interval begins at the stored cursor and ends at
+the report invocation's captured current time.
 
 ## Selection
 

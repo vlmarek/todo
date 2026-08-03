@@ -180,3 +180,5 @@ automatically retried.
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
   prove that an event cannot appear in two consecutive finalized reports.
+- Report interval tests must cover independent `--since` and `--until`
+  overrides and a single captured end time when `--until` is absent.

@@ -236,6 +236,11 @@ user does not mistake the operation for an unchanged failure.
 `todo report` synchronizes Todoist and creates a report beginning at the stored
 report cursor. It does not change the cursor.
 
+`--since TIMESTAMP` and `--until TIMESTAMP` may override either interval
+boundary for debugging and recovery. Boundary inclusion remains
+start-exclusive and end-inclusive. The command captures a single end time at
+the beginning of report generation when `--until` is omitted.
+
 Report generation requires a successful current-state synchronization,
 complete activity-history retrieval for the interval, and every comment lookup
 needed to evaluate or render report entries. Failure of any required source
