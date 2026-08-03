@@ -182,3 +182,5 @@ automatically retried.
   prove that an event cannot appear in two consecutive finalized reports.
 - Report interval tests must cover independent `--since` and `--until`
   overrides and a single captured end time when `--until` is absent.
+- Report option validation must reject `--final` combined with either interval
+  override before external requests and leave the cursor unchanged.

@@ -163,6 +163,10 @@ todo report [--since TIMESTAMP] [--until TIMESTAMP]
 recovery. Without them, the interval begins at the stored cursor and ends at
 the report invocation's captured current time.
 
+`--final` cannot be combined with `--since` or `--until`. Interval overrides
+are preview/debugging-only and never change the stored report cursor. Invalid
+option combinations fail before synchronization or report generation.
+
 ## Selection
 
 Selectors may match tasks or steps as allowed by the command. If a selector is
