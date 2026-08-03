@@ -138,6 +138,8 @@ automatically retried.
 - Waiting-view tests must use the same effective-hiding membership and ordering
   as the report snapshot while excluding configured hidden categories and
   arrived waiting labels.
+- Someday-view tests must include all configured hidden categories with their
+  open task trees and exclude every completed item.
 - Report tests must verify that optional task-completion text becomes a normal
   `Done: TEXT` progress comment in the same reporting period.
 - Report tests must verify that deleting a task before generation removes all

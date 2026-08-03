@@ -12,6 +12,7 @@ todo now
 todo now --all
 todo now --refresh
 todo waiting
+todo someday
 todo task SELECTOR
 ```
 
@@ -19,6 +20,9 @@ todo task SELECTOR
 tasks and independently hidden steps. It excludes configured hidden categories
 such as `Someday` and excludes items whose stored `waiting` label remains but
 whose attention day has arrived.
+
+`todo someday` is the focused view of every open task and open step in all
+configured hidden categories. Completed items remain excluded.
 
 ## Initialization
 

@@ -28,6 +28,13 @@ their parents. It does not include configured hidden categories or items whose
 attention day has arrived. Tasks and nested steps use the same alphabetical
 ordering established for the report snapshot.
 
+## `todo someday`
+
+`todo someday` shows all open tasks in every configured hidden category and
+their open steps. It does not show completed tasks or steps. The view is based
+on current category membership and is not limited to a category literally named
+`Someday`.
+
 ### Urgency ordering
 
 Task groups are sorted using these keys in order:
