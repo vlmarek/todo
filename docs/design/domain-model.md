@@ -94,6 +94,8 @@ it is not an independently stored state.
 14. Open task titles are unique within one category under case-insensitive
     comparison. The same title may exist in different categories. A completed
     title may be reused in its category with a warning.
+15. Open step titles are unique within one parent task under case-insensitive
+    comparison. The same step title may exist under a different parent.
 
 ## Derived task urgency
 

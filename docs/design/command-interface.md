@@ -54,6 +54,10 @@ If only completed tasks in the target category have the same case-insensitive
 title, creation is allowed but the command prints a warning to stderr before
 mutation. The warning identifies that completed title reuse is occurring.
 
+Creating a step fails before mutation if its parent already contains an open
+step with the same case-insensitive title. The same title under another parent
+task is allowed.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a
