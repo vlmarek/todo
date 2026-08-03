@@ -254,6 +254,10 @@ Task details include every current task comment, ordered chronologically from
 oldest to newest. `todo comment TASK` remains the focused comment-only view and
 uses the same ordering.
 
+Task details separate steps into an open group and a completed group rather
+than interleaving them. Each entry retains its open/checked completion marker,
+including completed steps that remain children of an open parent task.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a
