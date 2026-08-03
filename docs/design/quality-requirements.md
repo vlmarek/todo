@@ -77,5 +77,7 @@ automatically retried.
   time zone.
 - Report tests must cover cursor boundaries, failed finalization, comments,
   completed steps, completed tasks, and current-category grouping.
+- Report tests must verify case-insensitive alphabetical category ordering,
+  independently of Todoist's manual project order.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
   prove that an event cannot appear in two consecutive finalized reports.

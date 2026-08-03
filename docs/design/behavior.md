@@ -152,6 +152,9 @@ If no cursor exists, the effective beginning is infinitely in the past.
 
 The report contains three sections:
 
+Within every section, categories are ordered alphabetically using lowercase
+comparison. Todoist's manual project order does not affect report ordering.
+
 ### Finished
 
 Lists completed tasks. Tasks cannot be completed until all their steps are
