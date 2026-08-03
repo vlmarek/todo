@@ -181,11 +181,11 @@ automatically retried.
 - Task-detail tests must display the parent's own attention value and each
   step's own value without presenting derived effective attention as another
   task property.
-- Task-detail tests must include all current task comments from oldest to
-  newest, matching the focused comment view.
-- Task-detail tests must combine open and completed steps, retain their
-  completion markers, and sort them by creation timestamp newest first without
-  priority or attention affecting the order.
+- Task-detail tests must interleave all current comments and all open/completed
+  steps in one reverse-chronological history, using current comment posting
+  timestamps and step creation timestamps. Step priority and attention must not
+  affect this order, and completion must change the marker rather than create a
+  second history record.
 
 ## Testability
 

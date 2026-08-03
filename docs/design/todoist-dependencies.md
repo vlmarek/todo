@@ -21,7 +21,8 @@ Todoist stores:
 - the `waiting` label used as the persisted own hiding policy
 - hiding-reason metadata stored inside task descriptions
 - creation, update, and completion timestamps; task details specifically depend
-  on each step's stable `added_at` value for reverse-chronological history
+  on each step's stable `added_at` and each current comment's posting timestamp
+  to build a reverse-chronological history
 
 A replacement backend needs durable storage and stable object identity. The
 local cache is not currently designed to be authoritative.

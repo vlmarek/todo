@@ -250,15 +250,16 @@ Task details likewise display only the parent task's own attention date/time.
 They do not show the derived effective attention value used to order the task
 group. Each displayed step shows its own attention value.
 
-Task details include every current task comment, ordered chronologically from
-oldest to newest. `todo comment TASK` remains the focused comment-only view and
-uses the same ordering.
+Task details include every current task comment. `todo comment TASK` remains the
+focused comment-only view and orders comments from oldest to newest.
 
-Task details show open and completed steps together as a reverse-chronological
-history. Steps are sorted by their Todoist creation timestamp (`added_at`),
-newest first. Each entry retains its open/checked completion marker and shows
-its own priority and attention value, but those values do not affect ordering in
-this view.
+Within task details, comments and open/completed steps are interleaved in one
+reverse-chronological history. A step is positioned by its Todoist creation
+timestamp (`added_at`); a comment is positioned by its current posting
+timestamp. Newest records appear first. Each step retains its open/checked
+completion marker and shows its own priority and attention value, but those
+values do not affect ordering. Completing a step changes its marker in this
+view; it does not add a separate task-detail history record.
 
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
