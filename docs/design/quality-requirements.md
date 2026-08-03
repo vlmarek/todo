@@ -127,7 +127,9 @@ Status: Proposed
   for a missing file, malformed INI, and absent or invalid required settings.
 - Configuration compatibility tests must retain `[todoist] token` and `[main]`
   keys `project`, `default_sections`, and `hidden_from_now`, preserve category
-  name case, and reject reliance on `default_wait_due`.
+  name case, and prove that `default_wait_due` has no effect.
+- Unknown configuration sections and keys must be ignored, while malformed or
+  invalid recognized settings must still fail validation.
 
 ## Reliability
 

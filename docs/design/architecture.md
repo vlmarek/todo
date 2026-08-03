@@ -89,6 +89,10 @@ by init and ordinary commands. Comma-separated names are trimmed but preserve
 their case. `default_wait_due` is not a supported setting because hiding always
 requires an explicit date.
 
+Unknown INI sections and keys are ignored for compatibility. This includes an
+old `default_wait_due` entry: it has no effect and does not make the config
+invalid. Recognized settings are still validated strictly.
+
 ## Read-only flow
 
 Read-only commands load configuration and cached task data, validate the
