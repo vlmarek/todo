@@ -130,6 +130,10 @@ The explanatory `TEXT` is optional. These are ordinary comments and require no
 special report processing. If reopening succeeds but adding the comment fails,
 the item remains reopened and the command reports the partial failure.
 
+Reopening an already open item fails with a nonzero status, performs no
+mutation, and adds no comment. Symmetrically, completing an already completed
+item fails rather than reporting an unchanged success.
+
 ## Moving to a hidden category
 
 Before moving a task into a configured hidden category, validate the task and

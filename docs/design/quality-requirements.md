@@ -115,6 +115,8 @@ automatically retried.
 - Reopen tests must verify automatic task or parent-task progress comments,
   optional explanatory text, and partial failure after a successful reopen but
   failed comment creation.
+- State-transition tests must reject already-satisfied completion and reopening
+  requests without mutation or audit comments.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and

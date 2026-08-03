@@ -88,6 +88,9 @@ it is not an independently stored state.
 11. A task remains open after all its steps are completed until the task itself
     is completed.
 12. A task cannot be completed while it has open steps.
+13. Completion requires an open item; reopening requires a completed item.
+    Requesting either transition when the item is already in the target state
+    is a user error, not an idempotent success.
 
 ## Derived task urgency
 
