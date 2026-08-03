@@ -67,6 +67,11 @@ diagnostics and no normal result output.
 
 If synchronization, selection, or validation fails, no mutation is sent.
 
+Workflows requiring multiple Todoist mutations are not assumed to be
+transactional. Once a mutation is accepted, a later failure is reported rather
+than automatically reversed. A subsequent synchronization reconciles the
+cache with the authoritative partial result.
+
 ## Report flow
 
 1. Load the report cursor without changing it.

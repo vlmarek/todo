@@ -7,6 +7,9 @@ Status: Proposed
 - Validation must complete before any Todoist mutation.
 - Completing a parent with open steps must obtain explicit confirmation before
   completing any item; cancellation must leave the whole task tree unchanged.
+- Once Todoist accepts an operation in a confirmed multi-item completion, a
+  later failure must not trigger compensating reopens. The partial failure must
+  be reported clearly with a nonzero exit status.
 - An ambiguous mutation must not guess which task or step to change.
 - Exact title equality must not bypass ambiguity handling when other items also
   match the selector.

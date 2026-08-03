@@ -108,6 +108,12 @@ task, it adds a task comment with the content `Done: TEXT`. That comment is a
 normal progress event and is eligible for the report period. Steps do not
 accept completion comments because steps cannot have comments.
 
+After confirmation, open steps are completed sequentially before the parent.
+If a later Todoist operation fails, previously accepted completions remain in
+Todoist. The command does not attempt compensating reopens. It exits nonzero
+and reports clearly which operation failed and that earlier changes may already
+have succeeded.
+
 ## Moving to a hidden category
 
 Before moving a task into a configured hidden category, validate the task and
