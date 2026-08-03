@@ -242,6 +242,10 @@ resolved only by commands that explicitly require them, currently `reopen` and
 `delete`. Historical parent inspection may be added later if actual usage
 justifies the additional selection and presentation complexity.
 
+Task details display the parent task's single stored priority. They do not show
+the derived effective priority used to order the task group; the priorities of
+individual steps are visible on those steps.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a

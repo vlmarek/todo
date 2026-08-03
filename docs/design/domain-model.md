@@ -146,6 +146,9 @@ For ordering in `todo now`, a task represents itself and its open steps.
 
 Completed steps do not contribute to these derived values.
 
+Effective task priority is only an internal ordering value. A task itself has
+one stored priority, and task details display only that stored value.
+
 For urgency sorting, an absent effective attention value is treated as
 infinitely far in the past. This rule is applied only after the due bucket and
 effective-priority keys.

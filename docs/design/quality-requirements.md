@@ -176,6 +176,8 @@ automatically retried.
   forms as equivalent.
 - Priority mutation output must identify the item and print both its previous
   and resulting stored priority.
+- Task-detail tests must display only the task's stored priority, not label the
+  derived task-group sorting priority as another task property.
 
 ## Testability
 
