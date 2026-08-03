@@ -48,7 +48,8 @@ replaces Todoist's manual step order in `todo now`.
 
 Priority precedes the exact attention value within a bucket. For example, when
 both items are due today, a P1 item due at 17:00 sorts before a P2 item due at
-09:00.
+09:00. The same rule applies in the overdue bucket: a P1 item overdue by one
+day sorts before a P2 item overdue by one month.
 
 ## Attention values and hiding
 

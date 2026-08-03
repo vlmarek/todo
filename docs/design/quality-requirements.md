@@ -66,7 +66,7 @@ automatically retried.
 - Exact appointment times must not prevent items from appearing on the morning
   of their attention day.
 - Ordering tests must verify that priority outranks exact date/time within each
-  due bucket.
+  due bucket, including overdue items with substantially different dates.
 
 ## Testability
 
