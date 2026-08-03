@@ -88,10 +88,16 @@ missing structural objects implicitly.
 ## Progress and completion
 
 ```console
+todo comment [--refresh] TASK
 todo comment TASK COMMENT
 todo done ITEM [TEXT]
 todo reopen ITEM [TEXT]
 ```
+
+`todo comment TASK` displays the selected open parent task's existing comments
+without changing state and accepts `--refresh` like the other cached read views.
+`todo comment TASK COMMENT` creates one new task comment. Steps cannot own
+comments, so both forms select parent tasks only.
 
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative

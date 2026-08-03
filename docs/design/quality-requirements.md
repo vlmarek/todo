@@ -55,6 +55,8 @@ Status: Proposed
 - Report tests must keep comments in `Progress`, include them only in their
   cursor-bounded add/edit period, and prove task completion does not repeat old
   comments in `Finished`.
+- Comment-command tests must distinguish the no-text cached display form from
+  the text-supplied mutation form and restrict both to parent tasks.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side
