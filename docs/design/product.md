@@ -65,6 +65,8 @@ are treated as work categories. The root project name is configurable.
   are not part of the normal workflow.
 - Decisions may be revisited when sustained usage demonstrates a missing
   workflow; speculative future needs do not require implementation now.
+- Validate external capabilities and structural objects only when the requested
+  operation depends on them. Avoid unrelated preflight checks on every command.
 
 ## Scope
 

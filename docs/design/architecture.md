@@ -77,6 +77,10 @@ diagnostics and no normal result output.
 
 If synchronization, selection, or validation fails, no mutation is sent.
 
+Validation is operation-scoped. Workflows check Todoist projects, labels, and
+capabilities only when they depend on them rather than running a global
+external-object preflight for every command.
+
 When Todoist must interpret a due expression that the local parser cannot
 classify, the workflow snapshots reminder state, performs the update,
 synchronizes, and compares the resulting authoritative due/reminder state. Any

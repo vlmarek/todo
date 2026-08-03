@@ -56,6 +56,8 @@ Status: Proposed
   or ambiguous and must not silently select or create a replacement.
 - Initialization tests must provision only missing root/category/label objects
   and verify that ordinary commands perform no implicit provisioning.
+- A missing `waiting` label must fail `--hide` before item mutation but must not
+  make unrelated commands fail. The error must direct the user to `todo init`.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 

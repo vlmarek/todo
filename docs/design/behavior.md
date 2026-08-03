@@ -63,6 +63,12 @@ attention value without `--hide` removes that label; setting it with `--hide`
 adds it. Clearing the attention state also removes it. The label remains after
 the attention day arrives and is removed only by an explicit later mutation.
 
+The `waiting` label is required only by operations that add a hiding policy.
+If it is missing, `--hide` fails before item mutation and directs the user to
+run `todo init`. Unrelated commands do not perform or fail this label-existence
+check. Removing an existing hiding policy does not require the label resource
+to still exist.
+
 A hidden task or step must store a non-empty hiding reason in a marked metadata
 block in its Todoist description. Setting or changing temporary hiding updates
 that block without replacing ordinary description text. Removing the hiding
