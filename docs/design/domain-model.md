@@ -22,6 +22,11 @@ Configuration identifies hidden categories by their current case-sensitive
 Todoist names. A configured name that matches no current category has no effect
 and is not an error.
 
+If a Todoist rename causes a category with scheduled items to acquire a
+configured hidden name, the category is nevertheless hidden. The contained
+data is an invalid state that must be reported on read; it is not normalized
+implicitly.
+
 ### Task
 
 An open or completed Todoist item directly associated with a category. A task

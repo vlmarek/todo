@@ -12,6 +12,8 @@ Status: Proposed
 - A task must not be hidden beyond the attention day of any open step.
 - Moving work into a configured hidden category must not implicitly discard
   dates, recurrence, reminders, or hiding policies.
+- Invalid scheduling data discovered inside a configured hidden category must
+  be reported during reads without exposing the category or modifying Todoist.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 

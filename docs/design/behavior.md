@@ -101,6 +101,13 @@ A renamed project is treated as an ordinary visible category unless its new
 name is also configured as hidden. Todoist remains authoritative for the
 project and for the disposition of its tasks.
 
+The reverse rename takes effect immediately as well. If a Todoist project is
+renamed to a configured hidden-category name, it is hidden even when it already
+contains tasks or steps with attention values, reminders, or hiding policies.
+Read operations diagnose each resulting invariant violation. They must not
+ignore the scheduling data, treat the category as visible, or silently modify
+Todoist to repair it.
+
 ## Clearing
 
 `ITEM clear` removes the item's attention value, recurrence, reminders, and own
