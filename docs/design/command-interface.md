@@ -128,6 +128,10 @@ Each existing block carries its stable Todoist comment ID and displayed posting
 timestamp. Each `[new]` block represents one new comment. Multiple existing and
 new blocks may appear in the same buffer.
 
+Deleting an existing comment requires removing its entire header-and-body block.
+Removing only its header is not a deletion instruction and must not cause the
+orphaned body to be merged into another comment.
+
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
 confirmation, no item is completed.

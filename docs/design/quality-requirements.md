@@ -70,6 +70,9 @@ Status: Proposed
 - Comment-editor parsing tests must recognize existing
   `[id: COMMENT_ID posted: TIMESTAMP]` blocks and multiple `[new]` blocks while
   retaining stable IDs for existing comments.
+- Comment-editor deletion tests must require removal of the complete marked
+  block and must never merge text left after a removed header into an adjacent
+  comment.
 - A successfully generated empty final report must advance the cursor.
 - A task must not be hidden beyond the attention day of any open step.
 - Hiding-policy tests must verify `waiting` label addition, removal, phone-side
