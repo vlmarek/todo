@@ -64,6 +64,10 @@ When a step matches but its parent task does not, the parent task title is still
 shown as grouping context. The parent is not thereby considered a match, and
 nonmatching sibling steps are omitted.
 
+When a parent task matches, its nonmatching steps are not shown. Thus parent
+context is added only upward for a matching step, never downward from a matching
+parent to its steps.
+
 ## Initialization
 
 ```console

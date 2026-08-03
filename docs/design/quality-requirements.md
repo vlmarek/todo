@@ -43,6 +43,7 @@ Status: Proposed
   must not expose matching-field excerpts or explanations.
 - A step-only search match must display its nonmatching parent as context while
   omitting nonmatching sibling steps.
+- A parent-only search match must omit all nonmatching steps.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.
