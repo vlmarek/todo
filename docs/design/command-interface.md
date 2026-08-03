@@ -246,6 +246,10 @@ Task details display the parent task's single stored priority. They do not show
 the derived effective priority used to order the task group; the priorities of
 individual steps are visible on those steps.
 
+Task details likewise display only the parent task's own attention date/time.
+They do not show the derived effective attention value used to order the task
+group. Each displayed step shows its own attention value.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a

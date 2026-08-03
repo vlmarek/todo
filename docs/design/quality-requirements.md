@@ -178,6 +178,9 @@ automatically retried.
   and resulting stored priority.
 - Task-detail tests must display only the task's stored priority, not label the
   derived task-group sorting priority as another task property.
+- Task-detail tests must display the parent's own attention value and each
+  step's own value without presenting derived effective attention as another
+  task property.
 
 ## Testability
 
