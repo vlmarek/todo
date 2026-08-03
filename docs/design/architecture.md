@@ -97,6 +97,12 @@ invalid. Recognized settings are still validated strictly.
 value, meaning that no category is hidden from `todo now` by category policy.
 `default_sections` must contain at least one nonempty category name.
 
+The two lists are independent. `default_sections` only names category projects
+that `todo init` creates when absent. `hidden_from_now` classifies current
+matching categories for visibility and may contain names not present in
+`default_sections`; init does not create categories merely because they are
+listed as hidden.
+
 ## Read-only flow
 
 Read-only commands load configuration and cached task data, validate the
