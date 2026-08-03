@@ -108,6 +108,10 @@ Read operations diagnose each resulting invariant violation. They must not
 ignore the scheduling data, treat the category as visible, or silently modify
 Todoist to repair it.
 
+Model validation precedes normal read output. If any such invariant violation
+is found, the command prints diagnostic errors to stderr, exits nonzero, and
+does not print a partial actionable list or other normal result.
+
 ## Clearing
 
 `ITEM clear` removes the item's attention value, recurrence, reminders, and own

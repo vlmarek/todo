@@ -14,6 +14,8 @@ Status: Proposed
   dates, recurrence, reminders, or hiding policies.
 - Invalid scheduling data discovered inside a configured hidden category must
   be reported during reads without exposing the category or modifying Todoist.
+- Read output is atomic with respect to model validation: an invalid model must
+  produce no partial normal output and must return a nonzero status.
 - Secrets must not appear in logs, errors, caches committed to source control,
   or test fixtures.
 

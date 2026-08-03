@@ -50,8 +50,10 @@ Stores configuration, cache, report cursor, and runtime lock safely.
 
 ## Read-only flow
 
-Read-only commands load configuration and cached task data, apply domain rules,
-and format results. Explicit `--refresh` synchronizes Todoist before reading.
+Read-only commands load configuration and cached task data, validate the
+complete relevant model, apply domain rules, and format results. Explicit
+`--refresh` synchronizes Todoist before reading. Validation failure produces
+diagnostics and no normal result output.
 
 ## Mutation flow
 
@@ -73,4 +75,3 @@ If synchronization, selection, or validation fails, no mutation is sent.
 4. Print the report.
 5. If and only if `--final` was requested and all previous steps succeeded,
    advance the cursor.
-
