@@ -75,8 +75,14 @@ rather than being moved independently.
 
 Ordinary editing commands operate on open items only. This includes changing
 priority, attention values, hiding policy, recurrence, reminders, comments,
-titles, categories, and adding steps. Completed items may be inspected,
-reopened, or deleted, but are not temporarily reopened for editing.
+titles, categories, and adding steps. Completed items may be reopened or
+deleted, but are not temporarily reopened for editing.
+
+Normal `todo task SELECTOR` searches open parent tasks only. Its details include
+completed steps belonging to the selected open task. Completed parent tasks are
+resolved only by commands that explicitly require them, currently `reopen` and
+`delete`. Historical parent inspection may be added later if actual usage
+justifies the additional selection and presentation complexity.
 
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt

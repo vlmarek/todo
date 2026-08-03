@@ -98,7 +98,8 @@ it is not an independently stored state.
     comparison. The same step title may exist under a different parent. A
     completed step title may be reused under its parent with a warning.
 16. Completed items are immutable through ordinary editing commands. They may
-    be inspected, reopened, or deleted; editing requires reopening first.
+    be resolved by commands that reopen or delete them; editing requires
+    reopening first. Normal parent-task inspection remains open-only.
 
 ## Derived task urgency
 

@@ -63,6 +63,8 @@ are treated as work categories. The root project name is configurable.
 - Feature completeness is not a goal by itself. Do not implement uncommon
   mutations or Todoist quirks merely for symmetry when they add complexity and
   are not part of the normal workflow.
+- Decisions may be revisited when sustained usage demonstrates a missing
+  workflow; speculative future needs do not require implementation now.
 
 ## Scope
 
