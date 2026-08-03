@@ -73,6 +73,11 @@ mutation.
 not reopened temporarily for moving, and steps inherit their parent category
 rather than being moved independently.
 
+Ordinary editing commands operate on open items only. This includes changing
+priority, attention values, hiding policy, recurrence, reminders, comments,
+titles, categories, and adding steps. Completed items may be inspected,
+reopened, or deleted, but are not temporarily reopened for editing.
+
 `todo delete ITEM` requests interactive confirmation before mutation. Only an
 explicit affirmative response authorizes deletion. `--yes` skips the prompt
 and is required for non-interactive deletion. Cancellation, end of input, or a

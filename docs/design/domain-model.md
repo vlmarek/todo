@@ -97,6 +97,8 @@ it is not an independently stored state.
 15. Open step titles are unique within one parent task under case-insensitive
     comparison. The same step title may exist under a different parent. A
     completed step title may be reused under its parent with a warning.
+16. Completed items are immutable through ordinary editing commands. They may
+    be inspected, reopened, or deleted; editing requires reopening first.
 
 ## Derived task urgency
 

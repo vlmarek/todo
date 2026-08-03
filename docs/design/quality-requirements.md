@@ -135,6 +135,9 @@ automatically retried.
   workaround mutations.
 - Move tests must reject completed tasks and step targets without workaround
   mutations.
+- Every ordinary editing workflow must reject completed targets before Todoist
+  mutation. Only inspection, reopen, and delete intentionally accept completed
+  items.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
