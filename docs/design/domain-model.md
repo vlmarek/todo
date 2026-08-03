@@ -57,6 +57,13 @@ suppressed before its local attention day. The label remains after that day,
 even though the item is then visible. Todoist is authoritative for the label,
 so label changes made on the phone are observed after synchronization.
 
+### Hiding reason
+
+Human-readable context explaining why a task is temporarily hidden. It is
+stored in a marked metadata block inside the Todoist task description so it
+synchronizes across clients while remaining separable from ordinary
+description text. Steps do not have independent reasons.
+
 ### Effective visibility
 
 Whether an item is displayed after considering completion, category hiding,

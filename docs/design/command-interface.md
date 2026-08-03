@@ -118,6 +118,11 @@ todo wait --reminder clear ITEM
 
 The equivalent `due` and `schedule` clearing forms are also accepted.
 
+The temporary-hiding forms accept a reason associated with the parent task.
+The reason is stored in a marked block inside the task description and is shown
+in task details and reports. The final required/optional command grammar for
+that reason is specified separately.
+
 Supplying a date without `--hide` removes the item's own hiding policy.
 Supplying `--hide` enables it. Clearing the item removes attention, recurrence,
 reminders, and its own hiding policy.

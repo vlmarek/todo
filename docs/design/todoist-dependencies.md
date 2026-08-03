@@ -19,6 +19,7 @@ Todoist stores:
 - due/attention values and recurrence definitions
 - reminders
 - the `waiting` label used as the persisted own hiding policy
+- hiding-reason metadata stored inside task descriptions
 - creation, update, and completion timestamps
 
 A replacement backend needs durable storage and stable object identity. The
