@@ -31,6 +31,8 @@ Status: Proposed
   comments cannot cause an item to be targeted.
 - Search tests must cover titles, descriptions, waiting reasons, and comments,
   and must prove that search results cannot implicitly select or mutate items.
+- Search visibility tests must exclude completed items by default and include
+  both open and completed items with `--all`.
 - Failed synchronization must prevent mutation.
 - A report cursor must not advance unless synchronization and report generation
   both succeed.

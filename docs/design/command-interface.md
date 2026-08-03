@@ -15,7 +15,7 @@ todo waiting [--refresh]
 todo someday [--refresh]
 todo task [--refresh] SELECTOR
 todo category [--refresh]
-todo search [--refresh] TEXT
+todo search [--all] [--refresh] TEXT
 ```
 
 `todo waiting` is the focused view of currently suppressed temporary-hidden
@@ -37,6 +37,10 @@ A failed refresh exits nonzero and prints no normal view output.
 descriptions, temporary-waiting reasons, and task comments. It only displays
 matches and never selects an item or changes state. Its searchable fields do
 not affect the title-only selector rules used by other commands.
+
+Search examines open tasks and steps by default. `todo search --all TEXT`
+expands the same search to completed tasks and steps as well; it does not mean
+completed-only. Comments associated with an included task remain searchable.
 
 ## Initialization
 

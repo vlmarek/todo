@@ -40,6 +40,10 @@ category name, then lowercase task title. Open steps within a task are sorted by
 their own priority and then lowercase step title. No attention-date ordering is
 needed because hidden-category items cannot have attention values.
 
+`todo search` searches only open tasks and steps by default. Its `--all` option
+also includes completed tasks and steps in the result population. Search remains
+a read-only discovery operation in either mode.
+
 ### Urgency ordering
 
 Task groups are sorted using these keys in order:
