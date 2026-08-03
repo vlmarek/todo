@@ -137,6 +137,11 @@ Text outside a marked block, malformed or unknown headers, duplicate existing
 IDs, or an existing ID that was not present in the generated buffer causes a
 nonzero error with no Todoist changes.
 
+Every retained existing block and every `[new]` block must contain a
+non-whitespace body. An empty block invalidates the complete edit; it is never
+interpreted as deletion and is never silently ignored. Deletion remains the
+removal of the complete existing block.
+
 Completing a parent task that still has open steps requires interactive
 confirmation to complete all open steps first. Without explicit affirmative
 confirmation, no item is completed.
