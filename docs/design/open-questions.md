@@ -3,13 +3,6 @@
 Only genuinely unresolved behavior belongs here. Implementation must not choose
 an answer silently.
 
-## Exact tie-breaking within a task group
-
-Status: Open
-
-Task-group ordering is specified. Ordering of the displayed open steps within
-one task has not yet been specified.
-
 ## Hidden report section meaning
 
 Status: Open

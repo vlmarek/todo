@@ -41,6 +41,11 @@ infinitely far in the past. Consequently, among items in the same due bucket
 and with the same effective priority, an undated item sorts before every dated
 item.
 
+Open steps displayed within a task group use the same urgency keys: due bucket,
+step priority, step attention value, and lowercase title. A step has no separate
+category key because it inherits its parent task's category. This ordering
+replaces Todoist's manual step order in `todo now`.
+
 ## Attention values and hiding
 
 `wait`, `due`, and `schedule` are intended to be equivalent aliases.

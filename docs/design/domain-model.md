@@ -92,6 +92,10 @@ For urgency sorting, an absent effective attention value is treated as
 infinitely far in the past. This rule is applied only after the due bucket and
 effective-priority keys.
 
+Open steps within a displayed task group are sorted by their own due bucket,
+priority, attention value, and lowercase title. The same infinitely-past rule
+applies to an absent step attention value.
+
 ## Visibility
 
 An undated open task is normally actionable unless it is in a hidden category
