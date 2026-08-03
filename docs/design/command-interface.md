@@ -19,7 +19,7 @@ todo task SELECTOR
 ```console
 todo comment TASK COMMENT
 todo done ITEM [TEXT]
-todo reopen ITEM
+todo reopen ITEM [TEXT]
 ```
 
 Completing a parent task that still has open steps requires interactive
@@ -31,6 +31,10 @@ a task comment prefixed with `Done: `. It is not valid for a step.
 
 `todo reopen ITEM` changes only the selected task or step. Reopening a parent
 does not reopen any of its completed steps.
+
+A successful reopen always adds a progress comment. Task comments use
+`Reopened` or `Reopened: TEXT`; step reopenings add `Reopened step: STEP` or
+`Reopened step: STEP: TEXT` to the parent task. `TEXT` is optional.
 
 ## Creation and maintenance
 

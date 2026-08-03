@@ -112,6 +112,9 @@ automatically retried.
 - Report tests must ignore non-recurring completion events for items that are
   currently open, while retaining recurring completion events whose next
   occurrence is open.
+- Reopen tests must verify automatic task or parent-task progress comments,
+  optional explanatory text, and partial failure after a successful reopen but
+  failed comment creation.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
 - Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
