@@ -13,6 +13,8 @@ Status: Proposed
 - An ambiguous mutation must not guess which task or step to change.
 - Exact title equality must not bypass ambiguity handling when other items also
   match the selector.
+- Deletion must require either interactive affirmative confirmation or the
+  explicit `--yes` option; otherwise no mutation may be sent.
 - Acceptance tests must distinguish a quoted contiguous-phrase selector from
   multiple all-terms selectors, including reversed and non-contiguous terms.
 - Selection tests must distinguish task-only noun commands from implicit

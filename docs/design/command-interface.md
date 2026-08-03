@@ -38,9 +38,15 @@ does not reopen any of its completed steps.
 todo add CATEGORY TASK [STEP ...]
 todo add step TASK STEP [STEP ...]
 todo rename ITEM NEW_NAME
-todo delete ITEM
+todo delete [--yes] ITEM
 todo category
 ```
+
+`todo delete ITEM` requests interactive confirmation before mutation. Only an
+explicit affirmative response authorizes deletion. `--yes` skips the prompt
+and is required for non-interactive deletion. Cancellation, end of input, or a
+non-interactive invocation without `--yes` leaves the item unchanged and exits
+nonzero.
 
 ## Attention and reminders
 
