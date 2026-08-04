@@ -1,6 +1,6 @@
 # Architecture
 
-Status: Initial outline
+Status: Proposed
 
 ## System context
 

@@ -1,9 +1,9 @@
 # Command interface
 
-Status: Initial outline
+Status: Proposed
 
-This document will define the complete public CLI. The forms below record the
-parts established so far; omitted commands still require documentation.
+This document defines the proposed public CLI established during design
+discovery.
 
 ## Global options
 

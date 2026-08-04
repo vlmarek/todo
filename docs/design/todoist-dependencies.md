@@ -1,6 +1,6 @@
 # Todoist dependency inventory
 
-Status: Initial inventory
+Status: Proposed
 
 This document identifies behavior and infrastructure currently delegated to
 Todoist. Its purpose is to make the cost and capability loss of a future
