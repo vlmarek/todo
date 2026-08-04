@@ -270,6 +270,8 @@ automatically retried.
 - Retained `todo task --ACTION` and `todo step --ACTION` mutation forms must
   delegate to their canonical verb behavior and must not reintroduce removed
   features.
+- The parser must not expose a `check` command; step completion remains covered
+  by `done` and its documented aliases.
 - State-transition tests must reject already-satisfied completion and reopening
   requests without mutation or audit comments.
 - Mutation tests must reject complete no-op proposals before any Todoist

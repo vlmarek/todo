@@ -317,6 +317,10 @@ Compatibility syntax exists only for operations supported elsewhere in this
 design; it does not restore removed operations such as `resume` or an `ask`
 date value.
 
+`todo check` is not part of the interface. The unreachable function with that
+name in the old implementation is dead code for completing a step, not a
+diagnostic feature; `todo done` is the supported operation.
+
 Task details display the parent task's single stored priority. They do not show
 the derived effective priority used to order the task group; the priorities of
 individual steps are visible on those steps.
