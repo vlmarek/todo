@@ -193,6 +193,8 @@ todo rename ITEM NEW_NAME
 todo priority ITEM P
 todo delete [--yes] ITEM
 todo category [--refresh]
+todo category --add NAME
+todo add category NAME
 ```
 
 A newly created parent task has P2 unless the creation command explicitly sets
@@ -240,6 +242,8 @@ its previous priority, and its resulting priority. Setting the stored priority
 to its existing value is a no-op error under the normal mutation rules.
 
 `todo category` lists categories alphabetically using lowercase comparison.
+`todo category --add NAME` and `todo add category NAME` are equivalent creation
+forms and follow the same validation, synchronization, and output behavior.
 Creating a category fails before mutation when any existing category name is
 equal under case-insensitive comparison.
 

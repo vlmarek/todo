@@ -299,6 +299,8 @@ automatically retried.
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before
   Todoist mutation while leaving ordinary category selection case-sensitive.
+- `todo category --add NAME` and `todo add category NAME` must exercise the same
+  category-creation operation and observable behavior.
 - Rename tests must enforce the same case-insensitive open-sibling uniqueness
   invariants as creation and reject collisions before mutation.
 - Successful rename output must identify whether the item is a task or step and
