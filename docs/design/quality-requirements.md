@@ -308,6 +308,9 @@ automatically retried.
   conflicting priority options before mutation.
 - Explicit `todo add task` must be behaviorally identical to short-form task
   creation and permit categories whose names collide with explicit add kinds.
+- Creation tests must treat `--done`, `--close`, and `--closed` as equivalent,
+  generate normal completion events, and complete all inline steps before a
+  newly created parent.
 - Task- and step-creation tests must support initial attention values and
   repeatable reminders, reuse normal parsing and validation, and reject a
   reminder without a timed attention value before mutation.

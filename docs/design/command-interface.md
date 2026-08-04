@@ -241,13 +241,16 @@ A successful reopen always adds a progress comment. Task comments use
 ## Creation and maintenance
 
 ```console
-todo add [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
+todo add [--done|--close|--closed]
+         [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
          [--reminder OFFSET ...] [--hide REASON]
          CATEGORY TASK [STEP ...]
-todo add task [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
+todo add task [--done|--close|--closed]
+              [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
               [--reminder OFFSET ...] [--hide REASON]
               CATEGORY TASK [STEP ...]
-todo add step [--due DATE] [--reminder OFFSET ...] [--hide REASON]
+todo add step [--done|--close|--closed] [--due DATE]
+              [--reminder OFFSET ...] [--hide REASON]
               TASK STEP [STEP ...]
 todo rename ITEM NEW_NAME
 todo priority ITEM P
@@ -265,6 +268,12 @@ override; `todo priority` may change the step afterward.
 `todo add task ...` is an explicit alias for `todo add ...` with identical
 options and behavior. It disambiguates task creation when a category is
 literally named like an explicit add kind such as `category` or `step`.
+
+Task and step creation retain equivalent `--done`, `--close`, and `--closed`
+options. The item is first created and then completed through the normal Todoist
+completion operation, so the completion contributes to reporting. For a parent
+created with inline steps, every step is completed before the parent, preserving
+the invariant that a completed parent has no open steps.
 
 Task creation accepts both `--priority 1` through `--priority 4` and
 `--priority P1` through `--priority P4`, with the `P` case-insensitive. The
