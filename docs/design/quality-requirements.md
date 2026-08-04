@@ -332,6 +332,8 @@ automatically retried.
   ordering while limiting results to the case-insensitively selected category.
 - A missing `now --category` target must fail nonzero with no normal list,
   while an existing category with no actionable items must succeed.
+- `todo now --all --category` must include all open visibility states within
+  only the selected category.
 - `todo category --add NAME` and `todo add category NAME` must exercise the same
   category-creation operation and observable behavior.
 - `categories` must be behaviorally identical to `category`; `show` must not be

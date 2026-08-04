@@ -69,6 +69,10 @@ missing category and exits nonzero without normal list output. A matching
 category that simply contains no actionable items produces a successful empty
 view.
 
+`--all` and `--category` may be combined. The category lookup first limits the
+scope, then `--all` includes every open task and open step in that category,
+including temporarily hidden items and items hidden by category policy.
+
 ## Discovery
 
 `todo search TEXT` searches broadly across task titles, step titles, ordinary
