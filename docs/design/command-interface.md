@@ -425,6 +425,10 @@ ambiguous in an interactive terminal, the command displays matching choices
 and asks the user to select one. A non-interactive mutating command must refuse
 to guess.
 
+A non-interactive read-only lookup also refuses to guess. It prints the numbered
+candidate list, reports that interactive selection is unavailable, and exits
+nonzero without displaying any candidate's detail view.
+
 An exact title match does not take precedence over other matching results. For
 example, selector `Deploy` remains ambiguous when both `Deploy` and
 `Deploy staging` match, and both are presented for selection.

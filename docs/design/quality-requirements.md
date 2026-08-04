@@ -11,6 +11,8 @@ Status: Proposed
   later failure must not trigger compensating reopens. The partial failure must
   be reported clearly with a nonzero exit status.
 - An ambiguous mutation must not guess which task or step to change.
+- An ambiguous non-interactive read lookup must print its numbered candidates,
+  exit nonzero, and display no candidate detail view.
 - Exact title equality must not bypass ambiguity handling when other items also
   match the selector.
 - Deletion must require either interactive affirmative confirmation or the
