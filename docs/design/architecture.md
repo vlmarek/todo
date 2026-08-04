@@ -83,7 +83,15 @@ default_sections = ai, gatekeeper, engineer, Someday
 hidden_from_now = Someday
 
 [colors]
-# optional semantic color overrides
+# optional palette overrides
+# base01 = #586e75
+# base1 = #93a1a1
+# red = #dc322f
+# green = #859900
+# yellow = #b58900
+# blue = #268bd2
+# magenta = #d33682
+# cyan = #2aa198
 ```
 
 `token` may be omitted when `TODOIST_TOKEN` supplies authentication. `project`,
@@ -100,9 +108,11 @@ Unknown INI sections and keys are ignored for compatibility. This includes an
 old `default_wait_due` entry: it has no effect and does not make the config
 invalid. Recognized settings are still validated strictly.
 
-The optional `[colors]` section overrides recognized semantic roles individually.
-Solarized Dark supplies every omitted role. Invalid values for recognized roles
-fail configuration validation.
+The optional `[colors]` section recognizes exactly the palette slots `base01`,
+`base1`, `red`, `green`, `yellow`, `blue`, `magenta`, and `cyan`. Solarized Dark
+supplies the defaults shown above. Omitted slots retain their defaults; invalid
+values for recognized slots fail configuration validation. Other keys are
+ignored.
 
 Each recognized color value uses exactly six hexadecimal RGB digits prefixed by
 `#`, for example `#dc322f`. Hexadecimal digits are case-insensitive; shorthand,

@@ -17,9 +17,10 @@ forces color and `never` disables it. Diagnostics sent to stderr must remain
 understandable without relying on color.
 
 The built-in palette is Solarized Dark. An optional `[colors]` section in
-`~/.todo/config` may override individual recognized semantic color roles.
-Omitted roles keep their Solarized defaults. An invalid value for a recognized
-role is a configuration error; unknown keys remain ignored under the general
+`~/.todo/config` may override the existing palette slots `base01`, `base1`,
+`red`, `green`, `yellow`, `blue`, `magenta`, and `cyan`. Omitted slots keep
+their Solarized defaults. An invalid value for a recognized slot is a
+configuration error; unknown keys remain ignored under the general
 configuration compatibility rule.
 
 ## Work views

@@ -188,7 +188,7 @@ automatically retried.
 - Global color tests must cover `auto`, `always`, and `never`; auto mode must
   disable color for non-terminals, `NO_COLOR`, and `TERM=dumb`.
 - Color configuration tests must use Solarized Dark defaults, apply partial
-  recognized `[colors]` overrides, retain defaults for omitted roles, reject
+  recognized `[colors]` palette-slot overrides, retain defaults for omitted slots, reject
   invalid recognized values, and ignore unknown keys.
 - Recognized color values must accept case-insensitive six-digit `#RRGGBB` and
   reject shorthand, named, alpha, or unprefixed formats.
