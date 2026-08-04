@@ -111,6 +111,11 @@ todo done ITEM [TEXT]
 todo reopen ITEM [TEXT]
 ```
 
+`todo close` and `todo closed` are aliases for `todo done`. `todo unclose` and
+`todo undone` are aliases for `todo reopen`. Aliases preserve the complete
+selection, confirmation, comment, failure, and output behavior of the canonical
+command.
+
 `todo comment TASK` displays the selected open parent task's existing comments
 without changing state and accepts `--refresh` like the other cached read views.
 `todo comment TASK COMMENT [COMMENT ...]` creates one new task comment for each

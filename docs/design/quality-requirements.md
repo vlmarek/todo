@@ -260,6 +260,8 @@ automatically retried.
 - Reopen tests must verify automatic task or parent-task progress comments,
   optional explanatory text, and partial failure after a successful reopen but
   failed comment creation.
+- `close`/`closed` and `unclose`/`undone` must be behaviorally identical to
+  `done` and `reopen`, respectively.
 - State-transition tests must reject already-satisfied completion and reopening
   requests without mutation or audit comments.
 - Mutation tests must reject complete no-op proposals before any Todoist
