@@ -5,6 +5,17 @@ Status: Initial outline
 This document will define the complete public CLI. The forms below record the
 parts established so far; omitted commands still require documentation.
 
+## Global options
+
+```console
+todo [--color=auto|always|never] COMMAND ...
+```
+
+Color defaults to `auto`: it is enabled only when normal output is a terminal
+and is disabled for redirected output, `NO_COLOR`, or `TERM=dumb`. `always`
+forces color and `never` disables it. Diagnostics sent to stderr must remain
+understandable without relying on color.
+
 ## Work views
 
 ```console

@@ -185,6 +185,9 @@ automatically retried.
 
 ## Usability
 
+- Global color tests must cover `auto`, `always`, and `never`; auto mode must
+  disable color for non-terminals, `NO_COLOR`, and `TERM=dumb`.
+- Meaning and severity must never be conveyed by color alone.
 - `todo now` must provide a useful urgency ordering without requiring manual
   filtering during normal use.
 - The public command vocabulary should remain small.
