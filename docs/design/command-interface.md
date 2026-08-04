@@ -309,6 +309,14 @@ resolved only by commands that explicitly require them, currently `reopen` and
 `delete`. Historical parent inspection may be added later if actual usage
 justifies the additional selection and presentation complexity.
 
+Legacy mutation modes on the noun commands are retained for compatibility. A
+form such as `todo task --done`, `todo task --rename`, or `todo step --delete`
+delegates to the corresponding canonical verb operation and must have identical
+selection, validation, synchronization, mutation, output, and exit behavior.
+Compatibility syntax exists only for operations supported elsewhere in this
+design; it does not restore removed operations such as `resume` or an `ask`
+date value.
+
 Task details display the parent task's single stored priority. They do not show
 the derived effective priority used to order the task group; the priorities of
 individual steps are visible on those steps.

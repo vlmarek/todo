@@ -262,6 +262,9 @@ automatically retried.
   failed comment creation.
 - `close`/`closed` and `unclose`/`undone` must be behaviorally identical to
   `done` and `reopen`, respectively.
+- Retained `todo task --ACTION` and `todo step --ACTION` mutation forms must
+  delegate to their canonical verb behavior and must not reintroduce removed
+  features.
 - State-transition tests must reject already-satisfied completion and reopening
   requests without mutation or audit comments.
 - Mutation tests must reject complete no-op proposals before any Todoist
