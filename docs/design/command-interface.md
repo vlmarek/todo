@@ -275,6 +275,9 @@ completion operation, so the completion contributes to reporting. For a parent
 created with inline steps, every step is completed before the parent, preserving
 the invariant that a completed parent has no open steps.
 
+A completion-at-creation option cannot be combined with `--hide`; the proposal
+is contradictory and fails before any item is created.
+
 Task creation accepts both `--priority 1` through `--priority 4` and
 `--priority P1` through `--priority P4`, with the `P` case-insensitive. The
 convenience flags `-p1`, `-p2`, `-p3`, and `-p4` are equivalent. Supplying more

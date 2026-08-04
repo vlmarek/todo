@@ -311,6 +311,8 @@ automatically retried.
 - Creation tests must treat `--done`, `--close`, and `--closed` as equivalent,
   generate normal completion events, and complete all inline steps before a
   newly created parent.
+- Creation must reject completion-at-creation combined with `--hide` before any
+  mutation.
 - Task- and step-creation tests must support initial attention values and
   repeatable reminders, reuse normal parsing and validation, and reject a
   reminder without a timed attention value before mutation.
