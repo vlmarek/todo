@@ -187,6 +187,9 @@ automatically retried.
 
 - Global color tests must cover `auto`, `always`, and `never`; auto mode must
   disable color for non-terminals, `NO_COLOR`, and `TERM=dumb`.
+- Color configuration tests must use Solarized Dark defaults, apply partial
+  recognized `[colors]` overrides, retain defaults for omitted roles, reject
+  invalid recognized values, and ignore unknown keys.
 - Meaning and severity must never be conveyed by color alone.
 - `todo now` must provide a useful urgency ordering without requiring manual
   filtering during normal use.

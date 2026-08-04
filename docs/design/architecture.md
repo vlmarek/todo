@@ -81,6 +81,9 @@ token = ...
 project = Oracle
 default_sections = ai, gatekeeper, engineer, Someday
 hidden_from_now = Someday
+
+[colors]
+# optional semantic color overrides
 ```
 
 `token` may be omitted when `TODOIST_TOKEN` supplies authentication. `project`,
@@ -96,6 +99,10 @@ managed-scope resolution.
 Unknown INI sections and keys are ignored for compatibility. This includes an
 old `default_wait_due` entry: it has no effect and does not make the config
 invalid. Recognized settings are still validated strictly.
+
+The optional `[colors]` section overrides recognized semantic roles individually.
+Solarized Dark supplies every omitted role. Invalid values for recognized roles
+fail configuration validation.
 
 `hidden_from_now` is required as a recognized setting but may have an empty
 value, meaning that no category is hidden from `todo now` by category policy.

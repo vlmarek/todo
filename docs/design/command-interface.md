@@ -16,6 +16,12 @@ and is disabled for redirected output, `NO_COLOR`, or `TERM=dumb`. `always`
 forces color and `never` disables it. Diagnostics sent to stderr must remain
 understandable without relying on color.
 
+The built-in palette is Solarized Dark. An optional `[colors]` section in
+`~/.todo/config` may override individual recognized semantic color roles.
+Omitted roles keep their Solarized defaults. An invalid value for a recognized
+role is a configuration error; unknown keys remain ignored under the general
+configuration compatibility rule.
+
 ## Work views
 
 ```console
