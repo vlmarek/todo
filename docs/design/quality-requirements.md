@@ -195,6 +195,8 @@ automatically retried.
 - Meaning and severity must never be conveyed by color alone.
 - `todo help COMMAND` and `todo COMMAND --help` must produce equivalent help,
   and all help forms must work without configuration, cache, or network access.
+- A no-argument invocation must be behaviorally identical to `todo now`, while
+  `todo help` and `todo --help` remain explicit configuration-free help paths.
 - `todo now` must provide a useful urgency ordering without requiring manual
   filtering during normal use.
 - The public command vocabulary should remain small.

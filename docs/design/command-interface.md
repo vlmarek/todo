@@ -27,6 +27,11 @@ configuration compatibility rule.
 `todo COMMAND --help`; both forms display the same command-specific help and
 exit successfully without loading configuration, cache, or Todoist state.
 
+Running `todo` with no arguments is exactly equivalent to `todo now`. It loads
+the cached work queue and follows the same validation, ordering, output, and
+exit behavior. Top-level help remains available explicitly through `todo help`
+or `todo --help`.
+
 ## Work views
 
 ```console
