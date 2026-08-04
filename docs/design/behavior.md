@@ -36,7 +36,7 @@ on current category membership and is not limited to a category literally named
 `Someday`.
 
 When `hidden_from_now` is explicitly empty, `todo someday` prints an empty view
-and exits successfully.
+as `No someday items.` and exits successfully.
 
 Someday task groups are sorted by priority (P1 through P4), then lowercase
 category name, then lowercase task title. Open steps within a task are sorted by

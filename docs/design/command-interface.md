@@ -55,6 +55,9 @@ whose attention day has arrived.
 `todo someday` is the focused view of every open task and open step in all
 configured hidden categories. Completed items remain excluded.
 
+An empty `todo waiting` prints `No waiting items.`; an empty `todo someday`
+prints `No someday items.`. Both cases exit successfully.
+
 Every read view (`now`, `waiting`, `someday`, `task`, `step`, `category`, and
 `search`) accepts `--refresh`. Without it the command reads the local cache.
 With it the command synchronizes from Todoist before validating and displaying

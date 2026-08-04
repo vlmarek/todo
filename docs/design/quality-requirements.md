@@ -261,6 +261,8 @@ automatically retried.
   arrived waiting labels.
 - Someday-view tests must include all configured hidden categories with their
   open task trees and exclude every completed item.
+- Successful empty waiting and someday views must print `No waiting items.` and
+  `No someday items.`, respectively, and exit zero.
 - Someday-view tests must order tasks by priority/category/title and nested
   steps by priority/title without date-related sorting.
 - Report tests must verify that optional task-completion text becomes a normal
