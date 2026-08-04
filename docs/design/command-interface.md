@@ -64,6 +64,11 @@ the result. A failed refresh exits nonzero and prints no normal view output.
 category. The supplied category name is matched case-insensitively. It does not
 change the normal visibility or urgency-ordering rules.
 
+If no current category matches the supplied name, the command reports the
+missing category and exits nonzero without normal list output. A matching
+category that simply contains no actionable items produces a successful empty
+view.
+
 ## Discovery
 
 `todo search TEXT` searches broadly across task titles, step titles, ordinary

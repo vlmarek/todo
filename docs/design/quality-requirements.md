@@ -330,6 +330,8 @@ automatically retried.
   creation, and moves must be case-insensitive.
 - `todo now --category` must retain normal actionable visibility and urgency
   ordering while limiting results to the case-insensitively selected category.
+- A missing `now --category` target must fail nonzero with no normal list,
+  while an existing category with no actionable items must succeed.
 - `todo category --add NAME` and `todo add category NAME` must exercise the same
   category-creation operation and observable behavior.
 - `categories` must be behaviorally identical to `category`; `show` must not be
