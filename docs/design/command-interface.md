@@ -259,6 +259,8 @@ its previous priority, and its resulting priority. Setting the stored priority
 to its existing value is a no-op error under the normal mutation rules.
 
 `todo category` lists categories alphabetically using lowercase comparison.
+`todo categories` is an alias for `todo category`, including `--refresh` and
+`--add NAME` behavior.
 `todo category --add NAME` and `todo add category NAME` are equivalent creation
 forms and follow the same validation, synchronization, and output behavior.
 Creating a category fails before mutation when any existing category name is
@@ -320,6 +322,9 @@ date value.
 `todo check` is not part of the interface. The unreachable function with that
 name in the old implementation is dead code for completing a step, not a
 diagnostic feature; `todo done` is the supported operation.
+
+`todo show` is not retained as an alias. Parent-task inspection uses `todo task`
+and step inspection uses `todo step`.
 
 Task details display the parent task's single stored priority. They do not show
 the derived effective priority used to order the task group; the priorities of

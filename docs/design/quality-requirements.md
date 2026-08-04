@@ -317,6 +317,8 @@ automatically retried.
   Todoist mutation while leaving ordinary category selection case-sensitive.
 - `todo category --add NAME` and `todo add category NAME` must exercise the same
   category-creation operation and observable behavior.
+- `categories` must be behaviorally identical to `category`; `show` must not be
+  registered as a command or alias.
 - Rename tests must enforce the same case-insensitive open-sibling uniqueness
   invariants as creation and reject collisions before mutation.
 - Successful rename output must identify whether the item is a task or step and
