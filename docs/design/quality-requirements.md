@@ -65,6 +65,8 @@ Status: Proposed
   newest.
 - Comment creation with multiple text arguments must create one comment per
   argument in command-line order.
+- Explicit `todo add comment` must be behaviorally identical to the
+  text-supplied `todo comment` creation form.
 - A partial multi-comment creation failure must retain accepted comments, stop
   further creation, report the accepted and failed arguments, exit nonzero, and
   send no compensating deletion.

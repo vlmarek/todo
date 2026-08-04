@@ -105,6 +105,7 @@ variable is absent.
 ```console
 todo comment [--refresh] TASK
 todo comment TASK COMMENT [COMMENT ...]
+todo add comment TASK COMMENT [COMMENT ...]
 todo comment --edit TASK
 todo done ITEM [TEXT]
 todo reopen ITEM [TEXT]
@@ -117,6 +118,10 @@ trailing comment argument, in command-line order. Shell quoting defines the
 boundary between comments. Steps cannot own comments, so both forms select
 parent tasks only. Displayed comments are ordered chronologically from oldest to
 newest.
+
+`todo add comment TASK COMMENT [COMMENT ...]` is an explicit alias for the
+comment-creation form and has identical selection, ordering, synchronization,
+and partial-failure behavior.
 
 Multiple comments are created sequentially. If Todoist accepts one or more and
 a later creation fails, the accepted comments remain. The command stops, reports
