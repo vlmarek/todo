@@ -104,6 +104,10 @@ The optional `[colors]` section overrides recognized semantic roles individually
 Solarized Dark supplies every omitted role. Invalid values for recognized roles
 fail configuration validation.
 
+Each recognized color value uses exactly six hexadecimal RGB digits prefixed by
+`#`, for example `#dc322f`. Hexadecimal digits are case-insensitive; shorthand,
+named colors, alpha values, and other formats are invalid.
+
 `hidden_from_now` is required as a recognized setting but may have an empty
 value, meaning that no category is hidden from `todo now` by category policy.
 Its nonempty names must be unique under case-insensitive comparison.

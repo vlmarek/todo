@@ -190,6 +190,8 @@ automatically retried.
 - Color configuration tests must use Solarized Dark defaults, apply partial
   recognized `[colors]` overrides, retain defaults for omitted roles, reject
   invalid recognized values, and ignore unknown keys.
+- Recognized color values must accept case-insensitive six-digit `#RRGGBB` and
+  reject shorthand, named, alpha, or unprefixed formats.
 - Meaning and severity must never be conveyed by color alone.
 - `todo now` must provide a useful urgency ordering without requiring manual
   filtering during normal use.
