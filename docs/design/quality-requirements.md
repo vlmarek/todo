@@ -313,6 +313,8 @@ automatically retried.
   newly created parent.
 - Creation must reject completion-at-creation combined with `--hide`, `--due`,
   or `--reminder` before any mutation.
+- Completion-at-creation must use the same duplicate-title errors and
+  completed-title reuse warnings as ordinary creation.
 - Task- and step-creation tests must support initial attention values and
   repeatable reminders, reuse normal parsing and validation, and reject a
   reminder without a timed attention value before mutation.

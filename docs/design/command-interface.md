@@ -280,6 +280,10 @@ A completion-at-creation option cannot be combined with `--hide`, `--due`, or
 created. Creating and immediately completing a recurring scheduled item is not
 a supported shortcut.
 
+Completion-at-creation does not bypass title validation. The proposed task and
+steps must pass the same open-sibling duplicate checks and completed-title reuse
+warnings as ordinary creation before the first item is created.
+
 Task creation accepts both `--priority 1` through `--priority 4` and
 `--priority P1` through `--priority P4`, with the `P` case-insensitive. The
 convenience flags `-p1`, `-p2`, `-p3`, and `-p4` are equivalent. Supplying more
