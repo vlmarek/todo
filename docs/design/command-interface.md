@@ -458,6 +458,9 @@ Candidate type depends on the command form:
 
 Implicit lookup is intentional command syntax. It does not print an unknown- or
 missing-command warning before showing the selected item or ambiguity choices.
+If it finds no task or step, it prints a concise no-matching-item error and
+exits nonzero. This differs from `todo search`, where an empty result is a
+successful discovery outcome.
 
 If an implicit selector matches both tasks and steps, all matching candidates
 participate in normal ambiguity handling.
