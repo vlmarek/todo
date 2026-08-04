@@ -326,7 +326,10 @@ automatically retried.
 - Category-list tests must verify lowercase alphabetical ordering independently
   of Todoist's manual project order.
 - Category creation must reject case-insensitive name collisions before
-  Todoist mutation while leaving ordinary category selection case-sensitive.
+  Todoist mutation. User-entered category lookup for now-filtering, task
+  creation, and moves must be case-insensitive.
+- `todo now --category` must retain normal actionable visibility and urgency
+  ordering while limiting results to the case-insensitively selected category.
 - `todo category --add NAME` and `todo add category NAME` must exercise the same
   category-creation operation and observable behavior.
 - `categories` must be behaviorally identical to `category`; `show` must not be

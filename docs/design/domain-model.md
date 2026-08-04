@@ -14,11 +14,10 @@ Exactly one current Todoist project must match the configured root name.
 ### Category
 
 A direct child project of the configured root project. Category names and
-membership come dynamically from Todoist. Category matching is case-sensitive;
-task and step selector matching is independently case-insensitive.
+membership come dynamically from Todoist. User-entered category, task, and step
+lookups are case-insensitive.
 
-Category names are unique under case-insensitive comparison even though normal
-category selection is case-sensitive.
+Category names are unique under case-insensitive comparison.
 
 The supported project hierarchy is exactly two levels: the configured root and
 its direct category children. A deeper descendant project is invalid model

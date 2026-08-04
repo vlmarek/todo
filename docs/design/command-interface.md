@@ -38,6 +38,7 @@ or `todo --help`.
 todo now
 todo now --all
 todo now --refresh
+todo now --category CATEGORY
 todo waiting [--refresh]
 todo someday [--refresh]
 todo task [--refresh] SELECTOR
@@ -58,6 +59,10 @@ Every read view (`now`, `waiting`, `someday`, `task`, `step`, `category`, and
 `search`) accepts `--refresh`. Without it the command reads the local cache.
 With it the command synchronizes from Todoist before validating and displaying
 the result. A failed refresh exits nonzero and prints no normal view output.
+
+`todo now --category CATEGORY` limits the normal actionable view to one current
+category. The supplied category name is matched case-insensitively. It does not
+change the normal visibility or urgency-ordering rules.
 
 ## Discovery
 
@@ -469,8 +474,10 @@ An exact title match does not take precedence over other matching results. For
 example, selector `Deploy` remains ambiguous when both `Deploy` and
 `Deploy staging` match, and both are presented for selection.
 
-Task and step selectors are case-insensitive. This does not change category
-matching, which remains case-sensitive.
+Task, step, and user-supplied category selectors are case-insensitive. This
+includes category targets for task creation and moves and the `todo now
+--category` filter. Configured root-project and hidden-category names remain
+exact case-sensitive policy identifiers rather than search selectors.
 
 Quoting controls selector structure:
 
