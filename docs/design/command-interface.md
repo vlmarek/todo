@@ -187,6 +187,9 @@ A successful reopen always adds a progress comment. Task comments use
 todo add [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
          [--reminder OFFSET ...] [--hide REASON]
          CATEGORY TASK [STEP ...]
+todo add task [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
+              [--reminder OFFSET ...] [--hide REASON]
+              CATEGORY TASK [STEP ...]
 todo add step [--due DATE] [--reminder OFFSET ...] [--hide REASON]
               TASK STEP [STEP ...]
 todo rename ITEM NEW_NAME
@@ -201,6 +204,10 @@ A newly created parent task has P2 unless the creation command explicitly sets
 another priority. A newly created step always receives its parent task's
 effective priority at creation time. Step creation has no separate priority
 override; `todo priority` may change the step afterward.
+
+`todo add task ...` is an explicit alias for `todo add ...` with identical
+options and behavior. It disambiguates task creation when a category is
+literally named like an explicit add kind such as `category` or `step`.
 
 Task creation accepts both `--priority 1` through `--priority 4` and
 `--priority P1` through `--priority P4`, with the `P` case-insensitive. The

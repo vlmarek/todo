@@ -278,6 +278,8 @@ automatically retried.
 - Task-creation priority tests must accept numeric and case-insensitive
   `P`-prefixed `--priority` values plus `-p1` through `-p4`, and reject
   conflicting priority options before mutation.
+- Explicit `todo add task` must be behaviorally identical to short-form task
+  creation and permit categories whose names collide with explicit add kinds.
 - Task- and step-creation tests must support initial attention values and
   repeatable reminders, reuse normal parsing and validation, and reject a
   reminder without a timed attention value before mutation.
