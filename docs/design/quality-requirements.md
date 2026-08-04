@@ -128,6 +128,8 @@ Status: Proposed
 - Configuration compatibility tests must retain `[todoist] token` and `[main]`
   keys `project`, `default_sections`, and `hidden_from_now`, preserve category
   name case, and prove that `default_wait_due` has no effect.
+- Root-project lookup must use exact case-sensitive equality during init,
+  validation, and managed-scope resolution.
 - Unknown configuration sections and keys must be ignored, while malformed or
   invalid recognized settings must still fail validation.
 - An explicitly empty `hidden_from_now` must be valid and produce a successful

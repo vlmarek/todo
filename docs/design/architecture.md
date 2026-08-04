@@ -89,6 +89,10 @@ by init and ordinary commands. Comma-separated names are trimmed but preserve
 their case. `default_wait_due` is not a supported setting because hiding always
 requires an explicit date.
 
+The configured `project` name is matched against Todoist project names by exact,
+case-sensitive equality during initialization, synchronization validation, and
+managed-scope resolution.
+
 Unknown INI sections and keys are ignored for compatibility. This includes an
 old `default_wait_due` entry: it has no effect and does not make the config
 invalid. Recognized settings are still validated strictly.

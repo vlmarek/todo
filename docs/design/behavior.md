@@ -427,6 +427,9 @@ normal commands fail with a clear configuration/model error until the Todoist
 project or local configuration is corrected. The CLI does not silently select
 or create a replacement during ordinary operation.
 
+Root-project matching uses exact case-sensitive name equality. A project whose
+name differs only by case is not the configured root.
+
 There is no built-in root-project or category configuration. The user must
 create a complete local config before initialization; `todo init` consumes that
 config rather than choosing settings.
