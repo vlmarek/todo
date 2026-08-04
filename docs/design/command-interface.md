@@ -456,6 +456,9 @@ Candidate type depends on the command form:
   as independent candidates. A step may match even when its parent task title
   does not contain the selector.
 
+Implicit lookup is intentional command syntax. It does not print an unknown- or
+missing-command warning before showing the selected item or ambiguity choices.
+
 If an implicit selector matches both tasks and steps, all matching candidates
 participate in normal ambiguity handling.
 

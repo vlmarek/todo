@@ -27,6 +27,7 @@ Status: Proposed
   multiple all-terms selectors, including reversed and non-contiguous terms.
 - Selection tests must distinguish task-only noun commands from implicit
   task-and-step selection, including a matching step under a nonmatching parent.
+- Implicit top-level lookup must not emit an unknown-command warning.
 - Step-inspection tests must search only open steps across all managed parents,
   exclude parent tasks, and apply normal ambiguity handling across parents.
 - A selected step detail view must display its parent task and inherited
