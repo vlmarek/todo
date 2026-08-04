@@ -73,6 +73,9 @@ view.
 scope, then `--all` includes every open task and open step in that category,
 including temporarily hidden items and items hidden by category policy.
 
+Any successful `todo now` variant with no items prints `No actionable items.`
+and exits zero.
+
 ## Discovery
 
 `todo search TEXT` searches broadly across task titles, step titles, ordinary

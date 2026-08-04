@@ -334,6 +334,8 @@ automatically retried.
   while an existing category with no actionable items must succeed.
 - `todo now --all --category` must include all open visibility states within
   only the selected category.
+- Every successful empty `todo now` variant must print `No actionable items.`
+  and exit zero.
 - `todo category --add NAME` and `todo add category NAME` must exercise the same
   category-creation operation and observable behavior.
 - `categories` must be behaviorally identical to `category`; `show` must not be
