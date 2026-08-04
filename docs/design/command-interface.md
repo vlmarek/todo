@@ -23,6 +23,10 @@ their Solarized defaults. An invalid value for a recognized slot is a
 configuration error; unknown keys remain ignored under the general
 configuration compatibility rule.
 
+`todo help` displays top-level help. `todo help COMMAND` is equivalent to
+`todo COMMAND --help`; both forms display the same command-specific help and
+exit successfully without loading configuration, cache, or Todoist state.
+
 ## Work views
 
 ```console

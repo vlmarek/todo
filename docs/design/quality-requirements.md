@@ -193,6 +193,8 @@ automatically retried.
 - Recognized color values must accept case-insensitive six-digit `#RRGGBB` and
   reject shorthand, named, alpha, or unprefixed formats.
 - Meaning and severity must never be conveyed by color alone.
+- `todo help COMMAND` and `todo COMMAND --help` must produce equivalent help,
+  and all help forms must work without configuration, cache, or network access.
 - `todo now` must provide a useful urgency ordering without requiring manual
   filtering during normal use.
 - The public command vocabulary should remain small.
