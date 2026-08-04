@@ -275,8 +275,10 @@ completion operation, so the completion contributes to reporting. For a parent
 created with inline steps, every step is completed before the parent, preserving
 the invariant that a completed parent has no open steps.
 
-A completion-at-creation option cannot be combined with `--hide`; the proposal
-is contradictory and fails before any item is created.
+A completion-at-creation option cannot be combined with `--hide`, `--due`, or
+`--reminder`; the proposal is contradictory and fails before any item is
+created. Creating and immediately completing a recurring scheduled item is not
+a supported shortcut.
 
 Task creation accepts both `--priority 1` through `--priority 4` and
 `--priority P1` through `--priority P4`, with the `P` case-insensitive. The
