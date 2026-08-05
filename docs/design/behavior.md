@@ -2,6 +2,38 @@
 
 Status: Proposed
 
+## Helpful interaction
+
+Helpfulness is part of observable behavior.
+
+For a failure whose cause is known, diagnostics should answer:
+
+1. What operation failed?
+2. Which item, category, setting, or external resource was involved?
+3. Which rule or condition prevented the operation?
+4. What can the user do next, when a safe applicable action is known?
+
+Diagnostics should not dump internal identifiers or API payloads unless they
+are needed for debugging. Todoist failures are translated into domain
+vocabulary while retaining enough technical detail to diagnose an external
+failure.
+
+Recovery suggestions are operation-specific. Examples include:
+
+- An unusable cache suggests the same read command with `--refresh`.
+- A missing `waiting` label suggests `todo init`.
+- Editing a completed item explains that it must be reopened first.
+- Scheduling work in a hidden category explains that hidden-category items
+  cannot have attention values or reminders.
+- An invalid parent/step attention relationship identifies both items and both
+  relevant dates.
+- Ambiguous selection presents candidates with enough parent/category context
+  to distinguish them.
+
+A command must not print a success message before Todoist has accepted the
+operation. After a partial failure, it must not summarize the whole command as
+either wholly successful or wholly unchanged.
+
 ## `todo now`
 
 `todo now` shows all actionable tasks and every actionable open step belonging
@@ -198,6 +230,9 @@ selection and validation. If the operation would make no observable state
 change, it fails before contacting Todoist. Examples include setting P1 on an
 already-P1 item, moving a task to its current category, renaming to the current
 title, and clearing an already-empty reminder set.
+
+The error identifies the unchanged property and current value so the user can
+distinguish an accidental repeated command from a selection mistake.
 
 The comparison covers the complete operation. Keeping an attention date while
 changing reminders or the own hiding policy is a real mutation and is allowed.

@@ -185,6 +185,23 @@ automatically retried.
 
 ## Usability
 
+- The primary workflow must be discoverable from `todo help` without reading
+  source code or Todoist API documentation.
+- Command help must teach canonical forms before compatibility aliases.
+- Commands operating on the same concepts must share parsing, matching,
+  validation, and output conventions.
+- User-facing output must use domain vocabulary and avoid raw Todoist API field
+  names except in explicitly diagnostic detail.
+- Errors with a known safe recovery must identify the failure, its cause, and
+  the applicable next command or option.
+- Errors must not suggest a recovery that would violate current domain state.
+- Ambiguity output must include enough parent and category context to
+  distinguish candidates with similar titles.
+- Partial-failure output must distinguish accepted, failed, and unattempted
+  operations.
+- Successful mutations must identify the affected item and resulting state.
+- Automated acceptance tests must cover complete common workflows, not only
+  individual parser and domain functions.
 - Global color tests must cover `auto`, `always`, and `never`; auto mode must
   disable color for non-terminals, `NO_COLOR`, and `TERM=dumb`.
 - Color configuration tests must use Solarized Dark defaults, apply partial
@@ -235,6 +252,27 @@ automatically retried.
 - Every task-history entry must display the timestamp used for its position.
 - Task-history timestamps must be displayed in the executing machine's local
   timezone.
+
+### Workflow acceptance scenarios
+
+At minimum, tests must exercise these workflows through the public CLI:
+
+1. Find current work, inspect a task, add progress, and complete a step.
+2. Capture a task, refine it into steps, and change a step's priority.
+3. Add an attention time and reminders, then inspect the resulting state.
+4. Temporarily hide work with a reason and later make it visible.
+5. Resolve an ambiguous selector without modifying the wrong item.
+6. Encounter an unusable cache and recover through `--refresh`.
+7. Preview and finalize a report.
+8. Encounter a partial Todoist mutation and understand which changes remain.
+
+The expected stdout, stderr, exit status, and state change are asserted for
+every scenario.
+
+Because “intuitive” cannot be proven entirely through automated tests, a
+release review should also walk through these scenarios using only public help.
+Any point at which the user must consult implementation details is a usability
+defect or a missing help requirement.
 
 ## Testability
 

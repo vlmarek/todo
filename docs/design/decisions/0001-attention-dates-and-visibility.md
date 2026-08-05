@@ -33,7 +33,12 @@ parent task.
 
 - Capture requires deciding whether the item should be visible now, not why the
   date exists.
+- The same attention vocabulary and command behavior applies whether the date
+  represents a deadline, meeting, follow-up, or planned work, reducing choices
+  during capture.
 - The model does not structurally distinguish a deadline from a follow-up.
 - A task and its steps can express multiple dates.
 - Parent/step validation is required before mutations.
 - Exact times and list visibility use related but different comparisons.
+- Validation errors must explain the visibility conflict using the affected
+  task or step and its attention day.

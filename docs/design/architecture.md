@@ -31,10 +31,24 @@ Todoist adapter       Local persistence
 Parses commands, aliases, flags, selectors, dates, and reminder offsets.
 Formats normal output, previous-value feedback, warnings, and errors.
 
+This layer owns a shared interaction policy rather than allowing each command
+to invent its own diagnostics and formatting. Shared facilities cover:
+
+- canonical help and alias presentation
+- selector and ambiguity presentation
+- previous/result mutation output
+- empty-view messages
+- actionable error and recovery formatting
+- partial-failure summaries
+
 ### Application workflows
 
 Coordinate refresh, matching, validation, mutation, cache update, and output.
 Ensure that validation and synchronization precede mutation.
+
+Workflows return structured outcomes containing the affected domain objects,
+accepted changes, failures, and applicable recovery information. They do not
+construct unrelated ad hoc terminal messages.
 
 ### Domain rules
 
@@ -46,6 +60,9 @@ depend on network access.
 
 Maps Todoist projects and items to domain values, synchronizes task data,
 performs mutations, handles idempotency and retries, and manages reminders.
+
+The adapter preserves technical failure detail for diagnostics but does not
+make raw Todoist response shapes part of the public command interface.
 
 ### Local persistence
 

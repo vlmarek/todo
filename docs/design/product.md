@@ -27,6 +27,9 @@ are treated as work categories. The root project name is configurable.
 
 ## Goals
 
+- Make common workflows easy to discover and predictable to use.
+- Make interaction helpful: output should confirm what happened, and errors
+  should explain what failed and how to recover when a valid recovery is known.
 - Make the next work to consider visible and give a useful indication of
   relative urgency.
 - Keep the normal actionable list small enough to be usable.
@@ -42,6 +45,16 @@ are treated as work categories. The root project name is configurable.
 
 ## Guiding principles
 
+- Use the same language and interaction rules for the same concepts throughout
+  the CLI.
+- Give each operation one canonical command form. Compatibility aliases may
+  remain, but help and examples should teach the canonical form first.
+- Optimize the common successful path for few decisions and little required
+  syntax.
+- When a command cannot proceed, identify the affected item or setting, explain
+  the violated rule, and suggest a valid next action when one is known.
+- Helpfulness does not authorize guessing an ambiguous target, silently
+  changing unrelated state, or hiding a failure.
 - Todoist is authoritative for task data.
 - A task describes an outcome; steps may refine the work and carry their own
   scheduling information.
@@ -79,6 +92,9 @@ typical hidden category but is not hard-coded by name.
 
 ## Non-goals
 
+- Eliminating all need to learn the task model
+- Guessing the user's intent when a command or selector is ambiguous
+- Providing suggestions that have not been validated as applicable
 - Replacing Todoist as the task system of record
 - Managing unrelated Todoist projects
 - Multi-user workflow or permissions
@@ -97,3 +113,5 @@ From most harmful to least harmful:
 5. Losing or duplicating Todoist data
 6. Missing a configured phone reminder
 7. Showing extra non-urgent work in `todo now`
+8. Leaving the user unable to understand or recover from a validly rejected
+   command

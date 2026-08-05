@@ -32,6 +32,51 @@ the cached work queue and follows the same validation, ordering, output, and
 exit behavior. Top-level help remains available explicitly through `todo help`
 or `todo --help`.
 
+## Interaction contract
+
+The public interface follows these rules across all commands:
+
+- Help teaches canonical verb commands first. Compatibility aliases are listed
+  afterward and do not appear as separate concepts.
+- Commands accepting the same kind of selector, category, priority, attention
+  value, reminder, or refresh option use the same parsing and matching rules.
+- Successful mutations identify the selected item and resulting state.
+- When a previous value exists and is relevant to understanding the change,
+  mutation output displays both the previous and resulting values.
+- A successful empty view prints a short explicit message rather than producing
+  ambiguous blank output.
+- A rejected command identifies what could not be done and why.
+- When exactly one safe and applicable recovery is known, the error suggests
+  the concrete command or option that performs it.
+- Suggestions must not assume an ambiguous item selection or propose an
+  operation that would violate another domain rule.
+- Partial failures distinguish operations already accepted by Todoist from
+  operations that were not attempted or failed.
+
+Examples of actionable recovery include:
+
+```text
+todo: local cache is missing; rerun with --refresh
+todo: item is completed; reopen it before changing its priority
+todo: waiting label is missing; run `todo init`
+```
+
+The exact wording may vary, but the error must preserve the same facts and
+recovery action.
+
+## Help content
+
+Top-level help explains the primary workflow: view work, inspect an item,
+record progress, update state, and generate a report.
+
+Each command's help contains:
+
+- its canonical synopsis
+- a short explanation in domain vocabulary
+- the most common example
+- important destructive or state-dependent constraints
+- supported aliases, listed after the canonical form
+
 ## Work views
 
 ```console

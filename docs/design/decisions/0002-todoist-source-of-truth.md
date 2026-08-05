@@ -25,4 +25,8 @@ Failed synchronization prevents mutation.
 - Mutations require Todoist access.
 - Read-only commands can use stale cached data unless refreshed.
 - Cache loss is recoverable; configuration and report-cursor loss are not.
-
+- User-facing behavior is expressed in `todo` domain language rather than raw
+  Todoist API vocabulary.
+- When synchronization or mutation fails, diagnostics must distinguish local
+  validation failures, external failures, and state already accepted by
+  Todoist.

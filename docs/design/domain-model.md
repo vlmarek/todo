@@ -91,6 +91,20 @@ its own hiding policy, and its parent task's hiding policy.
 An open item eligible for normal `todo now` output. Actionability is derived;
 it is not an independently stored state.
 
+## User-facing vocabulary
+
+The terms in this document are the vocabulary presented to the user. Commands,
+help, normal output, warnings, and errors use these terms consistently.
+
+- Use `task`, `step`, `category`, `attention`, `reminder`, and `hidden`.
+- Do not expose Todoist API names such as `item`, `project_id`, `parent_id`,
+  `checked`, or `sync_token` in ordinary user-facing output.
+- A task has one stored priority and one own attention value. Derived effective
+  priority and attention are internal ordering concepts and must not be
+  presented as additional editable task properties.
+- When Todoist terminology must be mentioned for recovery, explain its
+  relationship to the corresponding `todo` concept.
+
 ## Core invariants
 
 1. Every managed task belongs to a category under the configured root project.

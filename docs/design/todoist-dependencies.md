@@ -121,6 +121,17 @@ A local backend would not need HTTP retry or rate-limit handling, but a remote
 replacement would need equivalent failure, idempotency, and reconciliation
 semantics.
 
+## User-facing backend boundary
+
+Todoist supplies API terminology, identifiers, HTTP errors, rate limits, and
+account capability failures. The CLI is responsible for translating these into
+the domain vocabulary used by `todo`.
+
+A replacement backend must preserve the meaning of user-facing outcomes and
+recovery guidance, but it need not reproduce Todoist's raw error text or API
+object names. Backend-specific diagnostic details may be retained for
+debugging without becoming the primary error message.
+
 ## User/account configuration
 
 Todoist supplies user-level date language, time-zone context, account-plan
@@ -139,6 +150,7 @@ These are primarily `todo` behavior and can survive a backend replacement:
 - configured hidden-category semantics
 - selector matching and ambiguity handling
 - CLI grammar and output
+- help, diagnostic, and recovery conventions
 - report formatting and cursor policy
 - local configuration
 - local cache and runtime locking concepts

@@ -8,6 +8,11 @@ describe existing behavior where it is intentional and proposed behavior where
 the current program is expected to change. Unresolved matters belong in
 `open-questions.md`; they must not be silently decided during implementation.
 
+The design also treats usability as a cross-cutting requirement. Common
+workflows should be discoverable, commands using the same concepts should
+behave consistently, and failures should help the user recover without
+silently guessing their intent.
+
 ## Documents
 
 - `product.md` — purpose, users, workflows, goals, and non-goals
@@ -20,6 +25,21 @@ the current program is expected to change. Unresolved matters belong in
   requirements for another backend
 - `open-questions.md` — decisions that remain unresolved
 - `decisions/` — accepted design decisions and their rationale
+
+## Suggested reading order
+
+1. `product.md`
+2. `domain-model.md`
+3. `command-interface.md`
+4. `behavior.md`
+5. `quality-requirements.md`
+6. `architecture.md`
+7. `todoist-dependencies.md`
+8. `decisions/`
+
+The first three documents explain what the product is, the language it uses,
+and how the user interacts with it. The remaining documents explain detailed
+behavior, verification, implementation boundaries, and rationale.
 
 ## Status vocabulary
 
