@@ -14,6 +14,11 @@ The user invokes `todo` from a shell. `todo` communicates with:
 Capabilities delegated to Todoist and the implications of replacing it are
 catalogued in `todoist-dependencies.md`.
 
+The supported runtime is Python 3.11 or newer on Linux and macOS. Windows is
+unsupported because locking, permissions, terminal behavior, and installation
+assume POSIX facilities. Distribution is a standard Python package with a
+`todo` console entry point, installed through `pipx`.
+
 ## Responsibility boundaries
 
 ```text
@@ -64,6 +69,16 @@ performs mutations, handles idempotency and retries, and manages reminders.
 The adapter preserves technical failure detail for diagnostics but does not
 make raw Todoist response shapes part of the public command interface.
 
+The adapter explicitly targets Todoist API v1 and its Sync endpoint. Its
+contract documents resource and event mappings, pagination, sync-token
+handling, tombstones, idempotency identifiers, and retry eligibility. Activity
+and comment retrieval follows every page until exhaustion and prints progress
+to stderr after several pages; reports are never silently truncated.
+
+Unknown response fields are ignored. Unsupported shapes or values in recognized
+fields that affect completion, attention, recurrence, hierarchy, reminders, or
+other domain behavior fail clearly rather than being normalized.
+
 ### Local persistence
 
 Stores configuration, cache, report cursor, and runtime lock safely.
@@ -75,6 +90,20 @@ variable is absent.
 
 `todo init` consumes these existing credentials and never accepts or persists a
 token argument.
+
+`~/.todo` has mode `0700`; configuration, cache, cursor, and editor temporary
+files have mode `0600`. Local encryption and persistent diagnostic logging are
+out of scope.
+
+The runtime lock is exclusive for initialization, Todoist mutations, explicit
+refreshes, reports, and cursor changes. Atomic cache-only reads remain lock-free.
+Lock acquisition waits at most 30 seconds and then reports that another `todo`
+command is running.
+
+Cache and cursor writes use temporary-file replacement. Cursor writes also
+flush and `fsync` the temporary file and containing directory because the
+cursor is locally authoritative. Disposable cache writes do not require
+`fsync`.
 
 ## Initialization flow
 
@@ -198,3 +227,6 @@ must not be reopened merely to make them deletable.
 
 Any required synchronization, activity, or comment failure aborts before
 normal report output and leaves the cursor unchanged.
+
+Report output is printed before a final cursor update. A crash between those
+operations may repeat a period but must not skip an unprinted period.

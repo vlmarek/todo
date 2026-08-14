@@ -23,6 +23,8 @@ silently guessing their intent.
 - `architecture.md` — system context and responsibility boundaries
 - `todoist-dependencies.md` — capabilities supplied by Todoist and replacement
   requirements for another backend
+- `todoist-adapter.md` — concrete Todoist API, synchronization, and pagination
+  contract
 - `open-questions.md` — decisions that remain unresolved
 - `decisions/` — accepted design decisions and their rationale
 

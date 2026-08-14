@@ -8,8 +8,12 @@ discovery.
 ## Global options
 
 ```console
-todo [--color=auto|always|never] COMMAND ...
+todo [--color=auto|always|never] [--refresh] COMMAND ...
 ```
+
+`--refresh` is global for cache-backed reads, including implicit lookup.
+`todo --refresh` is equivalent to `todo now --refresh`. Commands that already
+synchronize and help commands reject it as redundant or inapplicable.
 
 Color defaults to `auto`: it is enabled only when normal output is a terminal
 and is disabled for redirected output, `NO_COLOR`, or `TERM=dumb`. `always`
@@ -31,6 +35,9 @@ Running `todo` with no arguments is exactly equivalent to `todo now`. It loads
 the cached work queue and follows the same validation, ordering, output, and
 exit behavior. Top-level help remains available explicitly through `todo help`
 or `todo --help`.
+
+Successful commands exit `0`, command-line usage errors exit `2`, and every
+operational or partial failure exits `1`.
 
 ## Interaction contract
 
@@ -192,6 +199,13 @@ At runtime, `TODOIST_TOKEN` overrides any Todoist token stored in
 `~/.todo/config`. The configured token is used only when the environment
 variable is absent.
 
+`todo init` is repeatable and provisions only missing structures. After all
+validation and provisioning succeed, it creates the report cursor at the
+current time if and only if no cursor exists. It never changes an existing
+cursor. If cursor persistence fails after provisioning, init exits nonzero,
+reports the accepted provisioning and failed write, and a later init retries
+only the missing work.
+
 ## Progress and completion
 
 ```console
@@ -226,7 +240,9 @@ which comments were created and which creation failed, and exits nonzero without
 compensating deletion.
 
 `todo comment --edit TASK` synchronizes first, resolves an open parent task, and
-opens its current comments in `$EDITOR`. Saving a valid changed buffer applies
+opens its current comments using `$VISUAL`, then `$EDITOR`, then `vi`. The
+selected value is parsed as a shell-like argument string but executed directly
+without a shell. Saving a valid changed buffer applies
 comment edits, deletions, and additions to Todoist. An unchanged buffer performs
 no mutation and exits successfully. Steps and completed parent tasks are not
 editable through this command.
@@ -264,8 +280,13 @@ non-whitespace body. An empty block invalidates the complete edit; it is never
 interpreted as deletion and is never silently ignored. Deletion remains the
 removal of the complete existing block.
 
-After full local validation, the required Todoist comment operations are sent
-sequentially. The command stops on the first API failure. Operations Todoist
+After full local validation, operations are sent sequentially: edits first,
+additions second, and deletions last. Remote changes made while the editor is
+open do not trigger conflict detection; the saved buffer is authoritative. An
+entirely empty buffer requests deletion of every comment and requires a second
+explicit confirmation. Non-interactive use fails without mutation.
+
+The command stops on the first API failure. Operations Todoist
 already accepted remain in effect; the command reports the accepted operations
 and the failed operation, exits nonzero, and performs no rollback.
 
@@ -527,6 +548,8 @@ state in addition to the previous and resulting attention values.
 todo report
 todo report --final
 todo report [--since TIMESTAMP] [--until TIMESTAMP]
+todo report --show-cursor
+todo report --set-cursor TIMESTAMP [--yes]
 ```
 
 `--since` and `--until` override report interval boundaries for debugging and
@@ -536,6 +559,17 @@ the report invocation's captured current time.
 `--final` cannot be combined with `--since` or `--until`. Interval overrides
 are preview/debugging-only and never change the stored report cursor. Invalid
 option combinations fail before synchronization or report generation.
+
+`--show-cursor` displays the current cursor without synchronizing.
+`--set-cursor` changes it without synchronizing and accepts ISO timestamps or
+local past-relative forms such as `7d ago` and `7 days ago`. Offset-free
+timestamps use the machine's local timezone. Nonexistent or ambiguous local
+times are rejected and require an explicit offset. The resolved instant is
+displayed and stored in UTC.
+
+Changing the cursor always requires affirmative confirmation and explains that
+moving backward can duplicate work while moving forward can skip it.
+Non-interactive use requires `--yes`.
 
 ## Selection
 
@@ -556,6 +590,11 @@ Task, step, and user-supplied category selectors are case-insensitive. This
 includes category targets for task creation and moves and the `todo now
 --category` filter. Configured root-project and hidden-category names remain
 exact case-sensitive policy identifiers rather than search selectors.
+
+Each term uses case-insensitive substring matching. Text is canonically Unicode
+normalized and compared with Unicode-aware case folding; accents remain
+significant. Thus `ploy` matches `Deploy`, while `resume` does not match
+`Résumé`.
 
 Quoting controls selector structure:
 

@@ -147,6 +147,10 @@ help, normal output, warnings, and errors use these terms consistently.
 20. Every step is a direct child of a parent task. A step with its own child is
     invalid model state.
 21. The configured root project must exist uniquely in Todoist.
+22. User-created task, step, category, comment, rename, and hiding-reason text
+    must not be empty or whitespace-only and must not contain disallowed control
+    characters. Backend length limits remain Todoist's responsibility and its
+    rejection is translated into domain vocabulary.
 
 ## Derived task urgency
 

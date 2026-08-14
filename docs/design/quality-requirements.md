@@ -162,6 +162,18 @@ Status: Proposed
   traceback.
 - Local persistent writes must not leave partially written state.
 - Concurrent invocations must not corrupt local state.
+- Runtime-lock tests must cover acquisition, release, a 30-second timeout, and
+  lock-free reads during atomic cache replacement.
+- Cache fixtures carry a schema version. Incompatible versions fail cleanly and
+  are rebuilt rather than migrated when `--refresh` is supplied.
+- A failed cache replacement retains the preceding usable cache. A Todoist
+  mutation followed by cache-write failure is a partial failure and suggests
+  global `--refresh`.
+- Cache-backed reads older than 24 hours warn and suggest `--refresh`.
+- Cursor persistence tests cover atomic replacement plus file and directory
+  synchronization. Cache persistence requires atomicity but not `fsync`.
+- Local-state permissions are `0700` for the application directory and `0600`
+  for sensitive files and editor buffers.
 
 ## Retry policy
 
@@ -210,6 +222,13 @@ automatically retried.
 - Recognized color values must accept case-insensitive six-digit `#RRGGBB` and
   reject shorthand, named, alpha, or unprefixed formats.
 - Meaning and severity must never be conveyed by color alone.
+- Success exits `0`, command-line usage errors exit `2`, and operational or
+  partial failures exit `1`.
+- Golden-output fixtures cover every command and major failure with fixed time,
+  timezone, terminal width, color, and backend data. They make presentation
+  changes explicit without creating a permanent scripting interface.
+- Displayed instants use friendly English local timestamps with seconds and no
+  timezone suffix.
 - `todo help COMMAND` and `todo COMMAND --help` must produce equivalent help,
   and all help forms must work without configuration, cache, or network access.
 - A no-argument invocation must be behaviorally identical to `todo now`, while
@@ -279,6 +298,29 @@ defect or a missing help requirement.
 - Domain rules and ordering must be testable without Todoist or network access.
 - Acceptance tests must cover stdout, stderr, exit status, Todoist requests,
   and absence of mutation after failure.
+- Selector tests cover Unicode normalization and case folding, preserve accent
+  distinctions, and verify substring matching.
+- Time parsing treats offset-free input as machine-local and rejects nonexistent
+  or ambiguous daylight-saving times unless an explicit offset is supplied.
+  This applies to cursor, report-boundary, and locally parsed attention input.
+- Reminder parsing rejects equivalent duplicate offsets before mutation.
+- Init tests create a missing cursor only after successful provisioning, leave
+  an existing cursor unchanged, and report partial success when provisioning
+  succeeds but cursor persistence fails.
+- Cursor tests cover display, confirmation, `--yes`, direction warnings, UTC
+  persistence, and `Nd ago`/`N days ago` input.
+- Reports fail before synchronization when no cursor exists. Tests prove output
+  precedes cursor advancement so interruption favors repetition over omission.
+- Paginated report tests retrieve every activity and comment page and never
+  present a truncated report as complete.
+- Comment-editor tests parse `$VISUAL`/`$EDITOR` arguments without a shell,
+  apply edits then additions then deletions, allow the saved buffer to overwrite
+  concurrent remote changes, and require confirmation before an empty buffer
+  deletes all comments.
+- Adapter tests ignore unknown response fields but reject unsupported values or
+  shapes in recognized behavior-affecting fields.
+- Packaging tests target Python 3.11+ on Linux and macOS through the installed
+  `todo` console entry point. Windows is unsupported.
 - Tests must cover local calendar-day boundaries and the configured machine
   time zone.
 - Report tests must cover cursor boundaries, failed finalization, comments,

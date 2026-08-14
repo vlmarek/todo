@@ -147,6 +147,12 @@ that block without replacing ordinary description text. Removing the hiding
 policy also removes the metadata block while preserving the ordinary
 description.
 
+The existing unversioned `[todo waiting]` and `[/todo waiting]` markers remain
+the storage format. Marker collisions with user-authored text are an accepted
+risk. A duplicate, incomplete, or otherwise malformed block is invalid model
+state: commands report it and do not guess which text is metadata or modify the
+description.
+
 For a hidden item, list visibility begins at the start of its local attention
 day, not at an exact attention time. Exact time remains relevant to display,
 ordering within the day, and reminders.
@@ -283,6 +289,9 @@ item's complete existing reminder set. They are not added to the previous set.
 Repeating `--reminder` within one invocation defines multiple values in the new
 set.
 
+Equivalent duplicate offsets in one proposal, such as `1h` and `60m`, are
+rejected before mutation as a likely input error.
+
 When an attention value is changed without any `--reminder` option, the
 existing reminder set is preserved. Successful output explicitly prints the
 retained reminders when the set is nonempty, even though they were not changed,
@@ -337,7 +346,16 @@ Successful `--final` advances the cursor even when the event-based `Finished`
 and `Progress` sections contain no entries. An empty report is still a valid
 finalized reporting period.
 
-If no cursor exists, the effective beginning is infinitely in the past.
+If no cursor exists, report generation fails before synchronization and directs
+the user to run `todo init`. Successful initial init creates the cursor at its
+current time, so earlier activity is intentionally outside later default
+reports. Deliberate recovery uses `report --set-cursor`.
+
+Report generation uses one initial synchronization and one captured end time.
+It does not perform a second synchronization or claim an atomic snapshot across
+Todoist current state, activity, and comments. Activity after the boundary
+belongs to a later report; concurrent edits and deletions may affect the current
+report according to the authoritative responses returned.
 
 The report contains three sections:
 
@@ -444,6 +462,25 @@ Todoist is authoritative.
 `~/.todo/cache.json` can be deleted and recreated, for example with
 `todo now --refresh`.
 
+Every cache carries an explicit schema version. Incompatible caches are rebuilt,
+not migrated, because they contain no authoritative local data. Without
+`--refresh`, an incompatible cache fails cleanly and suggests refresh. Cache
+replacement is atomic. If synchronization succeeds but replacement fails, the
+previous usable cache remains intact and the command exits nonzero.
+
+A cache-backed read using data older than 24 hours warns on stderr and suggests
+global `--refresh`. Mutations, init, and reports synchronize automatically.
+There is no standalone refresh command.
+
+If Todoist accepts a mutation but the cache update fails, the command exits
+nonzero, states that the remote change succeeded, preserves the previous cache,
+and suggests `todo --refresh`.
+
+Displayed instants use friendly English local time with seconds, for example
+`Fri 14 Aug 2026, 16:30:42`. No timezone suffix is displayed. Ordering and
+comparisons use full instants, so distinct events in a repeated daylight-saving
+hour may display the same wall-clock timestamp.
+
 The following local state cannot be reconstructed solely from Todoist:
 
 - `~/.todo/config`
@@ -464,6 +501,12 @@ or create a replacement during ordinary operation.
 
 Root-project matching uses exact case-sensitive name equality. A project whose
 name differs only by case is not the configured root.
+
+If a managed category is archived or moved outside the configured root while it
+still has managed tasks, the model is invalid. Normal reads fail atomically and
+identify the category that must be restored. The CLI does not continue from
+cached membership, silently drop the work from scope, or move the project back
+automatically.
 
 There is no built-in root-project or category configuration. The user must
 create a complete local config before initialization; `todo init` consumes that
