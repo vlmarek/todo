@@ -1,6 +1,6 @@
 # Behavioral specification
 
-Status: Proposed
+Status: Accepted
 
 ## Helpful interaction
 
@@ -75,9 +75,10 @@ category name, then lowercase task title. Open steps within a task are sorted by
 their own priority and then lowercase step title. No attention-date ordering is
 needed because hidden-category items cannot have attention values.
 
-`todo search` searches only open tasks and steps by default. Its `--all` option
-also includes completed tasks and steps in the result population. Search remains
-a read-only discovery operation in either mode.
+`todo search` searches only open tasks, their steps, and their surviving task
+comments by default. Its `--all` option also includes retained completed tasks,
+steps, and their surviving cached comments. Search remains a read-only
+discovery operation in either mode.
 
 Search visibility is independent of work-queue visibility. Open items hidden by
 temporary waiting and open items in configured hidden categories remain in the
@@ -148,14 +149,18 @@ policy also removes the metadata block while preserving the ordinary
 description.
 
 The existing unversioned `[todo waiting]` and `[/todo waiting]` markers remain
-the storage format. Marker collisions with user-authored text are an accepted
-risk. A duplicate, incomplete, or otherwise malformed block is invalid model
-state: commands report it and do not guess which text is metadata or modify the
-description.
+the storage format. A canonical block is appended at the end of the ordinary
+description, separated by one blank line when ordinary text exists; both
+markers occupy exact lines, line endings are LF, and the intervening reason is
+preserved as Unicode text. A reason containing either exact marker line is
+invalid. Marker collisions with user-authored text are an accepted risk. A
+duplicate, incomplete, non-trailing, or otherwise malformed block is invalid
+model state: commands report it and do not guess which text is metadata or
+modify the description.
 
-For a hidden item, list visibility begins at the start of its local attention
-day, not at an exact attention time. Exact time remains relevant to display,
-ordering within the day, and reminders.
+For a hidden item, list visibility begins at the start of its account-local
+attention day, not at an exact attention time. Exact time remains relevant to
+display, ordering within the day, and reminders.
 
 Changing a value prints any previous attention value and the resulting value.
 Changing reminders prints previous reminders, when present, and resulting
@@ -177,57 +182,78 @@ When hiding a task or moving its hidden attention day later, all open dated
 steps are validated before any mutation. When adding or changing a step date,
 the parent is validated before any mutation.
 
-Date-time validation compares local calendar days. A parent hidden until
+Date-time validation compares Todoist account calendar days. A parent hidden until
 Friday 15:00 and a step due Friday 10:30 are compatible because both are
 eligible for display from Friday morning.
 
 ## Recurrence
 
-Completing a recurring task or step through `todo done` causes Todoist to move
-its attention value to the next occurrence. The completion is included in the
-report. A retained hiding policy applies to the next occurrence.
+Completing a recurring task or step through `todo done` records one completion
+occurrence and advances the item to its next occurrence. The item remains open;
+the report nevertheless includes one entry for every qualifying occurrence. A
+retained hiding policy applies to the next occurrence. Completing a recurring
+parent uses Todoist's normal non-resetting behavior: already completed ordinary
+steps are not implicitly reopened for its next occurrence.
+
+A parent cannot be completed while any open step is recurring. Completing such
+a step advances it and leaves it open, so the parent completion could not
+satisfy the tree invariant. The command identifies all open recurring steps and
+rejects the entire operation before confirmation, comment creation, or any
+completion.
+
+A recurring completion can be undone only when it is the latest completion
+occurrence for that object. Undo uses Todoist's recurring-completion command in
+the backward direction and moves the recurrence back exactly one occurrence.
+Older occurrences are ineligible while a later occurrence exists.
+
+Before a locally predictable recurring completion or undo, the resulting next
+occurrence is checked against hidden-parent and reminder invariants. If Todoist
+normalizes an occurrence in an unpredicted way, the mandatory reconciliation
+detects any resulting violation, reports a partial failure, and blocks normal
+workflows until the user repairs it; the CLI never claims the invalid result is
+safe.
 
 ## Completing a task with open steps
 
-When `todo done TASK` targets a task with open steps, it lists every open step
-and asks whether all of them should be completed together with the parent. Only
-an explicit `y` or `yes` authorizes the operation. After confirmation, it
-completes every open step and then completes the parent task.
+Before mutation, `todo done TASK` validates the complete task tree. If any open
+step is recurring, it applies the rejection above. Otherwise it lists every
+open step in normal displayed order and asks whether all should be completed
+with the parent. Only explicit `y` or `yes` authorizes the operation. Any other
+answer, blank input, EOF, or non-interactive invocation leaves the complete tree
+unchanged and exits `1`. A parent with no open steps needs no confirmation.
 
-Any other answer, cancellation, end of input, or non-interactive invocation
-leaves the parent and every step unchanged and returns a failure. A task with no
-open steps is completed without this confirmation.
+After confirmation, ordinary open steps are completed sequentially in displayed
+order, then the parent. Only after every requested completion succeeds does the
+command add optional task completion text as one `Done: TEXT` comment. Steps do
+not accept completion text because they cannot own comments.
 
-`todo done TASK TEXT` accepts optional completion text. Before completing the
-task, it adds a task comment with the content `Done: TEXT`. That comment is a
-normal progress event and is eligible for the report period. Steps do not
-accept completion comments because steps cannot have comments.
-
-After confirmation, open steps are completed sequentially before the parent.
-If a later Todoist operation fails, previously accepted completions remain in
-Todoist. The command does not attempt compensating reopens. It exits nonzero
-and reports clearly which operation failed and that earlier changes may already
-have succeeded.
+The first Todoist failure stops later operations. Already accepted completions
+or a completed parent are never rolled back. In particular, failure while
+creating the final `Done:` comment leaves the tree completed and reports the
+missing comment as a partial failure. This is safer than writing a false
+`Done:` comment before a completion that might fail.
 
 ## Reopening
 
-`todo reopen TASK` reopens only the selected parent task. Its completed steps
-remain completed. Reopening does not attempt to reconstruct or reverse the
-state of the task tree.
+`todo reopen` corrects a recent mistaken completion. Its candidate set is
+completion occurrences in `(report cursor, now]`; it does not search arbitrary
+history. It accepts no explanatory text and never creates a progress or audit
+comment.
 
-Every successful reopen also records progress as a task comment:
+Reopening a parent restores only that parent; its completed steps remain
+completed. Reopening a completed step may make Todoist restore its completed
+ancestor chain. Before sending any request, the command determines that complete
+chain and checks whether reopening any member would collide with a currently
+open case-insensitive sibling title. A collision rejects the whole operation
+and identifies the open conflict. A success prints the selected item and every
+ancestor Todoist reopened.
 
-- Reopening a task adds `Reopened` or `Reopened: TEXT` to that task.
-- Reopening a step adds `Reopened step: STEP` or
-  `Reopened step: STEP: TEXT` to its parent task.
-
-The explanatory `TEXT` is optional. These are ordinary comments and require no
-special report processing. If reopening succeeds but adding the comment fails,
-the item remains reopened and the command reports the partial failure.
-
-Reopening an already open item fails with a nonzero status, performs no
-mutation, and adds no comment. Symmetrically, completing an already completed
-item fails rather than reporting an unchanged success.
+A recurring item follows the latest-occurrence rule above, and only that latest
+eligible occurrence appears in its candidate population. A regular item must
+currently be completed. An already-open item, an occurrence at or before the
+cursor, or an older recurring occurrence fails without mutation. Reopen never
+changes reporting state locally; regular current-state filtering and recurring
+completed/uncompleted activity pairing determine the next report.
 
 ## No-op mutations
 
@@ -244,6 +270,11 @@ The comparison covers the complete operation. Keeping an attention date while
 changing reminders or the own hiding policy is a real mutation and is allowed.
 Creating another comment with identical text is also a real mutation because it
 creates a distinct comment.
+
+An unchanged comment-editor buffer and a repeatable already-provisioned
+`todo init` are successful inspections/maintenance operations, not requested
+state transitions, so the no-op failure rule does not apply to them. Setting
+the report cursor to its current instant is a no-op error.
 
 ## Moving to a hidden category
 
@@ -270,6 +301,12 @@ Model validation precedes normal read output. If any such invariant violation
 is found, the command prints diagnostic errors to stderr, exits nonzero, and
 does not print a partial actionable list or other normal result.
 
+
+Before moving a task, the destination is checked under the same title rules as
+creation. A same-title open task rejects the move before mutation; a same-title
+completed task permits it after a warning. The command never merges tasks or
+renames one implicitly.
+
 ## Clearing
 
 `ITEM clear` removes the item's attention value, recurrence, reminders, and own
@@ -289,26 +326,34 @@ item's complete existing reminder set. They are not added to the previous set.
 Repeating `--reminder` within one invocation defines multiple values in the new
 set.
 
-Equivalent duplicate offsets in one proposal, such as `1h` and `60m`, are
-rejected before mutation as a likely input error.
+Each offset is one positive integer followed immediately by lowercase `m`,
+`h`, `d`, or `w`. Zero, signs, decimals, spaces, compound units, and other units
+are rejected before mutation. Values normalize to minutes. Equivalent duplicate
+offsets in one proposal, such as `1h` and `60m`, are rejected before mutation
+as a likely input error.
 
 When an attention value is changed without any `--reminder` option, the
 existing reminder set is preserved. Successful output explicitly prints the
 retained reminders when the set is nonempty, even though they were not changed,
 so the user can see that they now apply relative to the new attention time.
 
-The local attention parser classifies proposed expressions as known date-only,
-known timed, or unknown to the local parser. When an item has relative
+The local attention parser implements exactly the forms and account-timezone
+semantics in `command-interface.md` and classifies them as known date-only or
+known timed. Every other nonempty English expression is unknown locally. When
+an item has relative
 reminders, changing it to a known date-only value is rejected before mutation
 and instructs the user to clear or replace the reminders explicitly.
 
-For an expression whose date/time shape is unknown locally, the command lets
+When resolving the proposed day is necessary to validate a hidden parent or an
+open dated step before mutation, an unknown expression is rejected with a
+request for a locally understood or ISO value. Otherwise the command lets
 Todoist parse it. Before mutation it snapshots the complete reminder set. After
 Todoist accepts the update, it synchronizes and compares the authoritative due
-value and reminders with that snapshot. It prints a warning to stderr if
-Todoist changed or removed any reminder, or if the resulting item is date-only
-while relative reminders still exist. It does not attempt to roll back an
-accepted Todoist update.
+value, reminders, and all affected domain invariants with that snapshot. It
+prints a warning to stderr if Todoist changed or removed any reminder, if the
+resulting item is date-only while relative reminders still exist, or if an
+unexpected normalization created an invalid relationship. It does not attempt
+to roll back an accepted Todoist update.
 
 Such a reconciliation warning makes the command exit nonzero even though
 Todoist accepted the attention-value change. The output must state that the
@@ -317,209 +362,216 @@ user does not mistake the operation for an unchanged failure.
 
 ## Reporting
 
-`todo report` synchronizes Todoist and creates a report beginning at the stored
-report cursor. It does not change the cursor.
+`todo report` is an operational summary of current managed work plus qualifying
+activity; it is not an immutable audit ledger.
 
-`--since TIMESTAMP` and `--until TIMESTAMP` may override either interval
-boundary for debugging and recovery. Boundary inclusion remains
-start-exclusive and end-inclusive. The command captures a single end time at
-the beginning of report generation when `--until` is omitted.
+### Boundary and retrieval algorithm
 
-An invocation using either interval override cannot use `--final` and never
-advances the cursor.
+A report performs these steps in order:
 
-Report generation requires a successful current-state synchronization,
-complete activity-history retrieval for the interval, and every comment lookup
-needed to evaluate or render report entries. Failure of any required source
-aborts generation: no report is printed, the command exits nonzero, and the
-cursor remains unchanged. A report is never intentionally produced from a
-partial event or comment set.
+1. Validate local option syntax, acquire the exclusive runtime lock, then load
+   and validate the binding, configuration, and cursor without changing them.
+2. Resolve explicit interval overrides and capture one end instant immediately
+   before the first Todoist request when `--until` is absent.
+3. Synchronize current state, account timezone, and `user_plan_limits`.
+4. Verify that the start is within available activity history.
+5. Retrieve every activity page in `(start, end]`, every required completed
+   object page, and every comment page needed for eligibility or rendering.
+6. Apply current managed-scope, survival, reopen, and recurrence rules.
+7. Build all sections in memory, render, write, and flush the complete report.
+8. Only for `--final`, atomically replace the cursor with the captured end.
 
-`todo report --final` advances the cursor only after synchronization and report
-generation succeed. A report period is start-exclusive and end-inclusive:
-`(previous cursor, report end]`. An event exactly at the previous cursor is not
-repeated, while an event exactly at the new report end belongs to the report
-being generated. The reporting time zone is the local time zone of the
-executing machine.
+The interval is start-exclusive and end-inclusive. An event exactly at the old
+cursor is not repeated; one exactly at the captured end belongs to this report.
+An event after the boundary belongs to a later report even if it occurs while
+requests are running.
 
-Successful `--final` advances the cursor even when the event-based `Finished`
-and `Progress` sections contain no entries. An empty report is still a valid
-finalized reporting period.
+Any missing page, malformed pagination, unavailable required comment, output
+write or flush error, broken pipe, synchronization error, model error, or cursor
+write error returns nonzero. No partial normal report is intentionally printed,
+and the old cursor remains. A successful empty final report advances the cursor.
+A crash after a complete write but before cursor replacement may repeat output;
+it must never skip output that was not completely written.
 
-If no cursor exists, report generation fails before synchronization and directs
-the user to run `todo init`. Successful initial init creates the cursor at its
-current time, so earlier activity is intentionally outside later default
-reports. Deliberate recovery uses `report --set-cursor`.
+The report does not claim an atomic Todoist snapshot and performs no second
+comparison sync. Concurrent post-boundary edits may affect current text or
+state returned by authoritative later requests, but their activity events remain
+for the next interval.
 
-Report generation uses one initial synchronization and one captured end time.
-It does not perform a second synchronization or claim an atomic snapshot across
-Todoist current state, activity, and comments. Activity after the boundary
-belongs to a later report; concurrent edits and deletions may affect the current
-report according to the authoritative responses returned.
+### Account history capability
 
-The report contains three sections:
+The synchronization already returns the plan name and activity-history limit;
+reporting performs no extra plan request. Every report warns when history is
+limited unless `[report] warn_limited_history = false`. The exact Free warning
+is defined in `output-contract.md`. Suppression never converts insufficient
+history into success.
 
-The `Finished`, `Progress`, and `Hidden` headings are always printed in that
-order, including when a section has no entries.
+If the requested start predates retained activity history, generation stops
+before normal output and cursor advancement. It never substitutes a shorter or
+partial interval. Reminder capability is independent: basic commands and
+reports continue on an account without arbitrary reminders, while a reminder
+mutation fails only when it needs an unavailable capability.
 
-Within every section, categories are ordered alphabetically using lowercase
-comparison. Todoist's manual project order does not affect report ordering.
+### Structure and ordering
 
-Within the event-based `Finished` and `Progress` sections, content is ordered
-chronologically from the oldest qualifying event to the newest. When multiple
-progress events are grouped under one task, the task's position is determined
-by its oldest qualifying event and its displayed events are ordered oldest
-first.
+`Finished`, `Progress`, and `Hidden` are always printed in that order. Category
+groups are ordered by lowercase current category name. Within each event-based
+category, task groups sort by their oldest qualifying event, and events within a
+task group sort oldest first. Hidden tasks sort by lowercase current title.
+Stable object/event tie-breakers are defined in `output-contract.md`.
+
+All timestamps, date-only boundaries, and displayed attention days use the
+Todoist account timezone. Explicit-offset input retains its instant; persistence
+uses UTC.
 
 ### Finished
 
-Lists completed tasks. Tasks cannot be completed until all their steps are
-complete. A Finished entry does not append the task's comments; comments belong
-to `Progress` in the period when they were added or edited.
+`Finished` contains task completion occurrences. A non-recurring completion is
+included only while the task is currently completed. A regular reopened task is
+therefore omitted naturally. Every still-effective recurring completion event
+is a separate entry even though the task is open at its next occurrence.
 
-A non-recurring task completion is included only if the task is still completed
-when the report is generated. If it was reopened, its earlier completion event
-is ignored. A recurring completion remains reportable even though Todoist has
-advanced the item to its next occurrence and the item is open again.
+For recurring objects, an `uncompleted` activity event cancels the latest
+unmatched preceding completion of the same object. The paired completion and
+undo are omitted. This event pairing is required because recurring items are
+open both before and after undo; it stores no local tombstone.
+
+Task comments never move into Finished. Completion text remains a normal
+`Done: TEXT` comment in Progress when its own add event qualifies.
 
 ### Progress
 
-Lists completed steps and task comments that were added or modified during the
-period. A completed step is presented in the context of its parent task.
-Steps cannot have comments. Editing a comment resets its comment date, making
-it eligible for a later report. Semantically, an edit deletes the old comment
-and creates a new comment containing the edited text. The report presents that
-new text like any other added comment and does not label it as edited. Deleted
-comments are not shown.
+`Progress` contains completed step occurrences and surviving task comments
+added or edited during the interval. A completed step is nested under its
+current parent. A non-recurring step completion is included only while the step
+is currently completed; recurring steps use the occurrence and undo rules
+above.
 
-A surviving comment is included only when its add/edit timestamp falls inside
-the current report interval. Completing its task does not repeat comments from
-earlier finalized periods.
-
-A non-recurring step completion is likewise ignored if that step is currently
-open because it was reopened after completion. This current-state check does
-not apply to a recurring step advanced by Todoist.
+Comment eligibility comes from `note:added` and `note:updated` activity event
+timestamps, never from the immutable original `posted_at` alone. When one
+surviving comment has several qualifying add/edit events in one interval, it is
+shown once using current text and the latest qualifying event for ordering. A
+later-period edit makes it eligible once in that later report. A deleted comment
+is omitted.
 
 ### Hidden
 
-Lists tasks currently suppressed by the temporary attention-date hiding policy
-established by `--hide`. A task leaves this section when its local attention day
-arrives, even though its stored hiding policy remains. Tasks are not included
-merely because they belong to a configured hidden category such as `Someday`.
-Within a category, hidden tasks are ordered alphabetically using lowercase task
-title comparison rather than by attention date.
+`Hidden` is a current-state snapshot, not a cursor-bounded event list. It
+contains every task currently suppressed by its own temporary hiding policy,
+including tasks with no interval activity. Configured hidden categories are not
+included merely because of category policy.
 
-Each hidden task displays its hiding reason when one is stored.
+Each task displays its current reason. A step with its own effective hiding
+policy is nested beneath the parent with its own reason. A step hidden only by
+inheritance is not repeated. Independently hidden steps sort by lowercase title.
+The snapshot uses the account-local attention day, so an item leaves Hidden at
+the beginning of that day even though its stored waiting label remains.
 
-A currently suppressed step with its own `--hide` policy is displayed beneath
-its parent task with its own hiding reason, even when the parent itself is
-visible. A step suppressed only because it inherits a hidden parent policy is
-not listed as a separate hidden entry. When both parent and step have effective
-own hiding policies, the parent is listed once and the step is nested beneath
-it. Independently hidden steps beneath one parent are ordered alphabetically by
-lowercase step title.
+### Current-state scope and deletion
 
-`Hidden` is a current-state snapshot rather than a cursor-bounded event list.
-It includes every currently suppressed temporary-hidden task even when the task
-was hidden before the report cursor and had no activity during the period.
+Every entry uses current title, current parent, and current category. Current
+managed-scope membership controls inclusion: a task currently outside the bound
+root is omitted with all its events; a task currently inside may contribute all
+qualifying interval events even if it entered scope during the interval.
 
-Report entries use each task's and step's current title and the task's current
-category, including when an item was renamed or moved after the recorded
-activity.
+A deleted task, step, or comment contributes no entries. Deleting a parent also
+removes its step and comment contributions. Deletion is terminal and behaves as
+though the object never existed for report rendering. Reports neither cache a
+private undelete snapshot nor reconstruct event-time names, categories, or
+scope.
 
-A task deleted before report generation contributes no report entries. Its
-earlier comments, completed steps, task completion, and temporary-hidden state
-are omitted even when their events occurred inside the report period. Deleting
-a parent likewise removes report entries belonging to its deleted steps.
+## Synchronization, cache, and local state
 
-The same rule applies to an individually deleted step or comment while its
-parent survives: all report events belonging to the deleted object are omitted.
-For reporting purposes, deletion makes the object behave as though it never
-existed.
+All managed current task data is cached so read-only commands can operate
+without Todoist. Mutations, initialization, doctor, explicit refresh, and
+reports synchronize first. A failed synchronization prevents mutation and
+normal synchronized output.
 
-## Synchronization and cache
+Without `--refresh`, a cached read fails cleanly on a missing, unreadable,
+malformed, or incompatible cache and suggests the same command with global
+`--refresh`. It never treats an unusable cache as an empty account. Cache-backed
+data older than 24 hours warns on stderr.
 
-All managed task data is cached so read-only operations can run without
-Todoist access. State-changing commands and `todo report` synchronize first.
-A failed synchronization prevents mutation.
+`~/.todo/cache.json` is disposable, schema-versioned, and atomically replaced.
+An incompatible cache is rebuilt on refresh rather than migrated. A failed
+replacement retains the previous usable cache. If Todoist accepted a mutation
+but cache update fails, the command reports remote success as a partial failure
+and suggests refresh.
 
-Every cached read command (`todo now`, `todo waiting`, `todo someday`, `todo
-task`, `todo step`, `todo category`, `todo search`, and the display form of
-`todo comment`) accepts `--refresh`. The option synchronizes from Todoist before
-the view is evaluated. If refresh fails, the command exits nonzero without
-printing an actionable list, detail view, category list, comments, or search
-results.
+The cache also accumulates completed tasks, steps, and surviving comments
+fetched by reports and completed-object workflows. Cursor advancement and
+ordinary refresh do not purge them; Todoist deletion does. The cache records
+the earliest cached completion and known coverage metadata. `todo search --all`
+searches every retained object and always states that coverage may be
+incomplete. Cache loss or incompatible rebuild may therefore reduce completed
+search results without losing authoritative data.
 
-If a read command is used without `--refresh` and the cache is missing,
-unreadable, malformed, or otherwise unusable, the command exits nonzero with a
-concise error that identifies the cache problem and suggests rerunning the same
-command with `--refresh`. It must not treat a missing cache as an empty Todoist
-account, misreport a missing root project, or expose a traceback.
+Completed-search objects are keyed by stable object ID. Several recurring
+completion occurrences enrich one cached object and never create duplicate
+search rows; the coverage line uses the earliest retained completion occurrence.
 
-Changes made on a phone are observed on the next synchronization because
-Todoist is authoritative.
-
-`~/.todo/cache.json` can be deleted and recreated, for example with
-`todo now --refresh`.
-
-Every cache carries an explicit schema version. Incompatible caches are rebuilt,
-not migrated, because they contain no authoritative local data. Without
-`--refresh`, an incompatible cache fails cleanly and suggests refresh. Cache
-replacement is atomic. If synchronization succeeds but replacement fails, the
-previous usable cache remains intact and the command exits nonzero.
-
-A cache-backed read using data older than 24 hours warns on stderr and suggests
-global `--refresh`. Mutations, init, and reports synchronize automatically.
-There is no standalone refresh command.
-
-If Todoist accepts a mutation but the cache update fails, the command exits
-nonzero, states that the remote change succeeded, preserves the previous cache,
-and suggests `todo --refresh`.
-
-Displayed instants use friendly English local time with seconds, for example
-`Fri 14 Aug 2026, 16:30:42`. No timezone suffix is displayed. Ordering and
-comparisons use full instants, so distinct events in a repeated daylight-saving
-hour may display the same wall-clock timestamp.
-
-The following local state cannot be reconstructed solely from Todoist:
+The authoritative local files are:
 
 - `~/.todo/config`
+- `~/.todo/binding.json`
 - `~/.todo/report-cursor`
 
-`~/.todo/lock` is runtime coordination state and need not be reconstructed.
+The binding stores schema version, Todoist account ID, bound root-project ID,
+and managed category identities. It is migrated deliberately rather than
+discarded. `~/.todo/lock` is runtime coordination state. The cache and binding
+also retain the Todoist account timezone required for offline rendering; after
+a sync, Todoist's current timezone wins.
 
-## Category listing
+Cached reads remain offline even if the process environment now contains a
+token for another account; they display the explicitly bound account's cached
+data. The next synchronizing command detects the mismatch before provisioning
+or mutation.
 
-`todo category` lists current child projects of the configured root project in
-alphabetical order using lowercase name comparison. Todoist's manual project
-order does not affect this view.
+Displayed instants use friendly English account-local time with seconds, for
+example `Fri 14 Aug 2026, 16:30:42`. Ordering and comparisons use full instants.
+Report headers print the account timezone name.
 
-If the configured root project is missing or not unique after synchronization,
-normal commands fail with a clear configuration/model error until the Todoist
-project or local configuration is corrected. The CLI does not silently select
-or create a replacement during ordinary operation.
+## Category identity, listing, and invalid-state recovery
 
-Root-project matching uses exact case-sensitive name equality. A project whose
-name differs only by case is not the configured root.
+`todo category` lists current direct children of the bound root alphabetically
+by lowercase name; Todoist manual order is ignored. A newly discovered direct
+child is enrolled by stable ID as a managed category. A rename updates its
+current/last-known name without changing identity. Hidden-category policy still
+matches current names exactly as configured.
 
-If a managed category is archived or moved outside the configured root while it
-still has managed tasks, the model is invalid. Normal reads fail atomically and
-identify the category that must be restored. The CLI does not continue from
-cached membership, silently drop the work from scope, or move the project back
-automatically.
+During first binding or explicit rebind, the configured root name follows the
+exact create/reuse/reject rules in `command-interface.md`. After binding,
+stable account and root IDs are authoritative; renaming the root does not make
+the CLI bind a different same-name project.
 
-There is no built-in root-project or category configuration. The user must
-create a complete local config before initialization; `todo init` consumes that
-config rather than choosing settings.
+A missing, deleted, archived, shared, workspace-owned, or wrongly nested bound
+root is invalid. A managed category moved or archived outside the root while it
+still owns managed tasks is also invalid and must be restored. An empty removed
+category may be retired from the binding because no managed work would be
+silently lost. Ordinary commands never create a replacement or move structure
+back automatically.
 
-If synchronization discovers a project nested beneath a category, model
-validation fails. Read commands print the hierarchy error to stderr, exit
-nonzero, and produce no normal output. The CLI does not flatten, ignore, or
-silently reinterpret the deeper project.
+Projects below a category, parent tasks directly in the root, and steps deeper
+than one direct level are invalid. Duplicate open sibling titles, malformed
+waiting metadata, and scheduling data forbidden inside a configured hidden
+category are likewise invalid when introduced outside the CLI.
 
-The same validation behavior applies to a parent task placed directly in the
-configured root project without a category. The task is not ignored or assigned
-an implicit category.
+The same invalid-state policy covers an orphan step, a step whose parent is
+outside managed scope, an open step below a completed parent, a task comment
+attached to a step, and either half of a waiting-label/reason mismatch. Doctor
+identifies the exact external repair; normal commands never discard or
+reinterpret these objects.
 
-Model validation also rejects nested steps deeper than one direct level. Read
-commands abort rather than flattening, ignoring, or promoting nested items.
+Normal views, reports, and mutations validate the complete managed model in the
+loaded snapshot, even when a selector or category filter would touch only one
+part of it. Capability checks and existence checks for operation-specific
+resources remain scoped to the requested operation. Any model violation prints
+diagnostics and no partial normal result. `todo doctor` remains available,
+synchronizes, lists all violations rather than stopping at the first, and gives
+concrete repair instructions. It never modifies Todoist. After external repair,
+doctor or a
+normal command with `--refresh` confirms recovery.
+
+There is no built-in interactive root/category configurator. The user creates a
+complete config before initialization; init consumes it rather than choosing
+settings.

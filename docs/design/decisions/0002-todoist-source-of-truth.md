@@ -13,8 +13,9 @@ Todoist is authoritative for task, step, category, date, completion, comment,
 priority, recurrence, and reminder data. The local cache supports offline
 read-only operations and can be reconstructed from Todoist.
 
-Local configuration and the report cursor remain locally authoritative because
-they cannot be reconstructed from Todoist.
+Local configuration, stable account/root/category binding, and the report
+cursor remain locally authoritative because discarding them could change scope
+or skip an unknown report interval.
 
 State-changing commands and report generation synchronize before operating.
 Failed synchronization prevents mutation.
@@ -24,7 +25,7 @@ Failed synchronization prevents mutation.
 - Phone changes become visible after synchronization.
 - Mutations require Todoist access.
 - Read-only commands can use stale cached data unless refreshed.
-- Cache loss is recoverable; configuration and report-cursor loss are not.
+- Cache loss is recoverable; configuration, binding, and report-cursor loss require explicit recovery.
 - User-facing behavior is expressed in `todo` domain language rather than raw
   Todoist API vocabulary.
 - When synchronization or mutation fails, diagnostics must distinguish local

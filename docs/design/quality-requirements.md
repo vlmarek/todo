@@ -1,18 +1,27 @@
 # Quality requirements
 
-Status: Proposed
+Status: Accepted
 
 ## Safety
 
-- Validation must complete before any Todoist mutation.
+- Every locally decidable validation must complete before any Todoist mutation.
+  The only post-acceptance validation path is the documented unknown English
+  attention-expression reconciliation, and it must report accepted remote state
+  as a partial failure when reconciliation finds a problem.
 - Completing a parent with open steps must obtain explicit confirmation before
   completing any item; cancellation must leave the whole task tree unchanged.
+- A parent with any open recurring step must be rejected before confirmation
+  or mutation; advancing that step cannot satisfy the closed-tree invariant.
 - Once Todoist accepts an operation in a confirmed multi-item completion, a
   later failure must not trigger compensating reopens. The partial failure must
   be reported clearly with a nonzero exit status.
 - An ambiguous mutation must not guess which task or step to change.
 - An ambiguous non-interactive read lookup must print its numbered candidates,
   exit nonzero, and display no candidate detail view.
+- Interactive ambiguity must accept only a displayed number or `q`, re-prompt
+  invalid numbers, and treat blank/EOF as cancellation without mutation.
+  Non-interactive ambiguity must print the identical candidate set and never
+  prompt.
 - Exact title equality must not bypass ambiguity handling when other items also
   match the selector.
 - Deletion must require either interactive affirmative confirmation or the
@@ -27,6 +36,13 @@ Status: Proposed
   reopen/reclose mutations.
 - Acceptance tests must distinguish a quoted contiguous-phrase selector from
   multiple all-terms selectors, including reversed and non-contiguous terms.
+- Parser tests must never infer batch structure from spaces or tabs inside an
+  argument. Unmarked prose is one value; multiple comments/steps require
+  repeated markers; marker values may be multiword; `--literal` escapes a
+  marker-looking token.
+- Comment shorthand tests must treat only the first argument as selector and
+  join the remainder into one comment. Multi-term selectors must use an
+  explicit `--comment` marker.
 - Selection tests must distinguish task-only noun commands from implicit
   task-and-step selection, including a matching step under a nonmatching parent.
 - Implicit top-level lookup must not emit an unknown-command warning.
@@ -40,8 +56,9 @@ Status: Proposed
   comments cannot cause an item to be targeted.
 - Search tests must cover titles, descriptions, waiting reasons, and comments,
   and must prove that search results cannot implicitly select or mutate items.
-- Search visibility tests must exclude completed items by default and include
-  both open and completed items with `--all`.
+- Search visibility tests must exclude completed items and their comments by
+  default and include open plus retained completed items and surviving cached
+  comments with `--all`.
 - Default search tests must include open temporary-hidden items and open items
   from every configured hidden category.
 - Search-order tests must sort task groups by priority/category/title and their
@@ -61,6 +78,11 @@ Status: Proposed
   both succeed.
 - Missing current state, activity history, or required comments must abort the
   entire report before normal output; partial reports are forbidden.
+- Report tests must consume plan limits from the required sync without an
+  extra plan request, warn on every limited-history report unless configured
+  off, use the exact Free warning, and hard-fail before normal output when the
+  cursor predates retained history. Warning suppression must not suppress the
+  hard error.
 - Report tests must keep comments in `Progress`, include them only in their
   cursor-bounded add/edit period, and prove task completion does not repeat old
   comments in `Finished`.
@@ -68,8 +90,9 @@ Status: Proposed
   the text-supplied mutation form and restrict both to parent tasks.
 - Comment display tests must order comments chronologically from oldest to
   newest.
-- Comment creation with multiple text arguments must create one comment per
-  argument in command-line order.
+- Unmarked comment prose must create one joined comment regardless of shell
+  argument count. Multiple comments require repeated `--comment` markers and
+  are created in marker order.
 - Explicit `todo add comment` must be behaviorally identical to the
   text-supplied `todo comment` creation form.
 - A partial multi-comment creation failure must retain accepted comments, stop
@@ -78,6 +101,10 @@ Status: Proposed
 - Comment-editor tests must restrict editing to open parent tasks, synchronize
   before opening the editor, perform no mutation for an unchanged buffer, and
   support editing, deleting, and adding comments from a changed valid buffer.
+- Comment-editor process tests must hold the local lock, use a UTF-8 mode-0600
+  file, treat launch/signal/nonzero exit as no mutation, leave concurrently
+  added comments untouched, and apply saved text by stable ID even when it
+  overwrites a concurrent edit to that same comment.
 - Comment-editor parsing tests must recognize existing
   `[id: COMMENT_ID posted: TIMESTAMP]` blocks and multiple `[new]` blocks while
   retaining stable IDs for existing comments.
@@ -108,14 +135,22 @@ Status: Proposed
   be reported during reads without exposing the category or modifying Todoist.
 - Read output is atomic with respect to model validation: an invalid model must
   produce no partial normal output and must return a nonzero status.
+- Invalid-model tests must block normal views, reports, and mutations without
+  automatic repair. `todo doctor` must synchronize, enumerate all violations
+  with repair guidance, remain read-only, and work when normal validation fails.
 - Model validation must reject any project deeper than a direct category child
   beneath the configured root and abort normal read output.
 - Model validation must reject parent tasks directly in the configured root
   rather than ignoring or implicitly categorizing them.
 - Model validation must reject any step that has a child, preserving the
   two-level parent-task/direct-step hierarchy.
-- Normal commands must fail clearly when the configured root project is missing
-  or ambiguous and must not silently select or create a replacement.
+- Initial root lookup must create a root on zero exact active top-level matches,
+  reuse one only when it is unshared and personally owned, and reject multiple,
+  shared, or team-owned matches. Configured categories must reuse a unique
+  case-insensitive direct-child match or be created and must reject collisions.
+  After binding, normal commands must use the stable root ID and reject a
+  missing, shared, workspace-owned, archived, or wrongly nested root without
+  selecting or creating a replacement.
 - Initialization tests must provision only missing root/category/label objects
   and verify that ordinary commands perform no implicit provisioning.
 - A missing `waiting` label must fail `--hide` before item mutation but must not
@@ -124,6 +159,13 @@ Status: Proposed
   or test fixtures.
 - Authentication tests must prefer a nonempty `TODOIST_TOKEN` over the
   configured token and fall back to configuration when the variable is absent.
+- First init must bind account, unshared-personal root, and category IDs.
+  Synchronizing with a different account must abort before provisioning or
+  mutation. Confirmed `init --rebind` must leave the old account untouched,
+  establish new state, replace cache, and create a new cursor only on success.
+- Token rotation within the bound account must succeed. Offline reads must use
+  the bound cache without making a token-account network check.
+- Shared roots and team-workspace roots must be rejected and diagnosed.
 - Initialization must require an existing valid config containing the root,
   initial categories, and hidden categories. Missing, malformed, or incomplete
   configuration must fail before network access or provisioning, and init must
@@ -135,8 +177,9 @@ Status: Proposed
 - Configuration compatibility tests must retain `[todoist] token` and `[main]`
   keys `project`, `default_sections`, and `hidden_from_now`, preserve category
   name case, and prove that `default_wait_due` has no effect.
-- Root-project lookup must use exact case-sensitive equality during init,
-  validation, and managed-scope resolution.
+- Root-project name lookup must use exact case-sensitive equality during first
+  init and explicit rebind. Subsequent validation and scope resolution must use
+  the bound account/root IDs and tolerate root renaming.
 - Unknown configuration sections and keys must be ignored, while malformed or
   invalid recognized settings must still fail validation.
 - An explicitly empty `hidden_from_now` must be valid and produce a successful
@@ -164,8 +207,18 @@ Status: Proposed
 - Concurrent invocations must not corrupt local state.
 - Runtime-lock tests must cover acquisition, release, a 30-second timeout, and
   lock-free reads during atomic cache replacement.
+- Two concurrent final-report tests must prove that each process acquires the
+  lock before reading the cursor and that the second process reloads the cursor
+  after the first advances it; neither may reuse a stale pre-lock interval.
 - Cache fixtures carry a schema version. Incompatible versions fail cleanly and
   are rebuilt rather than migrated when `--refresh` is supplied.
+- Reports and completed-object workflows must accumulate completed tasks,
+  steps, and comments in the disposable cache. Cursor advancement and ordinary
+  refresh must retain them; deletion removes them. `search --all` must search
+  all retained objects and always state earliest cached completion plus
+  incomplete-coverage semantics. No search `--since` option exists.
+- Cache deletion or incompatible rebuild may lose accumulated completed search
+  history, but a cached empty result must never claim complete Todoist history.
 - A failed cache replacement retains the preceding usable cache. A Todoist
   mutation followed by cache-write failure is a partial failure and suggests
   global `--refresh`.
@@ -227,8 +280,12 @@ automatically retried.
 - Golden-output fixtures cover every command and major failure with fixed time,
   timezone, terminal width, color, and backend data. They make presentation
   changes explicit without creating a permanent scripting interface.
-- Displayed instants use friendly English local timestamps with seconds and no
-  timezone suffix.
+- Golden fixtures must implement every literal heading, indentation level,
+  marker, empty message, ambiguity prompt, mutation label, report header, and
+  cache-coverage line in `output-contract.md`. Machine-readable output and
+  identity-safe selectors must remain absent.
+- Displayed instants use friendly English timestamps with seconds in the
+  Todoist account timezone; report headers print the IANA timezone name.
 - `todo help COMMAND` and `todo COMMAND --help` must produce equivalent help,
   and all help forms must work without configuration, cache, or network access.
 - A no-argument invocation must be behaviorally identical to `todo now`, while
@@ -269,8 +326,7 @@ automatically retried.
   affect this order, and completion must change the marker rather than create a
   second history record.
 - Every task-history entry must display the timestamp used for its position.
-- Task-history timestamps must be displayed in the executing machine's local
-  timezone.
+- Task-history timestamps must be displayed in the Todoist account timezone.
 
 ### Workflow acceptance scenarios
 
@@ -300,35 +356,54 @@ defect or a missing help requirement.
   and absence of mutation after failure.
 - Selector tests cover Unicode normalization and case folding, preserve accent
   distinctions, and verify substring matching.
-- Time parsing treats offset-free input as machine-local and rejects nonexistent
-  or ambiguous daylight-saving times unless an explicit offset is supplied.
-  This applies to cursor, report-boundary, and locally parsed attention input.
-- Reminder parsing rejects equivalent duplicate offsets before mutation.
-- Init tests create a missing cursor only after successful provisioning, leave
-  an existing cursor unchanged, and report partial success when provisioning
-  succeeds but cursor persistence fails.
+- Time parsing treats offset-free input as local to the Todoist account
+  timezone and rejects nonexistent or ambiguous daylight-saving times unless an
+  explicit offset is supplied. Explicit offsets retain their instant. This
+  applies to cursor, report boundaries, and locally parsed attention input.
+- Attention parser tests must cover ISO values, today/tomorrow, strict-next
+  English weekdays, optional clock times, elapsed `Nh`, account-calendar `Nd`,
+  Monday-Friday `Nbd`/business-day values, and unknown English Todoist strings.
+  Unknown values must fail before mutation when a hidden-parent/step day
+  comparison depends on them and otherwise undergo post-mutation reconciliation.
+- Reminder parsing accepts only a positive integer plus lowercase `m`, `h`,
+  `d`, or `w`; rejects zero, signs, decimals, whitespace, compound/unsupported
+  units; and rejects minute-equivalent duplicates before mutation.
+- First-binding init tests create a cursor only after provisioning and binding
+  persistence succeed. Once binding exists, missing/corrupt cursor tests must
+  fail init and require explicit `report --set-cursor` rather than silently
+  creating a current-time cursor.
 - Cursor tests cover display, confirmation, `--yes`, direction warnings, UTC
   persistence, and `Nd ago`/`N days ago` input.
-- Reports fail before synchronization when no cursor exists. Tests prove output
-  precedes cursor advancement so interruption favors repetition over omission.
+- Reports fail before synchronization when no valid cursor exists. Tests prove
+  complete output and flush precede cursor advancement; broken pipes, write
+  errors, and interruption leave the cursor unchanged so repetition is favored
+  over omission.
 - Paginated report tests retrieve every activity and comment page and never
   present a truncated report as complete.
+- Pagination progress tests must print the fixed stderr line after every tenth
+  completed page of one endpoint and must not treat progress as completion.
 - Comment-editor tests parse `$VISUAL`/`$EDITOR` arguments without a shell,
   apply edits then additions then deletions, allow the saved buffer to overwrite
   concurrent remote changes, and require confirmation before an empty buffer
   deletes all comments.
 - Adapter tests ignore unknown response fields but reject unsupported values or
   shapes in recognized behavior-affecting fields.
+- Adapter tests must prove the Todoist `4..1` to domain `P1..P4` mapping in both
+  directions, English due-language submission, atomic sync-token/state
+  persistence, reference-order independence, tombstone precedence, and
+  retention of a compatible completed-search index across full replacement.
 - Packaging tests target Python 3.11+ on Linux and macOS through the installed
   `todo` console entry point. Windows is unsupported.
-- Tests must cover local calendar-day boundaries and the configured machine
-  time zone.
+- Tests must cover account-local calendar-day boundaries, account-timezone
+  changes after synchronization, cached offline timezone use, and explicit
+  offsets independent of the executing machine timezone.
 - Report tests must cover cursor boundaries, failed finalization, comments,
   completed steps, completed tasks, and current-category grouping.
 - Report tests must verify case-insensitive alphabetical category ordering,
   independently of Todoist's manual project order.
-- Report tests must verify oldest-to-newest ordering of tasks and events in the
-  event-based sections, including multiple progress events grouped by one task.
+- Report tests must order categories alphabetically, then task groups by their
+  oldest qualifying event within each category, then grouped events oldest to
+  newest, with stable ID/event tie-breakers.
 - Report tests must verify lowercase alphabetical task ordering within each
   category of the non-event-based `Hidden` section.
 - Report tests must verify that the `Hidden` snapshot includes currently
@@ -345,20 +420,32 @@ defect or a missing help requirement.
   `No someday items.`, respectively, and exit zero.
 - Someday-view tests must order tasks by priority/category/title and nested
   steps by priority/title without date-related sorting.
-- Report tests must verify that optional task-completion text becomes a normal
-  `Done: TEXT` progress comment in the same reporting period.
+- Completion-text tests must complete ordinary open steps, then the parent,
+  then create the `Done: TEXT` progress comment. Comment failure must leave the
+  completed tree intact and report a partial failure; no false pre-completion
+  `Done:` comment may remain.
 - Report tests must verify that deleting a task before generation removes all
   of that task tree's Finished, Progress, and Hidden entries.
 - Report tests must verify the same erasure semantics when only a step or
   comment is deleted while its parent remains.
 - Report tests must verify that renames and category moves are reflected using
   current Todoist titles and category names rather than event-time values.
-- Report tests must ignore non-recurring completion events for items that are
-  currently open, while retaining recurring completion events whose next
-  occurrence is open.
-- Reopen tests must verify automatic task or parent-task progress comments,
-  optional explanatory text, and partial failure after a successful reopen but
-  failed comment creation.
+- Current-scope tests must omit objects currently outside the managed root
+  and include qualifying events for objects currently inside even when they
+  crossed the boundary during the interval.
+- Comment-report tests must derive add/edit time from activity rather than
+  `posted_at`, collapse several same-period events for one surviving comment to
+  current text at the latest event, show it again after a later-period edit,
+  and omit deleted comments.
+- Recurring report tests must print one entry per qualifying task/step
+  completion occurrence with its event time.
+- Report tests must ignore regular completion events for currently open items,
+  retain one line per effective recurring occurrence, and cancel the latest
+  unmatched recurring completion when a corresponding uncompleted event exists.
+- Reopen tests must reject explanatory text, create no audit/progress comment,
+  search only `(report cursor, now]`, list Todoist-reopened ancestors, preflight
+  duplicate-title conflicts across that chain, and permit only the latest
+  recurring occurrence to move backward once.
 - `close`/`closed` and `unclose`/`undone` must be behaviorally identical to
   `done` and `reopen`, respectively.
 - Retained `todo task --ACTION` and `todo step --ACTION` mutation forms must
@@ -388,26 +475,32 @@ defect or a missing help requirement.
   conflicting priority options before mutation.
 - Explicit `todo add task` must be behaviorally identical to short-form task
   creation and permit categories whose names collide with explicit add kinds.
+- Canonical creation must delimit unquoted multiword category/title values
+  with `--category` and `--title`; repeated `--step` creates several steps.
+  Positional aliases join their unmarked tail into one title and never use
+  shell quoting as a batch boundary.
 - Creation tests must treat `--done`, `--close`, and `--closed` as equivalent,
   generate normal completion events, and complete all inline steps before a
   newly created parent.
-- Creation must reject completion-at-creation combined with `--hide`, `--due`,
-  or `--reminder` before any mutation.
+- Creation must reject completion-at-creation combined with `--hide`, `--at`,
+  `--due`, or `--reminder` before any mutation.
 - Completion-at-creation must use the same duplicate-title errors and
   completed-title reuse warnings as ordinary creation.
 - Task- and step-creation tests must support initial attention values and
   repeatable reminders, reuse normal parsing and validation, and reject a
   reminder without a timed attention value before mutation.
-- Combined task-and-inline-step creation must apply scheduling options only to
-  the parent and leave every inline step unscheduled.
-- Multi-step creation with any scheduling option must fail before creating any
-  step; multiple unscheduled steps remain supported.
+- Combined task-and-`--step` creation must apply scheduling options only to the
+  parent and leave every marked inline step unscheduled.
+- Repeated-`--step` creation with any step-level scheduling option must fail
+  before creating any step; several explicitly marked unscheduled steps remain
+  supported and preserve marker order.
 - Task- and single-step creation must support `--hide REASON`, persist the
   waiting label and nonempty reason metadata, and enforce the normal hiding
   invariants before creation. Multi-step creation with `--hide` must fail before
   mutation.
-- Creation-time `--hide` without an explicit `--due` must fail before mutation
-  and must not consult or apply the configured default wait date.
+- Creation-time `--hide` without explicit `--at` or its `--due` alias must fail
+  before mutation and must not consult or apply a default wait date. Supplying
+  both `--at` and `--due` is an option conflict.
 - Every attention-change alias used with `--hide` must require an explicit date
   and reason before mutation; the design has no default wait-date setting.
 - Successful `--hide` output must print previous and resulting attention values
@@ -439,14 +532,64 @@ defect or a missing help requirement.
   workaround mutations.
 - Move tests must reject completed tasks and step targets without workaround
   mutations.
+- Move tests must reject a same-title open task in the destination before
+  mutation, allow only completed same-title conflicts with a warning, and never
+  merge or rename implicitly.
 - Every ordinary editing workflow must reject completed targets before Todoist
   mutation. Only reopen and delete intentionally resolve completed parent
   items; normal task inspection remains open-only.
+- Reopen selection must retrieve only eligible occurrences in `(report cursor,
+  now]`. Completed-delete selection must retrieve only currently completed
+  non-recurring objects completed in that interval; open deletion remains
+  unrestricted. Older completed objects are not mutation candidates even when
+  retained for cached search.
+- Recurring items must appear only once as open delete candidates. Deleting one
+  removes the active recurring object; a historical completion occurrence must
+  never appear as a second delete target.
 - Report tests must verify that all three section headings remain present for
   empty and partially empty reports.
-- Cursor-boundary tests must verify start-exclusive, end-inclusive periods and
-  prove that an event cannot appear in two consecutive finalized reports.
+- Cursor-boundary tests must verify start-exclusive, end-inclusive periods,
+  capture the automatic end before the first Todoist request, and prove that an
+  event cannot appear in two consecutive finalized reports.
 - Report interval tests must cover independent `--since` and `--until`
   overrides and a single captured end time when `--until` is absent.
+- Report/cursor time tests must reject start-after-end and future end/cursor
+  values, accept equal report boundaries as empty, and require explicit offsets
+  for ambiguous or nonexistent account-local times.
 - Report option validation must reject `--final` combined with either interval
   override before external requests and leave the cursor unchanged.
+
+### Accepted edge-case matrix
+
+The acceptance suite must additionally prove:
+
+- all retained aliases (`close`, `closed`, `unclose`, `undone`, `wait`, `due`,
+  `schedule`, `categories`, both category/task/comment creation families,
+  creation close flags, noun-action forms, help aliases, and priority spellings)
+  delegate to one canonical workflow with identical state and output
+- `--at` and `--due` are equivalent value markers and conflict when combined;
+  `--hide` is final and consumes one joined reason
+- exact selector equality never hides broader substring candidates
+- reopening a step may reopen ancestors and prints each one, but a duplicate
+  open title anywhere in the affected chain rejects before mutation
+- only the latest recurring occurrence can be undone through
+  `item_update_date_complete` with backward direction; ordinary REST reopen is
+  not used for an active recurring item
+- a matching recurring uncompleted event removes the corresponding upcoming
+  report occurrence without a local tombstone
+- deletion remains terminal and contributes no report or cached-search entry;
+  no undelete command or snapshot is created
+- root/category renames retain stable binding identity, while unsafe moves,
+  archives, sharing, workspace transfer, and forbidden hierarchy are diagnosed
+- a report interval whose start equals the retention boundary is accepted,
+  while one earlier than it is rejected without partial output
+- a final report with completely written stdout and failed cursor persistence
+  repeats on the next run; a failed/broken stdout write never advances
+- reports use current scope and current names rather than reconstructing an
+  event-time ledger
+- category order, task-group event order, recurring occurrence order, and every
+  equal-key tie are deterministic across repeated runs
+- all local files use required modes, tokens never enter cache/output/fixtures,
+  and personal-token-only help exposes no OAuth flow
+- Linux and macOS packaging pass; Windows, localization, JSON, exact ID/title
+  selectors, OAuth, shared roots, and undelete remain outside scope

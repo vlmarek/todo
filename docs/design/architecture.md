@@ -1,13 +1,13 @@
 # Architecture
 
-Status: Proposed
+Status: Accepted
 
 ## System context
 
 The user invokes `todo` from a shell. `todo` communicates with:
 
 - Todoist, the authoritative task store and notification provider
-- local files under `~/.todo`, used for configuration, cache, cursor, and lock
+- local files under `~/.todo`, used for configuration, binding, cache, cursor, and lock
 - the terminal, used for output and ambiguous-match selection
 - the user's phone indirectly through Todoist synchronization and reminders
 
@@ -73,7 +73,7 @@ The adapter explicitly targets Todoist API v1 and its Sync endpoint. Its
 contract documents resource and event mappings, pagination, sync-token
 handling, tombstones, idempotency identifiers, and retry eligibility. Activity
 and comment retrieval follows every page until exhaustion and prints progress
-to stderr after several pages; reports are never silently truncated.
+to stderr after every tenth page; reports are never silently truncated.
 
 Unknown response fields are ignored. Unsupported shapes or values in recognized
 fields that affect completion, attention, recurrence, hierarchy, reminders, or
@@ -81,43 +81,50 @@ other domain behavior fail clearly rather than being normalized.
 
 ### Local persistence
 
-Stores configuration, cache, report cursor, and runtime lock safely.
+Local persistence separates authoritative and disposable state:
 
-Todoist authentication resolves the token at command start. A nonempty
-`TODOIST_TOKEN` environment variable takes precedence over the token stored in
-`~/.todo/config`; the configured token is the fallback when the environment
-variable is absent.
+- `config` contains user policy and optional personal API token
+- `binding.json` contains schema version, Todoist account/root/category IDs, and
+  the last authoritative account timezone
+- `report-cursor` contains the finalized UTC report boundary
+- `cache.json` contains reconstructable current state plus best-effort
+  accumulated completed-search history and coverage metadata
+- `lock` coordinates synchronizing and mutating processes
 
-`todo init` consumes these existing credentials and never accepts or persists a
-token argument.
+Configuration, binding, and cursor are authoritative local state and are never
+discarded as cache recovery. Binding schema changes require an explicit
+migration. Cache schema changes may rebuild and lose accumulated completed
+search history because the cache remains disposable.
 
-`~/.todo` has mode `0700`; configuration, cache, cursor, and editor temporary
-files have mode `0600`. Local encryption and persistent diagnostic logging are
-out of scope.
+Authentication resolves once at command start. A nonempty `TODOIST_TOKEN`
+precedes `[todoist] token`. Only personal API-token authentication is supported;
+init accepts no token option and OAuth is outside scope.
 
-The runtime lock is exclusive for initialization, Todoist mutations, explicit
-refreshes, reports, and cursor changes. Atomic cache-only reads remain lock-free.
-Lock acquisition waits at most 30 seconds and then reports that another `todo`
-command is running.
+`~/.todo` has mode `0700`; configuration, binding, cache, cursor, and editor
+temporary files have mode `0600`. Local encryption and persistent diagnostic
+logging are outside scope.
 
-Cache and cursor writes use temporary-file replacement. Cursor writes also
-flush and `fsync` the temporary file and containing directory because the
-cursor is locally authoritative. Disposable cache writes do not require
-`fsync`.
+Initialization, rebind, refresh, doctor, reports, cursor changes, and mutations
+hold one exclusive runtime lock. Atomic cache-only reads remain lock-free. Lock
+acquisition waits at most 30 seconds and then reports the competing command.
 
-## Initialization flow
+All persistent writes use same-directory temporary-file replacement. Binding
+and cursor writes flush and `fsync` both file and containing directory. Cache
+writes require atomic replacement but not durability synchronization. A failed
+replace preserves the previous usable file.
 
-The user creates local configuration before initialization. `todo init`
-validates it, synchronizes Todoist, and provisions a missing configured root
-project, configured initial categories, and the `waiting` label. It does not
-choose structural settings or create a default config. Ordinary command flows
-only validate these structures and never provision them implicitly.
+`binding.json` minimally persists a schema version, account ID and display
+identity, root ID and last-known name, managed category IDs and last-known
+names, and the last account timezone. `report-cursor` is one UTC RFC 3339
+instant with a trailing newline. `cache.json` minimally persists its schema
+version, account/root identity, sync token, successful-sync time, current
+projects/tasks/comments/reminders, tombstones needed for merging, accumulated
+completed-search objects, and explicit coverage metadata. Stable IDs are
+serialized as strings. Exact object nesting is an implementation choice.
 
-`~/.todo/config` uses INI syntax. Configuration loading distinguishes a missing
-file, malformed INI, and missing or invalid required settings and reports each
-as a concise user-facing error rather than exposing parser exceptions.
+## Initialization and binding flow
 
-The schema retains these keys:
+The user writes configuration before initialization. The schema is:
 
 ```ini
 [todoist]
@@ -128,105 +135,124 @@ project = Oracle
 default_sections = ai, gatekeeper, engineer, Someday
 hidden_from_now = Someday
 
+[report]
+warn_limited_history = true
+
 [colors]
-# optional palette overrides
-# base01 = #586e75
-# base1 = #93a1a1
-# red = #dc322f
-# green = #859900
-# yellow = #b58900
-# blue = #268bd2
-# magenta = #d33682
-# cyan = #2aa198
+# optional Solarized Dark palette overrides
 ```
 
-`token` may be omitted when `TODOIST_TOKEN` supplies authentication. `project`,
-`default_sections`, and `hidden_from_now` are the structural settings consumed
-by init and ordinary commands. Comma-separated names are trimmed but preserve
-their case. `default_wait_due` is not a supported setting because hiding always
-requires an explicit date.
+`project`, `default_sections`, and `hidden_from_now` are required recognized
+settings; `hidden_from_now` may be empty. Names are trimmed and preserve case;
+duplicates within either comma-separated list fail case-insensitively. The two
+lists remain independent. Empty list elements are invalid, and configured
+initial/hidden category names cannot contain a comma because the format has no
+escaping convention. Unknown sections and keys are ignored for
+compatibility, including legacy `default_wait_due`. Recognized invalid values
+fail. Color values and slots follow `command-interface.md`.
 
-The configured `project` name is matched against Todoist project names by exact,
-case-sensitive equality during initialization, synchronization validation, and
-managed-scope resolution.
+`warn_limited_history` defaults to true and accepts only true/false. It suppresses
+only the informational plan warning, never a history-retention error.
 
-Unknown INI sections and keys are ignored for compatibility. This includes an
-old `default_wait_due` entry: it has no effect and does not make the config
-invalid. Recognized settings are still validated strictly.
+First init performs:
 
-The optional `[colors]` section recognizes exactly the palette slots `base01`,
-`base1`, `red`, `green`, `yellow`, `blue`, `magenta`, and `cyan`. Solarized Dark
-supplies the defaults shown above. Omitted slots retain their defaults; invalid
-values for recognized slots fail configuration validation. Other keys are
-ignored.
+1. Validate config, credentials, and local permissions.
+2. Synchronize identity, account timezone, plan capabilities, and projects.
+3. Apply the exact root and category matching rules in `command-interface.md`;
+   reject ambiguous/shared/workspace matches, otherwise reuse or provision the
+   personal root, configured initial category projects, and `waiting` label.
+4. Persist account ID, root ID, and category IDs in `binding.json`.
+5. Build cache with a full sync followed by an incremental sync.
+6. Create the initial report cursor at the captured binding time.
 
-Each recognized color value uses exactly six hexadecimal RGB digits prefixed by
-`#`, for example `#dc322f`. Hexadecimal digits are case-insensitive; shorthand,
-named colors, alpha values, and other formats are invalid.
+Remote provisioning may partially succeed, so rerunning init is idempotent and
+provisions only missing objects. A local failure before binding persistence may
+be retried normally. If binding persistence succeeds but cursor persistence
+fails, init reports the captured intended boundary; because a binding now
+exists, recovery is the explicit `report --set-cursor` workflow rather than a
+fresh current-time cursor on the next init.
 
-`hidden_from_now` is required as a recognized setting but may have an empty
-value, meaning that no category is hidden from `todo now` by category policy.
-Its nonempty names must be unique under case-insensitive comparison.
-`default_sections` must contain at least one nonempty category name.
-Names in `default_sections` must be unique under case-insensitive comparison;
-exact or case-only duplicates make the configuration invalid.
+Subsequent init validates the bound account and stable IDs. Root/category names
+may change without changing identity. A token resolving to another account
+aborts before provisioning. Confirmed `init --rebind` deliberately establishes
+a new account binding, provisions from current configuration, replaces the
+cache, and creates a new cursor after successful new binding; it never mutates
+the old account.
 
-The two lists are independent. `default_sections` only names category projects
-that `todo init` creates when absent. `hidden_from_now` classifies current
-matching categories for visibility and may contain names not present in
-`default_sections`; init does not create categories merely because they are
-listed as hidden.
+If binding exists but cursor is missing or corrupt, init fails and requires
+explicit `report --set-cursor`. This prevents silent omission of an unknown
+report interval.
 
 ## Read-only flow
 
-Read-only commands load configuration and cached task data, validate the
-complete relevant model, apply domain rules, and format results. Explicit
-`--refresh` synchronizes Todoist before reading. Validation failure produces
-diagnostics and no normal result output.
+Cache-backed reads load configuration, binding, cached account timezone, and
+cached task data; validate the complete managed model; apply domain
+rules; and format deterministic human output. They do not contact Todoist
+unless `--refresh` is supplied.
+
+A token change cannot be verified by an offline read, so cached output remains
+explicitly associated with the stored binding. The next synchronizing workflow
+validates account identity before any mutation.
+
+`todo doctor` is a special read-only synchronizing flow. It continues after
+individual model violations, collects all of them, and renders only diagnostics.
+It never returns a normal partial view or performs a repair.
 
 ## Mutation flow
 
-1. Load configuration and acquire the runtime lock.
-2. Synchronize from Todoist.
-3. Resolve the selected task or step.
-4. Validate the complete proposed change.
-5. Send the mutation to Todoist.
-6. Update or refresh the cache.
-7. Print previous and resulting values.
+1. Validate local option syntax and acquire the runtime lock.
+2. Load configuration and authoritative binding/cursor state as required.
+3. Synchronize and verify account, root, categories, timezone, and model.
+4. Resolve selector candidates and any interactive choice.
+5. Validate the complete proposed result, capability, duplicate-title, and
+   multi-object preconditions.
+6. Send ordered idempotent Todoist mutation commands.
+7. Reconcile and atomically update cache/binding state.
+8. Render accepted changes and any partial failure.
 
-If synchronization, selection, or validation fails, no mutation is sent.
+A structural or domain-model violation blocks every normal mutation even when
+another item appears unaffected; capability/resource checks such as reminder
+support or the waiting label remain operation-scoped. Selection and complete
+locally knowable validation precede the first mutation.
 
-Validation is operation-scoped. Workflows check Todoist projects, labels, and
-capabilities only when they depend on them rather than running a global
-external-object preflight for every command.
+Multi-command workflows are ordered but not transactional. The first remote
+failure stops later commands. Accepted changes remain and are never compensated
+with automatic reopen/delete operations. Completion orders ordinary steps,
+parent, then optional `Done:` comment. Creation and repeated marker values use
+command-line order.
 
-When Todoist must interpret a due expression that the local parser cannot
-classify, the workflow snapshots reminder state, performs the update,
-synchronizes, and compares the resulting authoritative due/reminder state. Any
-unexpected reminder change or invalid date-only/reminder combination is
-reported without compensating rollback.
+Unknown-shape Todoist date expressions are rejected when a locally resolved day
+is required for preflight; otherwise they require post-acceptance
+synchronization and full invariant/reminder reconciliation. An unexpected
+reminder or invariant result is a nonzero partial failure, not a rollback.
 
-Workflows requiring multiple Todoist mutations are not assumed to be
-transactional. Once a mutation is accepted, a later failure is reported rather
-than automatically reversed. A subsequent synchronization reconciles the
-cache with the authoritative partial result.
-
-Deleting an open or completed item uses Todoist's direct delete operation.
-Deletion must not be emulated by removing only cached data, and completed items
-must not be reopened merely to make them deletable.
+Deletion always uses Todoist's direct operation. Non-recurring completed delete
+candidates must currently be completed in `(report cursor, now]`; recurring
+objects remain normal open candidates. No temporary reopen or local-only delete
+is permitted.
 
 ## Report flow
 
-1. Load the report cursor without changing it.
-2. Synchronize current Todoist data and relevant activity.
-3. Retrieve every comment set required to evaluate and render the report.
-4. Generate Finished, Progress, and Hidden sections entirely in memory.
-5. Print the report.
-6. If and only if `--final` was requested and all previous steps succeeded,
-   advance the cursor.
+1. Validate local option syntax, acquire the runtime lock, then load and
+   validate configuration, binding, and cursor.
+2. Resolve overrides and capture the automatic end instant immediately before
+   the first Todoist request.
+3. Synchronize current state, timezone, and plan limits.
+4. Validate retention and model completeness.
+5. Fetch all activity pages, completed-object pages, and required comments for
+   `(start, end]`.
+6. Apply current-scope/survival rules, regular reopen filtering, recurring
+   complete/uncomplete pairing, and per-comment edit collapsing.
+7. Build deterministic Finished, Progress, and Hidden sections in memory.
+8. Write and flush the complete report.
+9. If `--final`, atomically advance the cursor to the captured end.
 
-Any required synchronization, activity, or comment failure aborts before
-normal report output and leaves the cursor unchanged.
+A request, validation, rendering, write, flush, broken-pipe, or cursor failure
+returns nonzero and leaves the old cursor. The design favors possible repetition
+over omission. Reports do not claim an atomic remote snapshot and perform no
+second comparison sync.
 
-Report output is printed before a final cursor update. A crash between those
-operations may repeat a period but must not skip an unprinted period.
+Plan limits are read from the synchronization already required. Limited history
+warns on every report unless configured off; an interval outside retained
+history is a hard pre-output error. Current managed scope, current names, and
+surviving objects determine membership and presentation.

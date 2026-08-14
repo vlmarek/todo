@@ -1,9 +1,10 @@
 # Command interface
 
-Status: Proposed
+Status: Accepted
 
-This document defines the proposed public CLI established during design
-discovery.
+This document defines the binding first-release public CLI. Canonical forms
+are taught first, but every documented compatibility alias is intentional
+public syntax and must behave identically to its canonical operation.
 
 ## Global options
 
@@ -25,7 +26,8 @@ The built-in palette is Solarized Dark. An optional `[colors]` section in
 `red`, `green`, `yellow`, `blue`, `magenta`, and `cyan`. Omitted slots keep
 their Solarized defaults. An invalid value for a recognized slot is a
 configuration error; unknown keys remain ignored under the general
-configuration compatibility rule.
+configuration compatibility rule. Values are case-insensitive six-digit
+`#RRGGBB`; shorthand, named, alpha-channel, and unprefixed forms are invalid.
 
 `todo help` displays top-level help. `todo help COMMAND` is equivalent to
 `todo COMMAND --help`; both forms display the same command-specific help and
@@ -35,6 +37,11 @@ Running `todo` with no arguments is exactly equivalent to `todo now`. It loads
 the cached work queue and follows the same validation, ordering, output, and
 exit behavior. Top-level help remains available explicitly through `todo help`
 or `todo --help`.
+
+Global options are accepted either before the command or in the command's
+documented option position. Repeating a singleton global option is a usage
+error. `--refresh` remains invalid for commands that already synchronize or do
+not read cached state.
 
 Successful commands exit `0`, command-line usage errors exit `2`, and every
 operational or partial failure exits `1`.
@@ -70,6 +77,47 @@ todo: waiting label is missing; run `todo init`
 
 The exact wording may vary, but the error must preserve the same facts and
 recovery action.
+
+## Argument and value grammar
+
+The shell removes quote syntax before `todo` receives its argument vector.
+`todo` therefore never infers a batch boundary from whether an argument happens
+to contain a space or tab.
+
+The canonical grammar uses value markers:
+
+- selector terms precede the first value marker
+- `--category`, `--title`, `--to`, `--at`, `--due`, `--comment`, `--step`, and
+  `--hide` begin values
+- a multiword value continues until the next recognized marker
+- `--reminder` is a marker that consumes exactly one following offset argument
+- `--comment` and `--step` are repeatable and create one object per occurrence
+- `--hide` consumes the remaining words as one reason and must therefore be the
+  last marker
+- `--literal ARG` inserts its next argument into the current selector or value
+  block without interpreting it as a marker
+
+Unmarked trailing prose in a documented shorthand is one logical value. It is
+never split into one value per shell argument. Quoting may preserve a
+contiguous phrase for selector matching, but quoting does not create multiple
+steps or comments.
+
+For example:
+
+```console
+todo add task --category Client Work --title prepare quarterly proposal \
+  --step draft outline --step request figures
+todo rename deploy staging --to deploy production
+todo move deploy staging --to Client Work
+todo done deploy staging --comment finished rollout
+todo schedule deploy staging --at next Friday 10:00
+todo add comment weekly report --comment added note about future
+```
+
+Legacy positional and noun-action forms remain accepted, but they normalize to
+this model. Their unmarked prose is a single value; positional batching is not
+retained. Invalid or conflicting markers fail with exit `2` before
+synchronization or mutation.
 
 ## Help content
 
@@ -138,116 +186,144 @@ descriptions, temporary-waiting reasons, and task comments. It only displays
 matches and never selects an item or changes state. Its searchable fields do
 not affect the title-only selector rules used by other commands.
 
-Search examines open tasks and steps by default. `todo search --all TEXT`
-expands the same search to completed tasks and steps as well; it does not mean
-completed-only. Comments associated with an included task remain searchable.
-The default open population includes items currently suppressed by `--hide` and
-items in configured hidden categories. Search is not limited to actionable
-work.
+Search examines open tasks and steps by default. `todo search --all TEXT` adds
+every completed task, step, and surviving comment currently retained in the
+disposable cache. Completed objects fetched by reports, completed-item
+operations, and prior refreshes remain searchable after the report cursor
+advances. Cache deletion or incompatible replacement may remove that historical
+population; `--all` does not claim complete Todoist history.
 
-Search results are grouped by parent task. Task groups are sorted by priority
-(P1 through P4), lowercase category name, and lowercase task title. Matching
-steps within a task are sorted by their own priority and lowercase step title.
-Attention dates do not participate in search-result ordering.
+Every `--all` search prints the completed-cache coverage line defined in
+`output-contract.md`, including when it finds no match. Ordinary `--refresh`
+updates current state and merges newly obtained completed objects without
+purging older retained objects. There is no search `--since` option and no
+first-release full-history backfill.
 
-Search uses the same argument structure as selectors: one quoted argument is a
-contiguous phrase, while multiple unquoted arguments are independent terms that
-must all match but may occur in any order and need not be contiguous. Matching
+Search visibility is independent of work-queue visibility. Open items hidden by
+temporary waiting and open items in configured hidden categories remain in the
+default search population.
+
+Search task groups are ordered by priority, lowercase category, and lowercase
+task title. Matching steps within a group are ordered by their own priority and
+lowercase title. Search ordering does not use attention dates.
+
+Search uses the same term matching as selectors: one shell argument containing
+spaces is a contiguous phrase, while multiple arguments are independent terms
+that must all match one field in any order and need not be contiguous. Matching
 is case-insensitive.
 
 One individual searchable field must satisfy the complete query. Terms cannot
-be combined across a title, description, waiting reason, and comment, or across
+be combined across a title, description, hiding reason, and comment, or across
 multiple comments. Each comment is a separate searchable field.
 
-Search output shows only the matching task or step title, within its task group;
-it does not print the matching description, waiting reason, comment, excerpt, or
-field name. An item that matches through multiple fields is displayed once.
+Search output shows only the matching task or step title within its task group;
+it does not print the matching description, reason, comment excerpt, or field
+name. An item matching through multiple fields is displayed once. A matching
+step includes its nonmatching parent as context and omits nonmatching siblings.
+A matching parent does not pull in nonmatching steps.
 
-When a step matches but its parent task does not, the parent task title is still
-shown as grouping context. The parent is not thereby considered a match, and
-nonmatching sibling steps are omitted.
+An empty default search prints `No matches.` and exits successfully. An empty
+`--all` search uses the cached-history message and coverage line from
+`output-contract.md` and also exits successfully.
 
-When a parent task matches, its nonmatching steps are not shown. Thus parent
-context is added only upward for a matching step, never downward from a matching
-parent to its steps.
-
-An empty search prints `No matches.` and exits successfully. Finding no match is
-not an error because search does not promise to select an item.
-
-## Initialization
+## Initialization and diagnosis
 
 ```console
 todo init
+todo init --rebind [--yes]
+todo doctor
 ```
 
-Before running `todo init`, the user creates `~/.todo/config` and specifies the
-root project, initial categories, and hidden categories. Init reads and validates
-that configuration, then provisions the configured root project, configured
-initial category projects, and Todoist `waiting` label when absent. It does not
-invent defaults or prompt for structural settings. A missing, malformed, or
-incomplete config fails before Todoist synchronization or provisioning.
+Before first initialization, the user creates `~/.todo/config` and specifies
+the root project, initial categories, and hidden categories. Init validates that
+configuration, then provisions only a missing root project, configured initial
+category projects, and Todoist `waiting` label. It does not invent structural
+defaults or prompt for them. Ordinary commands never provision structure.
 
-The configuration file uses INI syntax.
+Authentication must already be available from `[todoist] token` or
+`TODOIST_TOKEN`; the nonempty environment value wins. Init has no token option,
+does not write credentials, and supports personal API-token authentication only.
+OAuth is outside scope.
 
-Provisioning is explicit to `init`; ordinary commands never create missing
-structural objects implicitly.
+First successful initialization requires an unshared personal root project.
+Root discovery examines active top-level projects with exact case-sensitive
+name equality. No match creates one personal root; one match is reused only if
+it is unshared and personally owned; multiple matches, or a sole shared/team
+match, fail without provisioning a competing root. Configured initial
+categories reuse a unique case-insensitive direct-child match or are created;
+case-colliding or structurally invalid matches fail. Init stores the Todoist
+account ID, root-project ID, and managed category IDs in
+`~/.todo/binding.json`. Subsequent commands use stable IDs, so renames retain
+identity.
 
-Init has no token option and does not write credentials. Authentication must
-already be available from `~/.todo/config` or `TODOIST_TOKEN`.
+Init is repeatable within the bound account and provisions only missing
+configured structures. A token for a different account aborts before
+provisioning or mutation. Deliberately switching accounts requires
+`todo init --rebind`, displays both account identities, and requires interactive
+confirmation or `--yes`. Rebind leaves the old account untouched, establishes a
+new binding, replaces the disposable cache, and creates a new report cursor at
+the new binding time only after provisioning and local binding persistence
+succeed.
 
-At runtime, `TODOIST_TOKEN` overrides any Todoist token stored in
-`~/.todo/config`. The configured token is used only when the environment
-variable is absent.
+The first successful binding creates the report cursor if it does not yet
+exist. Once a binding exists, a missing, unreadable, or corrupt cursor is an
+error; ordinary init never recreates it. Recovery requires an explicit
+`todo report --set-cursor` operation.
 
-`todo init` is repeatable and provisions only missing structures. After all
-validation and provisioning succeed, it creates the report cursor at the
-current time if and only if no cursor exists. It never changes an existing
-cursor. If cursor persistence fails after provisioning, init exits nonzero,
-reports the accepted provisioning and failed write, and a later init retries
-only the missing work.
+`todo doctor` is a read-only synchronizing diagnostic. It remains available
+when normal model validation fails and prints every detected violation with the
+affected task, step, category, or binding plus the concrete Todoist-side or
+local repair. It never repairs, moves, renames, deletes, or normalizes data.
+Normal views, reports, and mutations remain blocked until a later refresh or
+doctor run confirms the repairs. Help and report-cursor inspection also remain
+available without a valid model.
 
 ## Progress and completion
 
 ```console
-todo comment [--refresh] TASK
-todo comment TASK COMMENT [COMMENT ...]
-todo add comment TASK COMMENT [COMMENT ...]
-todo comment --edit TASK
-todo done ITEM [TEXT]
-todo reopen ITEM [TEXT]
+todo comment [--refresh] SELECTOR...
+todo comment SELECTOR COMMENT...
+todo comment SELECTOR... --comment COMMENT... [--comment COMMENT...]...
+todo add comment SELECTOR... --comment COMMENT... [--comment COMMENT...]...
+todo comment --edit SELECTOR...
+todo done SELECTOR... [--comment TEXT...]
+todo reopen SELECTOR...
 ```
 
 `todo close` and `todo closed` are aliases for `todo done`. `todo unclose` and
-`todo undone` are aliases for `todo reopen`. Aliases preserve the complete
-selection, confirmation, comment, failure, and output behavior of the canonical
-command.
+`todo undone` are aliases for `todo reopen`. Every alias preserves selection,
+confirmation, ordering, failure, output, and exit behavior.
 
-`todo comment TASK` displays the selected open parent task's existing comments
-without changing state and accepts `--refresh` like the other cached read views.
-`todo comment TASK COMMENT [COMMENT ...]` creates one new task comment for each
-trailing comment argument, in command-line order. Shell quoting defines the
-boundary between comments. Steps cannot own comments, so both forms select
-parent tasks only. Displayed comments are ordered chronologically from oldest to
-newest.
+`todo comment TASK` displays the selected open parent task's comments oldest
+first and accepts cache-backed `--refresh`. The shorthand
+`todo comment report added note about future` treats only the first argument as
+the selector and joins the remaining words into one comment. To use a
+multi-term selector, use an explicit marker:
 
-`todo add comment TASK COMMENT [COMMENT ...]` is an explicit alias for the
-comment-creation form and has identical selection, ordering, synchronization,
-and partial-failure behavior.
+```console
+todo comment weekly report --comment added note about future
+```
 
-Multiple comments are created sequentially. If Todoist accepts one or more and
-a later creation fails, the accepted comments remain. The command stops, reports
-which comments were created and which creation failed, and exits nonzero without
-compensating deletion.
+Each repeated `--comment` creates one distinct comment sequentially in
+command-line order. `todo add comment` is an exact alias for creation. A later
+failure retains accepted comments, stops before unattempted comments, reports
+all three sets, and performs no compensating deletion. Steps cannot own
+comments, so comment commands select open parent tasks only.
 
-`todo comment --edit TASK` synchronizes first, resolves an open parent task, and
-opens its current comments using `$VISUAL`, then `$EDITOR`, then `vi`. The
-selected value is parsed as a shell-like argument string but executed directly
-without a shell. Saving a valid changed buffer applies
-comment edits, deletions, and additions to Todoist. An unchanged buffer performs
-no mutation and exits successfully. Steps and completed parent tasks are not
-editable through this command.
+`todo comment --edit TASK` synchronizes first and opens current comments using
+`$VISUAL`, then `$EDITOR`, then `vi`. The editor command is parsed as a
+shell-like argument string but executed directly without a shell. An unchanged
+valid buffer succeeds without mutation.
 
-The editor buffer uses marked blocks:
+The UTF-8 temporary file remains under `~/.todo` with mode `0600`, and the
+runtime lock is held while the editor is open. Launch failure, signal, or a
+nonzero editor exit performs no comment mutation. A comment concurrently added
+outside this CLI is not present in the generated buffer and is left untouched.
+Saving a changed block intentionally overwrites a concurrent edit to that same
+comment ID; a target deleted concurrently causes the ordered application to
+fail at that operation.
+
+The editor buffer uses blocks:
 
 ```text
 [id: COMMENT_ID posted: TIMESTAMP]
@@ -257,290 +333,236 @@ existing comment text
 new comment text
 ```
 
-Each existing block carries its stable Todoist comment ID and displayed posting
-timestamp. Each `[new]` block represents one new comment. Multiple existing and
-new blocks may appear in the same buffer.
+Stable comment ID is authoritative; the displayed timestamp is informational.
+Deleting an existing comment requires removing its complete block. The whole
+buffer is validated before mutation: orphan text, malformed or unknown headers,
+duplicate or foreign IDs, and whitespace-only blocks reject the entire edit.
+An empty buffer requests deletion of every comment shown in that generated
+buffer and requires a second interactive confirmation; non-interactive use
+fails. Comments added concurrently remain untouched. Valid operations run
+sequentially as edits, additions, then deletions. The first API failure stops
+processing without rollback and reports accepted, failed, and unattempted work.
 
-For an existing block, only `COMMENT_ID` identifies the Todoist comment. The
-`posted: TIMESTAMP` value is informational and is ignored when applying the
-buffer. Changing it does not attempt to alter Todoist history and does not by
-itself invalidate the edit.
+`todo done` selects an open task or step. The one-selector shorthand may place
+unmarked completion text after its first selector argument; canonical multi-term
+selection uses `--comment`. Completion text is valid only for a parent task and
+becomes one `Done: TEXT` comment.
 
-Deleting an existing comment requires removing its entire header-and-body block.
-Removing only its header is not a deletion instruction and must not cause the
-orphaned body to be merged into another comment.
+Completing a parent with ordinary open steps first prints them and requires an
+explicit `y` or `yes`; non-interactive use fails without mutation. After
+confirmation, steps are completed sequentially, then the parent is completed,
+and only then is the optional `Done: TEXT` comment created. A comment failure
+leaves the completed tree intact and is reported as a partial failure.
 
-The complete saved buffer is parsed and validated before any comment mutation.
-Text outside a marked block, malformed or unknown headers, duplicate existing
-IDs, or an existing ID that was not present in the generated buffer causes a
-nonzero error with no Todoist changes.
+An open recurring step cannot be cleared by completing the parent: completing
+it would merely advance it and leave it open. The entire parent completion is
+therefore rejected before confirmation or mutation, identifies every recurring
+open step, and tells the user to remove recurrence, delete the step, or move the
+recurring work to a separate task.
 
-Every retained existing block and every `[new]` block must contain a
-non-whitespace body. An empty block invalidates the complete edit; it is never
-interpreted as deletion and is never silently ignored. Deletion remains the
-removal of the complete existing block.
+`todo reopen` exists only to correct a recent mistaken completion. Candidates
+are completion occurrences in `(report cursor, now]`; older history is not
+searched. It accepts no text and creates no comment.
 
-After full local validation, operations are sent sequentially: edits first,
-additions second, and deletions last. Remote changes made while the editor is
-open do not trigger conflict detection; the saved buffer is authoritative. An
-entirely empty buffer requests deletion of every comment and requires a second
-explicit confirmation. Non-interactive use fails without mutation.
+Reopening a parent leaves its completed steps completed. Reopening a step may
+cause Todoist to reopen its completed ancestor chain; output lists every
+reopened ancestor. Before mutation, the complete affected chain is checked for
+case-insensitive open-sibling title conflicts. Any conflict rejects the whole
+operation and identifies the current open item that must be renamed or moved.
 
-The command stops on the first API failure. Operations Todoist
-already accepted remain in effect; the command reports the accepted operations
-and the failed operation, exits nonzero, and performs no rollback.
-
-Completing a parent task that still has open steps requires interactive
-confirmation to complete all open steps first. Without explicit affirmative
-confirmation, no item is completed.
-
-Optional `TEXT` is supported when the selected item is a task and is stored as
-a task comment prefixed with `Done: `. It is not valid for a step.
-
-`todo reopen ITEM` changes only the selected task or step. Reopening a parent
-does not reopen any of its completed steps.
-
-A successful reopen always adds a progress comment. Task comments use
-`Reopened` or `Reopened: TEXT`; step reopenings add `Reopened step: STEP` or
-`Reopened step: STEP: TEXT` to the parent task. `TEXT` is optional.
+For a recurring task or step, only its latest completion occurrence may be
+undone. A later occurrence makes an older occurrence ineligible. Undo moves the
+recurrence backward exactly one occurrence through Todoist's recurring-undo
+operation. Reopening an already-open ordinary item or any otherwise ineligible
+occurrence fails without mutation.
 
 ## Creation and maintenance
 
+Canonical forms are:
+
 ```console
-todo add [--done|--close|--closed]
-         [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
-         [--reminder OFFSET ...] [--hide REASON]
-         CATEGORY TASK [STEP ...]
 todo add task [--done|--close|--closed]
-              [--priority P|-p1|-p2|-p3|-p4] [--due DATE]
-              [--reminder OFFSET ...] [--hide REASON]
-              CATEGORY TASK [STEP ...]
-todo add step [--done|--close|--closed] [--due DATE]
-              [--reminder OFFSET ...] [--hide REASON]
-              TASK STEP [STEP ...]
-todo rename ITEM NEW_NAME
-todo priority ITEM P
-todo delete [--yes] ITEM
+              [--priority P|-p1|-p2|-p3|-p4]
+              [--at WHEN...|--due WHEN...]
+              [--reminder OFFSET]...
+              --category CATEGORY... --title TITLE...
+              [--step STEP...]... [--hide REASON...]
+todo add step [--done|--close|--closed]
+              [--at WHEN...|--due WHEN...]
+              [--reminder OFFSET]...
+              SELECTOR... --step STEP... [--step STEP...]...
+              [--hide REASON...]
+todo rename SELECTOR... --to NEW_NAME...
+todo move SELECTOR... --to CATEGORY...
+todo priority SELECTOR... P
+todo delete [--yes] SELECTOR...
 todo category [--refresh]
-todo category --add NAME
-todo add category NAME
+todo category --add NAME...
+todo add category NAME...
 ```
 
-A newly created parent task has P2 unless the creation command explicitly sets
-another priority. A newly created step always receives its parent task's
-effective priority at creation time. Step creation has no separate priority
-override; `todo priority` may change the step afterward.
+The short task-creation forms remain aliases:
 
-`todo add task ...` is an explicit alias for `todo add ...` with identical
-options and behavior. It disambiguates task creation when a category is
-literally named like an explicit add kind such as `category` or `step`.
+```console
+todo add [OPTIONS] CATEGORY TITLE... [--step STEP...]...
+todo add task [OPTIONS] CATEGORY TITLE... [--step STEP...]...
+```
+
+In those positional forms the first argument is the category selector and every
+remaining unmarked word is one task title; a multiword category must be quoted.
+Inline positional step batching is not supported. `todo add step TASK STEP...`
+likewise uses its first argument as the task selector and joins the rest into
+one step; repeated `--step` is required for several steps.
+
+A new parent task defaults to P2 unless explicitly overridden. A new step copies
+its parent's effective priority at creation and thereafter owns that value
+independently. Step creation has no priority override; `todo priority` changes
+it afterward.
 
 Task and step creation retain equivalent `--done`, `--close`, and `--closed`
-options. The item is first created and then completed through the normal Todoist
-completion operation, so the completion contributes to reporting. For a parent
-created with inline steps, every step is completed before the parent, preserving
-the invariant that a completed parent has no open steps.
+options. All proposed titles and duplicate-title warnings are validated before
+the first creation. Created steps are completed before their newly created
+parent. Completion-at-creation cannot be combined with attention, recurrence,
+reminders, or hiding and cannot be used for a recurring item.
 
-A completion-at-creation option cannot be combined with `--hide`, `--due`, or
-`--reminder`; the proposal is contradictory and fails before any item is
-created. Creating and immediately completing a recurring scheduled item is not
-a supported shortcut.
+Task priority accepts `1` through `4`, case-insensitive `P1` through `P4`, and
+`-p1` through `-p4`. `todo priority` accepts the numeric and P-prefixed forms
+for an open task or step. Multiple priority forms conflict. Successful output
+prints the stored previous and resulting priority; derived effective priority
+is recalculated but is not another editable field.
 
-Completion-at-creation does not bypass title validation. The proposed task and
-steps must pass the same open-sibling duplicate checks and completed-title reuse
-warnings as ordinary creation before the first item is created.
+`--at` is canonical for an initial attention value; `--due` is an equivalent
+alias and the two cannot appear together. Repeatable reminders and `--hide`
+reuse the scheduling grammar. `--hide` requires a nonempty final reason and an
+explicit attention value. Parent creation options apply only to the parent;
+inline steps remain unscheduled. Scheduling or hiding options on `add step`
+require exactly one `--step` value.
 
-Task creation accepts both `--priority 1` through `--priority 4` and
-`--priority P1` through `--priority P4`, with the `P` case-insensitive. The
-convenience flags `-p1`, `-p2`, `-p3`, and `-p4` are equivalent. Supplying more
-than one priority form in the same invocation is an option conflict and fails
-before mutation.
+`todo category` lists categories alphabetically. `todo categories` is an exact
+alias, including `--refresh`, `--add`, and the legacy `--create` spelling.
+`todo category --add NAME`, `todo category --create NAME`, and
+`todo add category NAME` are equivalent. Category names are one joined value
+and fail on a case-insensitive collision.
 
-Task and step creation accept an initial attention date/time through `--due`
-and zero or more relative reminders through repeatable `--reminder`. They use
-the same date parsing, timed-date requirement, offset syntax, and pre-mutation
-validation as `todo wait`/`todo due`/`todo schedule`. A reminder cannot be
-created without a timed attention value.
+Creating a task fails before mutation if the target category contains an open
+same-title task under case-insensitive comparison. Creating a step applies the
+same rule among open siblings. A same-title completed sibling does not block
+creation but produces a warning before mutation. The same open/completed rules
+apply to rename and move.
 
-Task and step creation accept `--hide REASON`. The new item receives the
-Todoist `waiting` label and a nonempty hiding-reason metadata block, and is
-subject to the same attention-date and parent/step visibility invariants as
-`todo wait --hide`. A missing or whitespace-only reason fails before creation.
-Creation-time `--hide` also requires an explicit `--due`; omitting it fails
-before creation rather than using the configured default wait date.
+`todo rename` supports open tasks and steps. `todo move` supports open parent
+tasks only; steps inherit category. Moving to the current category is a no-op
+error. Before moving, an open same-title task in the destination rejects the
+move; only completed same-title tasks allow it with a warning. No merge or
+implicit rename is ever performed. Success prints previous and resulting title
+or category.
 
-On `todo add ... CATEGORY TASK [STEP ...]`, `--due` and `--reminder` apply only
-to the new parent task. Inline-created steps receive their normal inherited
-priority but no attention value or reminders.
+Ordinary edits operate on open items only. Completed items are never reopened
+and re-completed as an implementation shortcut. Normal `todo task SELECTOR`
+selects open parents but includes their completed steps in detail. Historical
+parents are resolved only by `reopen` and `delete` within `(report cursor,
+now]`.
 
-`todo add step` may create multiple ordinary unscheduled steps in one
-invocation. If `--due`, any `--reminder`, or `--hide` is supplied, exactly one
-step title is allowed; combining any of these item-specific options with
-multiple new steps is an error before any step is created.
+Legacy noun-action forms such as `todo task --done`, `todo task --rename`, and
+`todo step --delete` delegate to the same canonical workflows. Compatibility
+syntax does not restore unsupported `check`, `show`, `resume`, or `ask` forms.
 
-`todo priority ITEM P` accepts `1` through `4` and `P1` through `P4` (with the
-`P` case-insensitive) as equivalent forms. It can select either an open parent
-task or an open step. Tasks and steps participate together in normal ambiguity
-handling. Changing a step priority also changes its parent task's effective
-priority when that step becomes or ceases to be the highest-priority open member
-of the task tree.
+The retained noun-action spellings are exhaustive:
 
-After a successful priority change, the command prints the selected item title,
-its previous priority, and its resulting priority. Setting the stored priority
-to its existing value is a no-op error under the normal mutation rules.
+| Noun | Retained actions |
+|---|---|
+| `task` | `--add`/`--new`/`--create`, `--done`/`--close`/`--closed`, `--undone`/`--unclose`, `--delete`, `--wait`/`--waiting`, `--due`, `--reminder`, `--priority`/`-p1`…`-p4`, `--move`, `--rename`, `--comment`, `--step` |
+| `step` | `--add`/`--new`/`--create`, `--done`/`--close`/`--closed`, `--undone`/`--unclose`, `--delete`, `--rename`, `--reminder` |
+| `comment` | `--add`/`--create`, `--edit` |
+| `category` | `--add`/`--create` |
 
-`todo category` lists categories alphabetically using lowercase comparison.
-`todo categories` is an alias for `todo category`, including `--refresh` and
-`--add NAME` behavior.
-`todo category --add NAME` and `todo add category NAME` are equivalent creation
-forms and follow the same validation, synchronization, and output behavior.
-Creating a category fails before mutation when any existing category name is
-equal under case-insensitive comparison.
+Compatibility forms preserve their historical positional boundary: a task
+operand is one shell argument; a step target is one parent argument followed by
+one step argument; later operands form the one action value. Quoting can keep a
+multiword selector in that one operand but never creates a batch. Unmarked
+creation tails now form one title, comment, or step; several comments or steps
+still require the canonical repeated markers. New code and help examples use
+the marker-based canonical forms because they support multi-term selectors
+without positional ambiguity.
 
-Creating a task fails if the target category already contains an open task with
-the same case-insensitive title. The duplicate check occurs before Todoist
-mutation. This rule does not prohibit the same title in a different category.
+The retained `todo task --wait`/`--waiting` form maps to `schedule --hide` and
+therefore requires an explicit `--at` or `--due` value plus a nonempty reason;
+it never consults a default date. Compatibility `--new`/`--create` actions map
+to `--add`, and `comment --create` maps to comment creation.
 
-If only completed tasks in the target category have the same case-insensitive
-title, creation is allowed but the command prints a warning to stderr before
-mutation. The warning identifies that completed title reuse is occurring.
+Task detail displays the parent's stored priority and own attention value, not
+the derived group values. It interleaves all current comments and open/completed
+steps newest first. Steps use `added_at`; comments use current `posted_at` for
+this detail timeline. Each entry prints its ordering timestamp in the Todoist
+account timezone. A step completion changes its marker rather than creating a
+second detail-history record.
 
-Creating a step fails before mutation if its parent already contains an open
-step with the same case-insensitive title. The same title under another parent
-task is allowed.
+`todo delete` requires interactive affirmative confirmation or `--yes`.
+Cancellation, EOF, or non-interactive use without `--yes` exits `1` unchanged.
+A parent preview lists the complete open/completed step tree before the prompt;
+`--yes` skips only the prompt, not that preview.
 
-If only completed steps under the selected parent have the same
-case-insensitive title, creation is allowed after printing a warning to stderr.
-
-Renaming an open task or step is subject to the same uniqueness rules as
-creation. A rename that would collide case-insensitively with another open task
-in the category or open step under the parent fails before Todoist mutation.
-
-`todo rename` supports open tasks and steps only. Completed items are not
-reopened temporarily for editing; attempting to rename one fails without
-mutation.
-
-After Todoist accepts a rename, the command prints the selected item type and
-its previous and resulting titles. Renaming to the existing title is a no-op
-error under the normal mutation rules.
-
-`todo move TASK CATEGORY` supports open parent tasks only. Completed tasks are
-not reopened temporarily for moving, and steps inherit their parent category
-rather than being moved independently.
-
-After Todoist accepts a move, the command prints the task title and its previous
-and resulting categories. Moving a task to its current category is a no-op error.
-
-Ordinary editing commands operate on open items only. This includes changing
-priority, attention values, hiding policy, recurrence, reminders, comments,
-titles, categories, and adding steps. Completed items may be reopened or
-deleted, but are not temporarily reopened for editing.
-
-Normal `todo task SELECTOR` searches open parent tasks only. Its details include
-completed steps belonging to the selected open task. Completed parent tasks are
-resolved only by commands that explicitly require them, currently `reopen` and
-`delete`. Historical parent inspection may be added later if actual usage
-justifies the additional selection and presentation complexity.
-
-Legacy mutation modes on the noun commands are retained for compatibility. A
-form such as `todo task --done`, `todo task --rename`, or `todo step --delete`
-delegates to the corresponding canonical verb operation and must have identical
-selection, validation, synchronization, mutation, output, and exit behavior.
-Compatibility syntax exists only for operations supported elsewhere in this
-design; it does not restore removed operations such as `resume` or an `ask`
-date value.
-
-`todo check` is not part of the interface. The unreachable function with that
-name in the old implementation is dead code for completing a step, not a
-diagnostic feature; `todo done` is the supported operation.
-
-`todo show` is not retained as an alias. Parent-task inspection uses `todo task`
-and step inspection uses `todo step`.
-
-Task details display the parent task's single stored priority. They do not show
-the derived effective priority used to order the task group; the priorities of
-individual steps are visible on those steps.
-
-Task details likewise display only the parent task's own attention date/time.
-They do not show the derived effective attention value used to order the task
-group. Each displayed step shows its own attention value.
-
-Task details include every current task comment. `todo comment TASK` remains the
-focused comment-only view and orders comments from oldest to newest.
-
-Within task details, comments and open/completed steps are interleaved in one
-reverse-chronological history. A step is positioned by its Todoist creation
-timestamp (`added_at`); a comment is positioned by its current posting
-timestamp. Newest records appear first. Each step retains its open/checked
-completion marker and shows its own priority and attention value, but those
-values do not affect ordering. Completing a step changes its marker in this
-view; it does not add a separate task-detail history record.
-
-Every history entry displays the timestamp that determines its position: the
-step's creation timestamp or the comment's current posting timestamp. A
-completed step still displays its creation timestamp in this timeline; its
-completion state is conveyed by the marker. Timestamps are converted to and
-displayed in the timezone of the machine running the command.
-
-`todo delete ITEM` requests interactive confirmation before mutation. Only an
-explicit affirmative response authorizes deletion. `--yes` skips the prompt
-and is required for non-interactive deletion. Cancellation, end of input, or a
-non-interactive invocation without `--yes` leaves the item unchanged and exits
-nonzero.
-
-Deletion is supported for both open and completed tasks and steps. After
-confirmation, the command uses Todoist's direct delete operation. It does not
-reopen the selected item or its parent before deletion and does not implement
-local-only deletion. If Todoist rejects the operation, the command reports the
-API failure and leaves local state consistent with Todoist.
-
-When the selected item is a parent task, the confirmation preview lists the
-parent and all of its open and completed steps with their completion markers.
-The prompt makes clear that confirming deletion removes the entire displayed
-task tree. Confirmation is requested only after the complete scope is printed.
-`--yes` skips only the confirmation prompt; it does not suppress this deletion
-scope output, which is printed before the mutation in all modes.
+Open items are normal delete candidates. A recurring object remains open after
+each completion and therefore appears once as an open candidate; deleting it
+deletes the active recurrence, not one historical occurrence. Non-recurring
+completed task and step candidates are limited to objects completed in
+`(report cursor, now]`, matching reopen's time horizon. Deletion uses Todoist's
+direct operation without temporary reopen and is terminal: no local undelete
+snapshot is retained. Deleting a parent deletes its whole displayed tree. API
+rejection leaves local state consistent with Todoist.
 
 ## Attention and reminders
 
-`wait`, `due`, and `schedule` are equivalent aliases.
+`wait`, `due`, and `schedule` are equivalent command aliases. `schedule` and
+`--at` are canonical:
 
 ```console
-todo wait [--reminder OFFSET ...] ITEM DATE
-todo wait --hide [--reminder OFFSET ...] ITEM DATE REASON
-todo due [--reminder OFFSET ...] ITEM DATE
-todo due --hide [--reminder OFFSET ...] ITEM DATE REASON
-todo schedule [--reminder OFFSET ...] ITEM DATE
-todo schedule --hide [--reminder OFFSET ...] ITEM DATE REASON
-
-todo wait ITEM clear
-todo wait --reminder clear ITEM
+todo schedule SELECTOR... --at WHEN... [--reminder OFFSET]... [--hide REASON...]
+todo schedule SELECTOR... --due WHEN... [--reminder OFFSET]... [--hide REASON...]
+todo schedule SELECTOR... clear
+todo schedule SELECTOR... --reminder clear
 ```
 
-The equivalent `due` and `schedule` clearing forms are also accepted.
+The older item/date positional forms for `wait`, `due`, and `schedule` remain
+accepted. `--at` and `--due` name the same attention value and conflict if both
+are supplied. Their multiword value ends at the next recognized marker.
+`--hide` must be last and consumes the remaining words as one nonempty reason.
+There is no implicit or configured hiding date.
 
-Every temporary-hiding form requires a non-empty reason after the item and
-date. The reason is stored in a marked block inside the selected task or step
-description and is shown in details and reports. Missing or whitespace-only
-reasons fail before mutation. `--hide` always requires an explicit date; there
-is no implicit or configured default wait date.
+`WHEN` is one nonempty English attention expression. The local forms are:
 
-After Todoist accepts a `--hide` change, output includes the previous and
-resulting attention values and the previous and resulting hiding reasons. If no
-previous hiding reason existed, that absence is stated explicitly.
+- ISO 8601 date or date-time, including an explicit offset or `Z`
+- `today`, `tomorrow`, or an English weekday name, optionally followed by
+  `H`, `HH`, `H:MM`, or `HH:MM`; a bare weekday means its next occurrence
+- a nonnegative integer followed by `h`, `d`, `bd`, `business day`, or
+  `business days`
 
-Supplying a date without `--hide` removes the item's own hiding policy.
-Supplying `--hide` enables it. Clearing the item removes attention, recurrence,
-reminders, and its own hiding policy.
+`Nh` adds elapsed hours. `Nd` adds account-local calendar days and `Nbd` counts
+Monday through Friday without a holiday calendar; both retain the current
+account-local wall-clock time. A generated ambiguous or nonexistent wall time
+fails and asks for an explicit date-time with offset. Other nonempty English
+expressions, including recurrence and `next Friday 10:00`, are sent unchanged
+to Todoist's English date parser and then reconciled. `ask`, `none`, and `-` are
+not attention values. Clearing uses the separate literal `clear` form.
 
-One or more supplied `--reminder OFFSET` arguments replace the complete
-existing reminder set. Repeating the option defines multiple reminders in the
-replacement set. `--reminder clear ITEM` removes the complete set without
-changing the attention value.
+Each `--reminder` accepts exactly one positive integer followed immediately by
+`m`, `h`, `d`, or `w`, for example `30m`, `2h`, `3d`, or `1w`. Units are
+case-sensitive lowercase. Zero, signs, decimals, whitespace, compound forms
+such as `1h30m`, and units such as months are invalid. Values normalize to
+minutes; equivalent duplicates such as `1h` and `60m` reject the complete
+proposal before mutation.
 
-Changing an attention value without a reminder option preserves all existing
-reminders. The success output prints any retained reminder set as informational
-state in addition to the previous and resulting attention values.
+One or more reminder markers replace the complete existing reminder set in
+marker order. `--reminder clear` removes all reminders while preserving
+attention, recurrence, and hiding. Changing attention without a reminder marker
+preserves reminders and prints the retained set. Relative reminders require an
+exact attention time and the Todoist account capability.
+
+Supplying attention without `--hide` removes the item's own hiding policy.
+Supplying `--hide` adds it and stores its reason. Clearing the item removes
+attention, recurrence, reminders, and its own hiding policy. Successful output
+shows previous and resulting values, including retained reminders and an
+explicitly absent prior reason.
 
 ## Reporting
 
@@ -552,87 +574,107 @@ todo report --show-cursor
 todo report --set-cursor TIMESTAMP [--yes]
 ```
 
-`--since` and `--until` override report interval boundaries for debugging and
-recovery. Without them, the interval begins at the stored cursor and ends at
-the report invocation's captured current time.
+After local syntax validation, a report acquires the exclusive runtime lock and
+then reloads its binding and cursor. Without `--until`, it captures one end
+instant immediately before its first Todoist request. The period is
+`(cursor, captured end]`. Synchronization and every activity,
+completed-object, and comment page are then retrieved against that fixed
+boundary. Activity after it belongs to the next report.
 
-`--final` cannot be combined with `--since` or `--until`. Interval overrides
-are preview/debugging-only and never change the stored report cursor. Invalid
-option combinations fail before synchronization or report generation.
+`--since` and `--until` override boundaries for preview/recovery and never
+change the stored cursor. `--final` cannot be combined with either override.
+Invalid combinations fail before external requests.
 
-`--show-cursor` displays the current cursor without synchronizing.
-`--set-cursor` changes it without synchronizing and accepts ISO timestamps or
-local past-relative forms such as `7d ago` and `7 days ago`. Offset-free
-timestamps use the machine's local timezone. Nonexistent or ambiguous local
-times are rejected and require an explicit offset. The resolved instant is
-displayed and stored in UTC.
+Report boundaries and cursor values accept RFC 3339/ISO 8601 date-times or the
+past-relative forms `Nd ago` and `N days ago`, where `N` is a positive integer.
+A multiword relative value must be one shell argument. Offset-free values use
+the cached Todoist account timezone; ambiguous or nonexistent local times
+require an explicit offset. Start after end, a future end, and a future cursor
+are rejected. Equal report boundaries are a valid empty preview.
 
-Changing the cursor always requires affirmative confirmation and explains that
-moving backward can duplicate work while moving forward can skip it.
-Non-interactive use requires `--yes`.
+`todo report` previews without changing the cursor. `--final` writes and
+flushes the complete report first, then atomically advances the cursor to the
+captured end. Broken pipe, output error, interruption, retrieval failure, or
+local persistence failure leaves the previous cursor unchanged. A successful
+empty final report still advances it.
+
+The report sync reads Todoist `user_plan_limits` without an extra request. If
+Todoist reports limited activity retention, every report prints a warning. For
+the Free plan and seven-day limit, the wording is defined in
+`output-contract.md`. Configuration may suppress only that warning:
+
+```ini
+[report]
+warn_limited_history = false
+```
+
+If the requested start is older than the available activity history, report
+generation fails before normal report output and cursor advancement. It never
+emits a partial report. Reminder commands independently fail only when the
+account lacks the required reminder capability.
+
+`--show-cursor` displays local state without synchronizing. `--set-cursor`
+changes it without synchronization and accepts ISO timestamps or past-relative
+forms such as `7d ago` and `7 days ago`. Offset-free input uses the Todoist
+account timezone cached in the binding/cache; nonexistent or ambiguous local
+times require an explicit offset. Storage is UTC.
+
+Cursor changes display the resolved instant and require confirmation, explaining
+that moving backward may duplicate work and moving forward may skip it.
+Non-interactive use requires `--yes`. If a binding exists but the cursor is
+missing or corrupt, reports and ordinary init fail until this explicit command
+repairs it.
 
 ## Selection
 
-Selectors may match tasks or steps as allowed by the command. If a selector is
-ambiguous in an interactive terminal, the command displays matching choices
-and asks the user to select one. A non-interactive mutating command must refuse
-to guess.
+Selectors match titles only among the item types allowed by the command.
+Descriptions, reasons, and comments affect `search` but never targeting. Each
+selector term and candidate title is normalized to NFC and compared with
+Unicode case folding for substring matching; accent distinctions are
+preserved. Stored text is not rewritten. Empty terms are usage errors. All
+terms must match the same title, in any order and not necessarily contiguously.
+One shell argument with spaces is one contiguous phrase.
 
-A non-interactive read-only lookup also refuses to guess. It prints the numbered
-candidate list, reports that interactive selection is unavailable, and exits
-nonzero without displaying any candidate's detail view.
+For marker-based commands, every argument before the first value marker is a
+selector term. The comment and done one-selector shorthands intentionally use
+only their first argument as selector and join the remaining unmarked words as
+one value. Use explicit `--comment` for a multi-term selector. `--literal ARG`
+escapes a marker-looking selector or value token.
 
-An exact title match does not take precedence over other matching results. For
-example, selector `Deploy` remains ambiguous when both `Deploy` and
-`Deploy staging` match, and both are presented for selection.
+An exact title match receives no precedence. If both `Report` and
+`Weekly report` match `report`, both are candidates.
 
-Task, step, and user-supplied category selectors are case-insensitive. This
-includes category targets for task creation and moves and the `todo now
---category` filter. Configured root-project and hidden-category names remain
-exact case-sensitive policy identifiers rather than search selectors.
+Interactive ambiguity prints the numbered candidates with item type, title,
+category, and parent context as defined in `output-contract.md`. A valid number
+selects; `q`, blank input, or EOF cancels unchanged with exit `1`; invalid
+numbers re-prompt. Non-interactive ambiguity prints the same candidates, never
+prompts or mutates, and exits `1`.
 
-Each term uses case-insensitive substring matching. Text is canonically Unicode
-normalized and compared with Unicode-aware case folding; accents remain
-significant. Thus `ploy` matches `Deploy`, while `resume` does not match
-`Résumé`.
+Completed candidates append their completion timestamp so reused titles can be
+distinguished. For a recurring object, only its latest undo-eligible occurrence
+participates in reopen selection; older occurrences are not displayed as
+candidates.
 
-Quoting controls selector structure:
+Task, step, and user-supplied category selectors are case-insensitive.
+Configured hidden-category names remain exact case-sensitive policy names,
+while the configured root name is used only to establish or re-establish its
+stable binding.
 
-- A single argument such as `todo task "deploy staging"` is one phrase and
-  matches that contiguous phrase.
-- Multiple arguments such as `todo task deploy staging` are independent terms.
-  Every term must match, but the terms may occur in any order and need not be
-  contiguous.
+Candidate type depends on the command:
 
-Shell quoting therefore affects matching semantics and is not merely a way to
-preserve spaces in one equivalent selector string.
+- `todo task` searches open parent tasks only.
+- `todo step` searches open steps across all managed parents and displays parent
+  and category context.
+- implicit top-level lookup searches open tasks and steps independently.
+- ordinary mutations search open types permitted by that mutation.
+- `reopen` searches eligible completion occurrences only in `(report cursor,
+  now]`; completed-item `delete` searches currently completed non-recurring
+  objects whose completion is in that interval.
 
-Candidate type depends on the command form:
-
-- `todo task SELECTOR` searches parent tasks only. A matching step is not
-  returned as the selected item.
-- `todo step SELECTOR` searches open steps only across every managed parent
-  task. Parent tasks are not candidates. Steps with the same or similar titles
-  under different parents participate in normal ambiguity handling. The
-  selected step's detail view shows its parent task title and inherited category
-  as context.
-- An implicit top-level selector such as `todo review` searches tasks and steps
-  as independent candidates. A step may match even when its parent task title
-  does not contain the selector.
-
-Implicit lookup is intentional command syntax. It does not print an unknown- or
-missing-command warning before showing the selected item or ambiguity choices.
-If it finds no task or step, it prints a concise no-matching-item error and
-exits nonzero. This differs from `todo search`, where an empty result is a
-successful discovery outcome.
-
-If an implicit selector matches both tasks and steps, all matching candidates
-participate in normal ambiguity handling.
-
-Normal item selection matches titles only. Task descriptions, waiting metadata,
-and comments do not make a task or step match a selector. `todo search` has
-broader searchable fields, but does not change targeting semantics for mutation
-and inspection commands.
+Implicit lookup is intentional syntax and emits no unknown-command warning. No
+match is an operational error, unlike an empty discovery search. When a step
+and task both match an implicit selector, both participate in normal ambiguity
+handling.
 
 ## Mutation output
 
@@ -642,4 +684,6 @@ values. Do not print successful-change output until Todoist has accepted the
 mutation.
 
 Warnings and errors go to stderr. Normal results and successful change details
-go to stdout.
+go to stdout. Exact structural templates, empty messages, ambiguity prompts,
+report framing, timestamp rendering, and tie-breakers are defined in
+`output-contract.md`.

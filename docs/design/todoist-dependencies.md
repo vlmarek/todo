@@ -1,6 +1,6 @@
 # Todoist dependency inventory
 
-Status: Proposed
+Status: Accepted
 
 This document identifies behavior and infrastructure currently delegated to
 Todoist. Its purpose is to make the cost and capability loss of a future
@@ -59,11 +59,11 @@ accepted attention grammar to expressions the CLI can parse locally.
 ## Recurrence engine
 
 When a recurring task or step is completed, Todoist records the occurrence and
-advances the item to its next occurrence. It applies time-zone and recurrence
-rules.
+advances the item to its next occurrence. Its Sync command can also undo the
+latest occurrence by moving backward. It applies timezone and recurrence rules.
 
-A replacement needs recurrence parsing, next-occurrence calculation,
-completion history, and daylight-saving/time-zone behavior, or must omit
+A replacement needs recurrence parsing, next/previous-occurrence calculation,
+ordered completion and undo history, and daylight-saving behavior, or must omit
 recurring items.
 
 ## Reminder model
@@ -94,22 +94,26 @@ A replacement must define and implement those persistence semantics directly.
 
 ## Comments and editing
 
-Todoist stores task comments and their timestamps and supports adding, editing,
-and deleting them. Reports use current surviving comments and their activity.
-Steps intentionally do not have comments in the `todo` domain.
+Todoist stores task comments and their original posting timestamps and supports
+adding, editing, and deleting them. Separate activity events provide edit times.
+Reports use the latest qualifying event with current surviving content. Steps
+intentionally do not have comments in the `todo` domain.
 
-A replacement needs comment identity, content, timestamps, edit-as-replacement
-semantics, and deletion behavior.
+A replacement needs comment identity, current content, original posting time,
+edit/delete events, and survival behavior.
 
 ## Activity and completion history
 
-Todoist supplies activity events used to build cursor-bounded reports,
-including task and step completions and comment activity. It also retains
-completed items in account history so they can be reopened or deleted.
+Todoist supplies plan-limited activity events used to build cursor-bounded
+reports, including task/step completed and uncompleted events and comment
+add/update/delete activity. Completed object bodies come from the separate
+completion-date endpoint in bounded date windows; normal sync aggregates alone
+are insufficient.
 
 This is a major backend dependency. A replacement needs an append-oriented
-event/history model in addition to current task state. Current state alone is
-insufficient to reconstruct weekly reports.
+event model, completed-object lookup, recurring occurrence/undo pairing, and
+retention capability reporting in addition to current task state. Current state
+alone is insufficient to reconstruct operational reports.
 
 ## API mutation semantics
 
@@ -134,12 +138,14 @@ debugging without becoming the primary error message.
 
 ## User/account configuration
 
-Todoist supplies user-level date language, time-zone context, account-plan
-capabilities, and authentication. The CLI additionally uses the executing
-machine's local time zone for reports and attention-day visibility.
+Todoist supplies natural-language date parsing (selected as English by this
+CLI), the authoritative account IANA timezone, plan capabilities/retention,
+stable account identity, and personal API-token authentication. Reports,
+offset-free input, overdue buckets, and attention-day visibility all use that
+account timezone, including during offline reads through its cached value.
 
-A replacement must decide which settings become local configuration and how
-time-zone changes affect recurrence, reminders, and reports.
+A replacement must provide equivalent account identity, timezone, capability,
+and retention contracts or make them explicit local configuration.
 
 ## Capabilities already owned locally
 

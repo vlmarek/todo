@@ -1,6 +1,6 @@
 # Product definition
 
-Status: Proposed
+Status: Accepted
 
 ## Purpose
 
@@ -13,6 +13,11 @@ optimized for daily terminal use.
 
 The configured root Todoist project is currently `Oracle`. Its child projects
 are treated as work categories. The root project name is configurable.
+
+“Weekly” describes the intended human cadence, not a calendar scheduler. The
+user runs reports manually, the cursor determines the default interval, and the
+report is written to stdout. Automatic scheduling and delivery are not part of
+the application.
 
 ## Primary workflow
 
@@ -83,9 +88,15 @@ are treated as work categories. The root project name is configurable.
 
 ## Scope
 
-Only tasks inside the configured root Todoist project are considered. Its
-child projects provide dynamic categories. Steps inherit their parent task's
-category.
+Only tasks inside the bound root Todoist project are considered. Its child
+projects provide dynamic categories. Steps inherit their parent task's
+category. The root must be an unshared personal project; shared projects and
+team workspaces are outside the first-release contract.
+
+The first release implements the complete Accepted command and behavior
+contract. There is no smaller MVP subset hidden inside these documents.
+Compatibility aliases remain intentional public syntax and receive the same
+behavioral tests as their canonical commands.
 
 One or more categories can be configured as hidden categories. `Someday` is a
 typical hidden category but is not hard-coded by name.
@@ -97,7 +108,10 @@ typical hidden category but is not hard-coded by name.
 - Providing suggestions that have not been validated as applicable
 - Replacing Todoist as the task system of record
 - Managing unrelated Todoist projects
-- Multi-user workflow or permissions
+- Multi-user workflow, shared projects, team workspaces, or permissions
+- OAuth or application authentication; the first release uses one personal API
+  token and one explicitly bound Todoist account
+- Machine-readable output or automation-safe exact/ID selectors
 - Making every Todoist feature available from the CLI
 - Inferring whether a date semantically means blocked, deferred, scheduled, or
   deadline

@@ -1,27 +1,29 @@
 # Domain model
 
-Status: Proposed
+Status: Accepted
 
 ## Terms
 
 ### Root project
 
-The configurable Todoist project containing all work managed by `todo`.
-Currently named `Oracle`.
+The unshared personal Todoist project containing all work managed by `todo`.
+Its configured initial name is currently `Oracle`.
 
-Exactly one current Todoist project must match the configured root name.
+During first initialization or explicit rebind, the configured name is matched
+exactly and case-sensitively. Thereafter the stable Todoist account and project
+IDs in `~/.todo/binding.json` define identity; a rename does not rebind scope.
+A shared or team-workspace root is outside the model.
 
 ### Category
 
-A direct child project of the configured root project. Category names and
-membership come dynamically from Todoist. User-entered category, task, and step
-lookups are case-insensitive.
+A direct child project of the bound root. Current names and membership come
+from Todoist; stable category IDs are retained in binding state so a rename does
+not change identity and a move cannot silently discard managed work.
+User-entered category, task, and step lookups are case-insensitive.
 
-Category names are unique under case-insensitive comparison.
-
-The supported project hierarchy is exactly two levels: the configured root and
-its direct category children. A deeper descendant project is invalid model
-state rather than another category.
+Open category names are unique under case-insensitive comparison. The supported
+project hierarchy is exactly the bound root and its direct category children. A
+deeper descendant project is invalid rather than another category.
 
 ### Hidden category
 
@@ -69,7 +71,8 @@ a notification. An item may have multiple reminders.
 ### Own hiding policy
 
 An item configured with `--hide` carries the Todoist `waiting` label and is
-suppressed before its local attention day. The label remains after that day,
+suppressed before its attention day in the Todoist account timezone. The label
+remains after that day,
 even though the item is then visible. Todoist is authoritative for the label,
 so label changes made on the phone are observed after synchronization.
 
@@ -91,6 +94,24 @@ its own hiding policy, and its parent task's hiding policy.
 An open item eligible for normal `todo now` output. Actionability is derived;
 it is not an independently stored state.
 
+### Account binding
+
+Authoritative local identity tying one configuration to one Todoist account,
+root project, and set of managed category IDs. Token rotation does not change a
+binding. A different account requires explicit confirmed rebind.
+
+### Report cursor
+
+The locally authoritative UTC instant immediately through which a successful
+final report has claimed activity. Default report and recent-completed
+selection intervals begin strictly after it.
+
+### Completion occurrence
+
+One completion event for a task or step. A non-recurring object normally has one
+current completion, while a recurring object can contribute several occurrences
+and remains open at its next occurrence.
+
 ## User-facing vocabulary
 
 The terms in this document are the vocabulary presented to the user. Commands,
@@ -107,50 +128,72 @@ help, normal output, warnings, and errors use these terms consistently.
 
 ## Core invariants
 
-1. Every managed task belongs to a category under the configured root project.
-2. A step inherits its parent task's category.
-3. Completed steps are excluded from `todo now` but shown in task details.
-4. A hidden item must have an attention value.
-5. Relative reminders require an attention value containing an exact time.
-6. A task in a hidden category, and all of its steps, cannot have attention
-   values, reminders, or own hiding policies.
-   Moving a task into a hidden category is rejected if the task or any of its
-   steps violates this invariant; scheduling information is never cleared
-   implicitly.
-7. A hidden task hides all of its steps until the task's local attention day.
-8. The local attention day of a step must not precede the local attention day
-   of its hidden parent task.
-9. The invariant in rule 8 is checked both when changing a step and when hiding
-   or rescheduling its parent.
-10. An exact time does not postpone list visibility within its calendar day.
-    A meeting at 10:30 is eligible for display from the beginning of that local
-    day.
-11. A task remains open after all its steps are completed until the task itself
-    is completed.
-12. A task cannot be completed while it has open steps.
-13. Completion requires an open item; reopening requires a completed item.
-    Requesting either transition when the item is already in the target state
-    is a user error, not an idempotent success.
-14. Open task titles are unique within one category under case-insensitive
-    comparison. The same title may exist in different categories. A completed
-    title may be reused in its category with a warning.
-15. Open step titles are unique within one parent task under case-insensitive
-    comparison. The same step title may exist under a different parent. A
-    completed step title may be reused under its parent with a warning.
-16. Completed items are immutable through ordinary editing commands. They may
-    be resolved by commands that reopen or delete them; editing requires
-    reopening first. Normal parent-task inspection remains open-only.
-17. Every item carrying an own hiding policy has a non-empty hiding reason.
-18. No project may be nested below a category within the configured root tree.
-19. Every parent task must belong to a direct category project; parent tasks
-    directly in the configured root project are invalid.
-20. Every step is a direct child of a parent task. A step with its own child is
-    invalid model state.
-21. The configured root project must exist uniquely in Todoist.
-22. User-created task, step, category, comment, rename, and hiding-reason text
-    must not be empty or whitespace-only and must not contain disallowed control
-    characters. Backend length limits remain Todoist's responsibility and its
-    rejection is translated into domain vocabulary.
+1. One local binding belongs to exactly one Todoist account and one unshared
+   personal root-project ID.
+2. Every managed parent task belongs to a direct managed category under the
+   bound root; parent tasks directly in the root are invalid.
+3. A step is one direct child of a parent task and inherits its category. A step
+   with a child is invalid.
+4. No project may be nested below a category inside the managed root.
+5. Completed steps are excluded from `todo now` but may appear in task details.
+6. An item with its own hiding policy has an attention value, the Todoist
+   `waiting` label, and a nonempty hiding reason.
+7. Relative reminders require an attention value containing an exact time and
+   an account capability that supports the requested reminder.
+8. A task in a configured hidden category, and all its steps, has no attention
+   value, reminder, or own hiding policy. Moving work there never clears such
+   state implicitly.
+9. A hidden parent suppresses its complete open tree before the parent's
+   attention day in the Todoist account timezone.
+10. A step's account-local attention day cannot precede that of its hidden
+    parent. Parent and step changes both validate this rule.
+11. Exact time never delays list visibility beyond the beginning of its
+    account-local calendar day.
+12. A parent remains open after all steps complete until it is separately
+    completed.
+13. A parent cannot be completed while it has an open step. In particular, an
+    open recurring step rejects parent completion because completing that step
+    would advance it and leave it open.
+14. Completion requires an open item. Ordinary reopen requires a currently
+    completed item. An already-satisfied transition is an error rather than an
+    idempotent success.
+15. `reopen` considers only eligible completion occurrences in
+    `(report cursor, now]`. Completed-item `delete` considers only currently
+    completed non-recurring objects whose completion is in that interval. A
+    recurring object remains an ordinary open delete candidate and is never
+    duplicated as a historical completed candidate.
+16. Only the latest completion occurrence of a recurring object can be undone;
+    undo moves recurrence backward one occurrence.
+17. Reopening a step may reopen its completed ancestor chain. The complete
+    chain must preserve every open-sibling title-uniqueness invariant.
+18. Open task titles are unique within a category under case-insensitive
+    comparison. A completed title may be reused there with a warning.
+19. Open step titles are unique within one parent under case-insensitive
+    comparison. A completed sibling title may be reused with a warning.
+20. Creation, rename, move, and reopen validate title uniqueness before their
+    first mutation. They never merge or rename an object implicitly.
+21. Completed items are immutable through ordinary editing. They may only be
+    reopened or deleted through the explicitly bounded workflows.
+22. Category names are unique under case-insensitive comparison.
+23. Current managed-scope membership determines report inclusion. Current
+    titles, parents, and categories determine report presentation.
+24. Deletion is terminal. A deleted task, step, or comment has no report or
+    completed-search contribution and no local undelete snapshot.
+25. Offset-free dates, attention days, overdue buckets, and displayed instants
+    use the Todoist account timezone. Explicit offsets identify an instant;
+    persisted instants use UTC.
+26. Task, step, category, comment, rename, and hiding-reason text must not be
+    empty or whitespace-only and must not contain disallowed control
+    characters. Todoist length limits remain authoritative and are translated
+    into domain errors.
+27. Phone-side or web-side state that violates any invariant is diagnosed and
+    never silently repaired, flattened, ignored, or normalized.
+
+Single-line task, step, and category titles reject line breaks, tabs, NUL,
+escape, and the remaining C0/C1 control characters. Multiline descriptions,
+comments, and hiding reasons may contain line feeds and tabs but reject NUL,
+escape, carriage return, and all other C0/C1 controls. Matching normalization
+never rewrites the stored user text.
 
 ## Derived task urgency
 
@@ -184,8 +227,8 @@ or hidden by a parent rule.
 
 An item without its own hiding policy is visible even when its attention date
 is in the future. An item with its own hiding policy becomes visible at the
-start of its local attention day and stays visible afterward.
+start of its account-local attention day and stays visible afterward.
 
 A task's hiding policy applies to its entire task tree. A step may extend its
-own hiding beyond the parent's visibility day, but cannot have an attention day
+own hiding beyond the parent's account-local visibility day, but cannot have an attention day
 before the hidden parent's attention day.

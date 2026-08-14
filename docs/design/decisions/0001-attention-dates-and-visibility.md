@@ -18,7 +18,7 @@ requires attention. `wait`, `due`, and `schedule` are equivalent aliases for
 editing it.
 
 Visibility before the attention day is controlled independently by `--hide`.
-A hidden item becomes visible at the beginning of its local attention day. An
+A hidden item becomes visible at the beginning of its attention day in the Todoist account timezone. An
 exact time remains relevant to display, urgency ordering, and reminders.
 
 The policy is persisted using the Todoist `waiting` label so it synchronizes

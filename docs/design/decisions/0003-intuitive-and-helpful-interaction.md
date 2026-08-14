@@ -29,7 +29,7 @@ feedback.
 ## Consequences
 
 - Help and workflow-level acceptance tests are part of the product contract.
-- Compatibility aliases may remain but are secondary in documentation.
+- Every documented compatibility alias remains supported but is secondary in documentation.
 - Presentation and diagnostic behavior should be implemented through shared
   policies rather than independently in each command.
 - Some rejected commands require more informative errors.
