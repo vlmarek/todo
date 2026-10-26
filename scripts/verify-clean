@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -eu
+export PYTHONDONTWRITEBYTECODE=1
+exec python3.11 -B "$(dirname -- "${BASH_SOURCE[0]}")/verify_clean.py"
