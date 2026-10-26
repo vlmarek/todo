@@ -1,13 +1,14 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-003
-predecessor_revision_id: TODO3-PLAN-002
+revision_id: TODO3-PLAN-004
+predecessor_revision_id: TODO3-PLAN-003
 contract_sources:
 - COMPONENTS.yaml
 - docs/implementation/provider-contracts.md
 - docs/design/architecture.md
 - docs/design/behavior.md
 - docs/design/command-interface.md
+- docs/design/command-time-precision.md
 - docs/design/domain-model.md
 - docs/design/operations.md
 - docs/design/out-of-scope.md
@@ -1463,13 +1464,30 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: 'Consume precise persisted snapshots/history and adapted rendering. Extend the
-    existing cache-first recursive inspection case with reverse-ID siblings differing below a microsecond
-    and a null sibling; after store reload the known newer child precedes the older child, unknown remains
-    last, and owner comments retain exact chronological order without extra HTTP or changed compact text.
-    Use shared instant helpers for any lifecycle selector keys; preserve existing no-match versus state-error
-    behavior. Publication boundary: docs/design/publication-failure.md supplies the scoped successors to
-    the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036
+  correction_instructions: 'Command-time precision: REQ-TIME-001 and REQ-VERIFY-024 supersede only exact
+    subsecond command-time demands in older selected definitions and inherited precise-interface descriptions.
+    Ordinary timezone-aware datetime projection is permitted for urgency, countdowns, relative attention
+    scheduling and relative report-boundary parsing; preserve one applicable command-time reference, full-second
+    distinctions, account timezone/calendar/DST correctness and exact templates. Preserve precise stored
+    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report event
+    eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second normalization
+    or storage migration. Resolve the parent of a parent/direct-child alias across open tasks and steps
+    before restricting children by the selected stable parent ID. Preserve or re-establish the nested-parent
+    correction: Root -> Branch -> Leaf must select Leaf with Branch as parent, mixed task/step parent ambiguity
+    is resolved before child selection, and non-direct descendants are refused. Keep persisted nested-parent,
+    mixed ambiguity and interactive-selection evidence. The earlier review precision finding and correction
+    attempt demand for exact submicrosecond command-now distinctions are superseded, not current failures;
+    reconcile that regression to meaningful full-second before/equal/after due cases across queue, now --all,
+    detail, implicit lookup and ambiguity, with cached-clock recomputation and zero offline HTTP. Use the
+    existing datetime conversion at the workflow boundary where needed by domain urgency/visibility; no
+    domain or presentation ownership expansion is needed. Keep precise sibling/comment/lifecycle selector
+    ordering and eligibility unchanged. Consume precise persisted snapshots/history and adapted rendering.
+    Extend the existing cache-first recursive inspection case with reverse-ID siblings differing below a
+    microsecond and a null sibling; after store reload the known newer child precedes the older child, unknown
+    remains last, and owner comments retain exact chronological order without extra HTTP or changed compact
+    text. Use shared instant helpers for any lifecycle selector keys; preserve existing no-match versus
+    state-error behavior. Publication boundary: docs/design/publication-failure.md supplies the scoped successors
+    to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036
     to this task; old selected definitions remain binding outside that explicit scope. After the first successful
     destination replacement, later failure may leave individually complete mixed files requiring explicit
     recovery; never promise a usable old snapshot or accept a mixed view. Preserve pre-publication files,
@@ -1479,12 +1497,14 @@ tasks:
     publication fixture and assert zero-HTTP refusal; keep valid older coherent snapshots readable with
     the ordinary age warning.'
   requirement_refs:
+  - REQ-TIME-001
   - REQ-CLI-034
   - REQ-CLI-027
   - REQ-CLI-021
   - REQ-CLI-016
   - REQ-CLI-035
   constraint_refs:
+  - REQ-VERIFY-024
   - REQ-ARCH-002
   - REQ-CACHE-006
   - REQ-CACHE-008
@@ -1509,7 +1529,43 @@ tasks:
   - REQ-CACHE-010
   - REQ-LOCAL-007
   - REQ-CLI-036
-  exclusion_refs: *publication_exclusions
+  exclusion_refs: &command_time_exclusions
+  - OUT-PLAN-001
+  - OUT-DATA-001
+  - OUT-PLAT-001
+  - OUT-PLAT-002
+  - OUT-I18N-001
+  - OUT-OUTPUT-001
+  - OUT-OUTPUT-005
+  - OUT-SELECT-001
+  - OUT-AUTH-001
+  - OUT-COLLAB-001
+  - OUT-SEARCH-001
+  - OUT-BACKEND-001
+  - OUT-OPS-001
+  - OUT-OPS-003
+  - OUT-FEATURE-001
+  - OUT-TIME-001
+  - OUT-PACKAGE-001
+  - OUT-SEC-001
+  - OUT-PRIVACY-001
+  - OUT-HISTORY-001
+  - OUT-ARCHIVE-001
+  - OUT-TEST-001
+  - OUT-NFR-001
+  - OUT-NFR-002
+  - OUT-NFR-003
+  - OUT-NFR-004
+  - OUT-CONC-001
+  - OUT-SIGNAL-001
+  - OUT-REPORT-001
+  - OUT-LOGGING-001
+  - OUT-PROVISION-002
+  - OUT-BUNDLE-001
+  - OUT-USABILITY-001
+  - OUT-DIAG-001
+  - OUT-LOCAL-001
+  - OUT-TIME-002
   component_refs:
   - workflows
   provides_interface_refs:
@@ -1732,19 +1788,31 @@ tasks:
     T16 supplies public composition. Run the named focused unittest command while implementing; it is
     a starting point for relevant dependency checks. Required tests must not silently skip. The runner
     owns settled integrated/final broad checks; do not repeatedly run a full suite for each role.
-  correction_instructions: 'Preserve precise timestamps and nullable creation values in copied/replaced/reconciled
-    model records using T19 helpers; scalar changes and creation-time completion must not round unrelated
-    fields. Extend an existing scheduling/creation after-state fixture with a precise known sibling and
-    a null creation value, verifying exact fields through returned/published state. General recursive existing-tree
-    done belongs to T18; the original goal reference to T13 is a stale pointer, not lifecycle ownership.
-    Publication boundary: docs/design/publication-failure.md supplies the scoped successors to the earlier
-    cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this
-    task; old selected definitions remain binding outside that explicit scope. After the first successful
-    destination replacement, later failure may leave individually complete mixed files requiring explicit
-    recovery; never promise a usable old snapshot or accept a mixed view. Preserve pre-publication files,
-    pending-history content, exact timestamps, remote outcome classification and no mutation replay. Creation/scalar/scheduling
-    workflows consume synchronized-state failure facts. Preserve accepted/unknown/unattempted remote receipts
-    after failed publication and do not replay to repair local state. Adapt existing controlled after-state/failure
+  correction_instructions: 'Command-time precision: REQ-TIME-001 and REQ-VERIFY-024 supersede only exact
+    subsecond command-time demands in older selected definitions and inherited precise-interface descriptions.
+    Ordinary timezone-aware datetime projection is permitted for urgency, countdowns, relative attention
+    scheduling and relative report-boundary parsing; preserve one applicable command-time reference, full-second
+    distinctions, account timezone/calendar/DST correctness and exact templates. Preserve precise stored
+    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report event
+    eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second normalization
+    or storage migration. Use the existing aware-datetime parse_attention API for relative expressions,
+    converting the one synchronized command-time value if needed. Its subsecond projection is permitted;
+    do not rewrite the shared clock/domain interfaces. Reuse relative scheduling evidence for elapsed minutes/hours
+    versus calendar days/weeks/months, DST refusal and aliases. Explicit absolute changes, including small
+    requested differences, still use exact no-op comparison and preserve unrelated stored fractions. Preserve
+    precise timestamps and nullable creation values in copied/replaced/reconciled model records using T19
+    helpers; scalar changes and creation-time completion must not round unrelated fields. Extend an existing
+    scheduling/creation after-state fixture with a precise known sibling and a null creation value, verifying
+    exact fields through returned/published state. General recursive existing-tree done belongs to T18;
+    the original goal reference to T13 is a stale pointer, not lifecycle ownership. Publication boundary:
+    docs/design/publication-failure.md supplies the scoped successors to the earlier cache/history/interruption
+    promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions
+    remain binding outside that explicit scope. After the first successful destination replacement, later
+    failure may leave individually complete mixed files requiring explicit recovery; never promise a usable
+    old snapshot or accept a mixed view. Preserve pre-publication files, pending-history content, exact
+    timestamps, remote outcome classification and no mutation replay. Creation/scalar/scheduling workflows
+    consume synchronized-state failure facts. Preserve accepted/unknown/unattempted remote receipts after
+    failed publication and do not replay to repair local state. Adapt existing controlled after-state/failure
     fixtures to the scoped boundary; detailed publisher evidence is supplied by T08 and recurring mutation
     evidence by T18.'
   requirement_refs:
@@ -1759,6 +1827,8 @@ tasks:
   - REQ-SCHED-005
   - REQ-VERIFY-010
   constraint_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
   - REQ-ARCH-002
   - REQ-CACHE-006
   - REQ-CACHE-008
@@ -1785,7 +1855,7 @@ tasks:
   - REQ-CACHE-010
   - REQ-LOCAL-007
   - REQ-CLI-036
-  exclusion_refs: *publication_exclusions
+  exclusion_refs: *command_time_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -2476,12 +2546,27 @@ tasks:
     not repeated per role. Run the named focused unittest command while implementing; it is a starting
     point for relevant dependency checks. Required tests must not silently skip. The runner owns settled
     integrated/final broad checks; do not repeatedly run a full suite for each role.
-  correction_instructions: 'Compose T19 precise APIs across all consumers and adapt any remaining fakes/call
-    sites only for demonstrated integration defects. Add a representative public detail/report regression
-    using actual adapter, persisted state and rendering with >6-digit provider timestamps: exact order and
-    cursor survive reload while human templates remain unchanged. Reuse focused dependency evidence for
-    detailed null/invalid/ordering cases; scripts/check includes the new domain/local cases once in its
-    complete suite and self-tests still use synthetic mini-suites. Publication boundary: docs/design/publication-failure.md
+  correction_instructions: 'Command-time precision: REQ-TIME-001 and REQ-VERIFY-024 supersede only exact
+    subsecond command-time demands in older selected definitions and inherited precise-interface descriptions.
+    Ordinary timezone-aware datetime projection is permitted for urgency, countdowns, relative attention
+    scheduling and relative report-boundary parsing; preserve one applicable command-time reference, full-second
+    distinctions, account timezone/calendar/DST correctness and exact templates. Preserve precise stored
+    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report event
+    eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second normalization
+    or storage migration. Own current composed REQ-VERIFY-024 evidence across reads, relative scheduling
+    and relative report/cursor-boundary parsing. Retained T15 Reporter._boundary projects its command time
+    into parse_boundary for calendar arithmetic; that projection is permitted and must not be rejected for
+    losing subsecond command precision. Inspect retained source and focused evidence, permit no change when
+    compatible, and adapt actual caller/test mismatches within existing scope if demonstrated. Reconcile
+    any stale strict command-now subsecond assertions to full-second before/equal/after and existing calendar/timezone
+    cases; retain exact storage/order, absolute boundary/event-window, output-before-cursor and cleanup
+    tests. Reuse adequate dependency evidence and preserve nested-parent alias behavior through public composition
+    without duplicating a full case matrix. Compose T19 precise APIs across all consumers and adapt any
+    remaining fakes/call sites only for demonstrated integration defects. Add a representative public detail/report
+    regression using actual adapter, persisted state and rendering with >6-digit provider timestamps: exact
+    order and cursor survive reload while human templates remain unchanged. Reuse focused dependency evidence
+    for detailed null/invalid/ordering cases; scripts/check includes the new domain/local cases once in
+    its complete suite and self-tests still use synthetic mini-suites. Publication boundary: docs/design/publication-failure.md
     supplies the scoped successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010,
     REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit
     scope. After the first successful destination replacement, later failure may leave individually complete
@@ -2496,6 +2581,7 @@ tasks:
     finalization ordering. Adapt stale fixtures/diagnostics in declared runtime/test scope only for demonstrated
     gaps; no storage redesign or broadened full-suite schedule.'
   requirement_refs:
+  - REQ-VERIFY-024
   - REQ-PROD-004
   - REQ-PROD-005
   - REQ-CLI-030
@@ -2512,6 +2598,7 @@ tasks:
   - REQ-LOCAL-007
   - REQ-CLI-036
   constraint_refs:
+  - REQ-TIME-001
   - REQ-ARCH-002
   - REQ-BUILD-002
   - REQ-CACHE-005
@@ -2606,7 +2693,7 @@ tasks:
   - REQ-CACHE-009
   - REQ-CACHE-010
   - REQ-VERIFY-023
-  exclusion_refs: *publication_exclusions
+  exclusion_refs: *command_time_exclusions
   component_refs:
   - domain
   - local
@@ -2769,7 +2856,19 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: 'Audit the T19 precision repair and consumer regressions against REQ-DOM-014,
+  correction_instructions: 'Command-time precision: REQ-TIME-001 and REQ-VERIFY-024 supersede only exact
+    subsecond command-time demands in older selected definitions and inherited precise-interface descriptions.
+    Ordinary timezone-aware datetime projection is permitted for urgency, countdowns, relative attention
+    scheduling and relative report-boundary parsing; preserve one applicable command-time reference, full-second
+    distinctions, account timezone/calendar/DST correctness and exact templates. Preserve precise stored
+    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report event
+    eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second normalization
+    or storage migration. Audit the current scoped precision policy in implementation, tests and copied-runtime
+    evidence. Ordinary command-time projection, including T15 relative boundary parsing, is accepted; do
+    not reintroduce the superseded exact-command-time review demand. Reuse T10/T12/T16 evidence for meaningful
+    full-second and calendar/timezone distinctions, verifying unchanged precise persisted ordering and absolute
+    report/cursor/event eligibility separately. Keep the existing single final-delivery broad gate and fill
+    only demonstrated coverage gaps. Audit the T19 precision repair and consumer regressions against REQ-DOM-014,
     REQ-SYNC-027, REQ-CLI-021 and existing report/full-instant requirements. In an existing copied-runtime
     read/report probe retain precise creation/comment/occurrence values through persisted reload, observe
     submicrosecond order and exact final cursor, and verify known-to-null is preserved where supplied. Reuse
@@ -2797,6 +2896,8 @@ tasks:
   - REQ-VERIFY-022
   - REQ-VERIFY-023
   constraint_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
   - REQ-ARCH-002
   - REQ-CACHE-005
   - REQ-CACHE-006
@@ -2899,7 +3000,7 @@ tasks:
   - REQ-CACHE-010
   - REQ-LOCAL-007
   - REQ-CLI-036
-  exclusion_refs: *publication_exclusions
+  exclusion_refs: *command_time_exclusions
   component_refs:
   - domain
   - local
@@ -3090,6 +3191,8 @@ stages:
 - id: release-1
   final_project: true
   active_requirement_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
   - REQ-ARCH-002
   - REQ-BUILD-002
   - REQ-CACHE-005
