@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -eu
+export PYTHONDONTWRITEBYTECODE=1
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+exec python3.11 -B - <<'PY'
+import importlib
+import os
+from pathlib import Path
+import stat
+import sys
+import unittest
+
+
+def fail(message):
+    print('check: ' + message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+if sys.version_info[:2] != (3, 11) or sys.implementation.name != 'cpython':
+    fail('CPython 3.11 is required')
+root = Path.cwd()
+launcher = root / 'todo'
+try:
+    mode = launcher.lstat().st_mode
+    if not stat.S_ISREG(mode) or not os.access(launcher, os.X_OK):
+        fail('todo must be a regular executable file')
+    if not launcher.read_bytes().startswith(b'#!/usr/bin/env python3\n'):
+        fail('todo requires the exact python3 shebang')
+    if not (root / 'todo_lib' / '__init__.py').is_file() or not (root / 'todo_lib' / 'cli.py').is_file():
+        fail('missing required todo_lib runtime')
+    sources = [launcher, *sorted((root / 'todo_lib').rglob('*.py'))]
+    for path in sources:
+        compile(path.read_text(), str(path), 'exec', dont_inherit=True)
+    for path in sources[1:]:
+        parts = path.relative_to(root).with_suffix('').parts
+        name = '.'.join(parts[:-1] if parts[-1] == '__init__' else parts)
+        importlib.import_module(name)
+    from todo_lib.cli import main
+    if not callable(main):
+        fail('missing CLI main')
+    required = ('adapter', 'domain', 'local', 'presentation', 'syntax', 'workflows', 'cli', 'delivery')
+    required += tuple('adapter.' + name for name in ('commands', 'current', 'history', 'transport'))
+    required += tuple('workflows.' + name for name in ('capture', 'comments', 'init', 'lifecycle', 'moves', 'reads', 'report', 'sync'))
+    for package in ('', *required):
+        if not (root / 'tests' / package.replace('.', '/') / '__init__.py').is_file():
+            fail('missing required test package: tests/' + package)
+    loader = unittest.TestLoader()
+    suite = loader.discover('tests', pattern='test_*.py', top_level_dir=str(root))
+    if loader.errors:
+        fail('\n'.join(loader.errors))
+    def cases(suite):
+        for entry in suite:
+            if isinstance(entry, unittest.TestSuite):
+                yield from cases(entry)
+            else:
+                yield entry
+    # Imported shared TestCase fixtures can appear in several discovery modules.
+    # Execute each actual test identity once.
+    unique = {}
+    for case in cases(suite):
+        unique.setdefault(case.id(), case)
+    suite = unittest.TestSuite(unique.values())
+    ids = list(unique)
+    for package in required:
+        if not any(name.startswith('tests.' + package + '.') for name in ids):
+            fail('no tests discovered in required package: ' + package)
+    if not ids:
+        fail('no offline tests discovered')
+    print(f'check: discovered {len(ids)} offline tests', flush=True)
+    result = unittest.TextTestRunner(verbosity=1).run(suite)
+    if result.skipped:
+        fail(f'{len(result.skipped)} required tests skipped')
+    raise SystemExit(0 if result.wasSuccessful() else 1)
+except (OSError, SyntaxError, ImportError) as error:
+    fail(str(error))
+PY

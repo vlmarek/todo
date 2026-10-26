@@ -18,6 +18,7 @@ from todo_lib.adapter.commands import Gateway, Result, Outcome
 from todo_lib.adapter.current import retrieve
 from todo_lib.local import empty_history, prepare_candidates, exclusive_lock, LocalError
 from todo_lib.local.codec import loads
+from todo_lib.local.config import Configuration
 from todo_lib.syntax import parse
 from todo_lib.syntax.parser import UsageError
 from todo_lib.workflows.reads import NoMatch, AmbiguityError
@@ -102,7 +103,7 @@ class LifecycleTests(unittest.TestCase):
     def workflow(self, snapshot, *, outcomes=(), after=(), answer='yes\n', tty=True, hidden=()):
         sync, gateway = FakeSync(snapshot, after), FakeGateway(outcomes)
         out = streams(answer, tty)
-        workflow = LifecycleWorkflow(sync, gateway=gateway, settings=SimpleNamespace(hidden_from_now=hidden), streams=out)
+        workflow = LifecycleWorkflow(sync, gateway=gateway, settings=Configuration('root', ('cat',), hidden), streams=out)
         return workflow, sync, gateway, out
 
     def test_exact_nested_preview_postorder_and_root_only_comments(self):

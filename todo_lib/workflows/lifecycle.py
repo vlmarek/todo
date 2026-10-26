@@ -171,6 +171,8 @@ class LifecycleWorkflow:
                        for group in request.groups for body in group.values)
         with exclusive_lock(command, self.synchronizer.store.root):
             settings = self.settings or load_config(self.synchronizer.store.root)
+            color = p.Color.for_stdout(self.streams.stdout, request.option('color', 'auto'),
+                                       slots=settings.colors)
             state = self.synchronizer.refresh_locked()
             snapshot, now, cursor = state.snapshot, state.now, state.state.cursor
             if command in ('reopen', 'delete'):
@@ -187,10 +189,10 @@ class LifecycleWorkflow:
                         key=lambda i: (snapshot.categories[i.category_id].name.lower(),
                             tuple(a.title.lower() for a in d.ancestors(snapshot, i.id)),
                             i.title.lower(), i.id))))
-                parent = choose(snapshot, request.parent, parents, now, streams=self.streams)
+                parent = choose(snapshot, request.parent, parents, now, streams=self.streams, color=color)
                 candidates = tuple(c for c in candidates if snapshot.items[
                     c.item_id if isinstance(c, d.LifecycleCandidate) else c.id].parent_id == parent.id)
-            candidate = choose(snapshot, request.selector, candidates, now, streams=self.streams)
+            candidate = choose(snapshot, request.selector, candidates, now, streams=self.streams, color=color)
             root = snapshot.items[candidate.item_id] if isinstance(candidate, d.LifecycleCandidate) else candidate
             tree = d.subtree(snapshot, root.id)
             if command == 'done':

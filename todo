@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Copy this executable together with its sibling todo_lib directory."""
+from todo_lib.cli import main
+
+if __name__ == '__main__':
+    raise SystemExit(main())

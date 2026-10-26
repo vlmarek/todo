@@ -19,6 +19,8 @@ class UsageError(ValueError):
         self.example = EXAMPLES.get(command, 'todo now')
         super().__init__(f'{command}: {problem}' + (f': {offending!r}' if offending is not None else '')
                          + f'\nUsage: {self.synopsis}\nExample: {self.example}')
+        if command == 'report':
+            self.args = (str(self) + '\nBoundaries: YYYY-MM-DD, local YYYY-MM-DDTHH:MM[:SS], aware RFC3339; positive Nd ago or N days ago.',)
 
 
 @dataclass(frozen=True)

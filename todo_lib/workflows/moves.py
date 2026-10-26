@@ -131,14 +131,16 @@ class MoveWorkflow:
             raise ValueError('not a move command')
         sync = self.synchronizer
         settings = self.settings or load_config(sync.store.root)
+        color = p.Color.for_stdout((self.streams or p.OriginalStreams.current()).stdout,
+            request.option('color', 'auto'), slots=settings.colors)
         with exclusive_lock('move', sync.store.root):
             result = sync.refresh_locked()
             snapshot = combined_snapshot(result)
             d.validate(snapshot, settings.hidden_from_now)
             source = (select_child(snapshot, request.parent, request.selector, result.now,
-                                   streams=self.streams) if request.parent else
+                                   streams=self.streams, color=color) if request.parent else
                       select_title(snapshot, request.selector, result.now,
-                                   target=request.target or 'item', streams=self.streams))
+                                   target=request.target or 'item', streams=self.streams, color=color))
             kind = request.destination_kind
             explicit_category = request.option('category')
             category = None
@@ -146,7 +148,7 @@ class MoveWorkflow:
             if kind != 'category' and kind != 'promotion':
                 destination = choose(snapshot, request.destination,
                     destination_candidates(snapshot, request.destination, kind),
-                    result.now, streams=self.streams)
+                    result.now, streams=self.streams, color=color)
                 if isinstance(destination, d.Item):
                     if destination.completed:
                         raise MoveError('completed destination cannot be a parent')
