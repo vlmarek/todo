@@ -1,7 +1,7 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-004
-predecessor_revision_id: TODO3-PLAN-003
+revision_id: TODO3-PLAN-005
+predecessor_revision_id: TODO3-PLAN-004
 contract_sources:
 - COMPONENTS.yaml
 - docs/implementation/provider-contracts.md
@@ -14,6 +14,7 @@ contract_sources:
 - docs/design/out-of-scope.md
 - docs/design/output-contract.md
 - docs/design/product.md
+- docs/design/partial-initialization-failure.md
 - docs/design/publication-failure.md
 - docs/design/quality-requirements.md
 - docs/design/security.md
@@ -1594,10 +1595,11 @@ tasks:
   required_evidence:
   - t10-focused
 - id: T11
-  title: Terminal setup and idempotent stable initialization
+  title: Terminal setup and stable initialization
   origin_stage_ref: release-1
-  observable_outcome: A new or populated configuration initializes the chosen managed scope safely without
-    resetting prior binding/history/cursor.
+  observable_outcome: A new or populated configuration initializes the chosen managed scope safely; valid-binding
+    repeats preserve pending history/cursor, and failed first-init publication has the explicit manual-recovery
+    boundary.
   dependencies:
   - task_ref: T19
     kind: interface
@@ -1638,41 +1640,103 @@ tasks:
     preflight precedes every provision, needs no activity endpoint/history capability and accepts legitimate
     checked false, nullable timestamps, optional descriptions and floating due. Provision only missing
     authorized root/default categories/waiting label, then full-plus-delta validation, staged cache/history/cursor
-    and binding-last publication. Repeat init preserves cursor/pending history. Report saved configuration
-    separately from init failure and accepted remote creations for explicit idempotent rerun.
-  failure_domain: A new or populated configuration initializes the chosen managed scope safely without
-    resetting prior binding/history/cursor.
+    and binding-last publication. Repeat init with a valid binding preserves cursor/pending history. Report
+    saved configuration separately from init failure and accepted remote creations for explicit remote-provisioning
+    reuse. Failed local first-init publication follows REQ-INIT-009; successful rerun recovery of every
+    partial local state is not promised.
+  failure_domain: A new or populated configuration initializes the chosen managed scope safely; valid-binding
+    repeats preserve pending history/cursor, and failed first-init publication has the explicit manual-recovery
+    boundary.
   verification_rationale: Controlled terminal/HTTP/temporary-home tests cover absent directory, owned
     empty 0644 config accepted/declined repair, populated never rewritten, no-TTY unchanged, hidden-input
     failure, environment-token non-persistence and EOF/SIGINT. Existing-root categories are offered without
     fallback creation; incomplete discovery does not imply empty. An invalid managed checked or tree with
-    missing category/label must block all provisioning; valid unavailable history permits init. Repeat
-    and partial provision rerun preserve stable IDs/cursor/history. File failure before final binding
-    rejects mixed publication without guessing recovery. Run the named focused unittest command while
-    implementing; it is a starting point for relevant dependency checks. Required tests must not silently
-    skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
-    each role.
+    missing category/label must block all provisioning; valid unavailable history permits init. Valid-binding
+    repeats and reuse after partial remote provisioning preserve stable IDs/cursor/history; partial local
+    first-init recovery follows REQ-INIT-009/REQ-VERIFY-025 instead of a universal rerun guarantee. File
+    failure before final binding rejects mixed publication without guessing recovery. Run the named focused
+    unittest command while implementing; it is a starting point for relevant dependency checks. Required
+    tests must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly
+    run a full suite for each role.
   correction_instructions: 'Use T19 precise local/model contracts for preflight and initialization candidates.
-    Through the actual current adapter and public store, retain a >6-digit creation timestamp through first
-    publication and reload, and preserve pending precise history/cursor on repeat initialization. Null creation
-    stays valid and required malformed timestamps still block provisioning. Extend existing initialization
-    fixtures; do not add another setup workflow or new public option. Publication boundary: docs/design/publication-failure.md
-    supplies the scoped successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010,
-    REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit
-    scope. After the first successful destination replacement, later failure may leave individually complete
-    mixed files requiring explicit recovery; never promise a usable old snapshot or accept a mixed view.
-    Preserve pre-publication files, pending-history content, exact timestamps, remote outcome classification
-    and no mutation replay. First and repeat init use the same per-file boundary. Preserve existing cursor
-    and all still-required pending observations in candidates; after partial publication retain available
-    bytes and disclose failure/accepted remote provisions rather than claiming whole-set preservation. Reuse
-    partial-binding initialization evidence and distinguish an idempotent init rerun from a mixed existing
-    binding/history set requiring manual consistent-set restoration.'
+    Through the actual current adapter and public store, retain a >6-digit creation timestamp through
+    first publication and reload, and preserve pending precise history/cursor on repeat initialization.
+    Null creation stays valid and required malformed timestamps still block provisioning. Extend existing
+    initialization fixtures; do not add another setup workflow or new public option. Publication boundary:
+    docs/design/publication-failure.md supplies the scoped successors to the earlier cache/history/interruption
+    promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions
+    remain binding outside that explicit scope. After the first successful destination replacement, later
+    failure may leave individually complete mixed files requiring explicit recovery; never promise a usable
+    old snapshot or accept a mixed view. Preserve pre-publication files, pending-history content, exact
+    timestamps, remote outcome classification and no mutation replay. First and repeat init use the same
+    per-file boundary. Preserve existing cursor and all still-required pending observations in candidates;
+    after partial publication retain available bytes and disclose failure/accepted remote provisions rather
+    than claiming whole-set preservation. Scoped first-init exception: docs/design/partial-initialization-failure.md
+    REQ-INIT-009 and OUT-INIT-001 supersede earlier rerun/recoverable-history wording only after failed
+    local first-init publication before coherent initialization. Report failed phase/nonzero, retain complete
+    restrictive per-file candidates and binding-last safety, preserve available bytes and reject mixed/unusable
+    state. Existing explicit manual full-directory fresh start is sufficient: stop processes, optionally
+    back up wanted data, delete the entire ~/.todo directory explicitly and run todo init; disclose loss
+    of local config/binding/cache/pending observations/report cursor and new initial report boundary,
+    with remote data unchanged. No automatic deletion, new command, journal, guard bypass, guessed association/timezone/cursor
+    or shared-store repair is assigned. In particular, a binding-last failure followed by changed account
+    timezone and incompatible unbound floating history may fail clearly and require that manual action;
+    do not implement a guarantee of successful rerun or remove safe reruns already working. Keep normal
+    successful first init, valid-binding repeats and partial remote-provisioning reuse required.
+
+
+    Current normal-operation corrections remain mandatory independently of this exception. Each validated
+    preflight and post-provision full-plus-delta observation must join pending history with required ancestor
+    context before later reads can omit it; the final cache reflects its own authoritative current read.
+    Preserve preflight-observed task/step title, description, due/raw time, priority, parent/category,
+    exact or authoritative-null timestamps and supported completion evidence through subsequent omission,
+    public StateStore reload and a later valid-binding init. Later explicit task changes, reopen/completion
+    evidence, confirmed item deletion or scope departure supersede older observations; active/full omission
+    alone is not deletion or completion proof. Reconcile current notes for retained known managed owners,
+    including edited bodies and exact/null posted_at, new notes, explicit tombstones and ownership loss,
+    even when the owner is absent from the filtered live snapshot. Later explicit note evidence wins;
+    ordinary omission preserves required pending notes. Category/root renames retain stable IDs while
+    current names/scope and authenticated timezone/capabilities override retained values; departed subtrees
+    and unrelated/private data remain removed. Preserve initial/incomplete history coverage, pending observations
+    and the valid existing cursor. For normal successful first and repeat init, accept legitimate floating/fixed
+    due values and authenticated timezone changes with current authority; the partial-first-init exception
+    is not a waiver for those paths.
+
+
+    Concrete inputs: accepted todo_lib/adapter/current.py retrieve returns Current(snapshot, sync_token,
+    disappeared_ids, deleted_ids, departed_ids); todo_lib/local/history.py History and merge_history require
+    explicit removed item/comment evidence and complete ancestor context, with incoming current values
+    winning and omission retaining observations. todo_lib/local/store.py StateStore load_consistent_state/load_history,
+    prepare_candidates and publish_snapshot enforce association/path/mode checks; reuse them without editing
+    the shared store. todo_lib/workflows/sync.py _known/_reconcile and tests/workflows/sync/test_sync.py
+    provide existing current-truth, retained-comment, deletion/scope and timezone patterns. Implement
+    initialization in the assigned workflow/tests using actual dependency APIs, including raw current
+    note evidence where the public live snapshot filters retained owners; no new provider behavior or
+    activity prerequisite. The revision restarts this task: abandoned candidate code is not continuation
+    input, and this assignment does not authorize inspection or copying of sibling/abandoned worktrees.
+
+
+    Extend existing actual Transport/current-adapter/public-StateStore fixtures where available. Distinguish
+    preflight-observed edited task fields and known-to-null values followed by full/delta omission from
+    later explicit supersession/deletion/departure; assert exact pending values/context after reload and
+    subsequent init, not only final cache. Distinguish a pending-only owned comment edited in an actual
+    read from a preseeded edited history fixture; verify later tombstone/ownership loss wins and later
+    ordinary omission retains its latest body/time. Validate malformed required task/note fields for known
+    managed owners before provisioning; failures preserve protected bytes and issue no provisioning request,
+    while ownership-first discard of unrelated unsupported objects remains. Representative local first-init
+    write failure must report failure, leave individually complete old/candidate destinations, and refuse
+    a mixed set without HTTP; successful rerun across changed timezone is not a required assertion. Reuse
+    adequate pre-publication and valid-binding repeat evidence. Focused feedback is the t11-focused command
+    and, when these adapters/history/store are directly consumed, python3.11 -B -m unittest tests.adapter.current.test_current
+    tests.local.test_local -v with PYTHONDONTWRITEBYTECODE=1. No repeated broad suite or exhaustive failure
+    matrix.'
   requirement_refs:
   - REQ-INIT-005
   - REQ-INIT-008
   - REQ-INIT-002
   - REQ-INIT-003
   - REQ-VERIFY-007
+  - REQ-INIT-009
   constraint_refs:
   - REQ-ARCH-002
   - REQ-CACHE-006
@@ -1699,7 +1763,44 @@ tasks:
   - REQ-LOCAL-007
   - REQ-CLI-036
   - REQ-VERIFY-023
-  exclusion_refs: *publication_exclusions
+  - REQ-VERIFY-025
+  exclusion_refs:
+  - OUT-PLAN-001
+  - OUT-DATA-001
+  - OUT-PLAT-001
+  - OUT-PLAT-002
+  - OUT-I18N-001
+  - OUT-OUTPUT-001
+  - OUT-OUTPUT-005
+  - OUT-SELECT-001
+  - OUT-AUTH-001
+  - OUT-COLLAB-001
+  - OUT-SEARCH-001
+  - OUT-BACKEND-001
+  - OUT-OPS-001
+  - OUT-OPS-003
+  - OUT-FEATURE-001
+  - OUT-TIME-001
+  - OUT-PACKAGE-001
+  - OUT-SEC-001
+  - OUT-PRIVACY-001
+  - OUT-HISTORY-001
+  - OUT-ARCHIVE-001
+  - OUT-TEST-001
+  - OUT-NFR-001
+  - OUT-NFR-002
+  - OUT-NFR-003
+  - OUT-NFR-004
+  - OUT-CONC-001
+  - OUT-SIGNAL-001
+  - OUT-REPORT-001
+  - OUT-LOGGING-001
+  - OUT-PROVISION-002
+  - OUT-BUNDLE-001
+  - OUT-USABILITY-001
+  - OUT-DIAG-001
+  - OUT-LOCAL-001
+  - OUT-INIT-001
   component_refs:
   - workflows
   provides_interface_refs:
@@ -2551,35 +2652,48 @@ tasks:
     Ordinary timezone-aware datetime projection is permitted for urgency, countdowns, relative attention
     scheduling and relative report-boundary parsing; preserve one applicable command-time reference, full-second
     distinctions, account timezone/calendar/DST correctness and exact templates. Preserve precise stored
-    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report event
-    eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second normalization
-    or storage migration. Own current composed REQ-VERIFY-024 evidence across reads, relative scheduling
-    and relative report/cursor-boundary parsing. Retained T15 Reporter._boundary projects its command time
-    into parse_boundary for calendar arithmetic; that projection is permitted and must not be rejected for
-    losing subsecond command precision. Inspect retained source and focused evidence, permit no change when
-    compatible, and adapt actual caller/test mismatches within existing scope if demonstrated. Reconcile
-    any stale strict command-now subsecond assertions to full-second before/equal/after and existing calendar/timezone
-    cases; retain exact storage/order, absolute boundary/event-window, output-before-cursor and cleanup
-    tests. Reuse adequate dependency evidence and preserve nested-parent alias behavior through public composition
-    without duplicating a full case matrix. Compose T19 precise APIs across all consumers and adapt any
-    remaining fakes/call sites only for demonstrated integration defects. Add a representative public detail/report
-    regression using actual adapter, persisted state and rendering with >6-digit provider timestamps: exact
-    order and cursor survive reload while human templates remain unchanged. Reuse focused dependency evidence
-    for detailed null/invalid/ordering cases; scripts/check includes the new domain/local cases once in
-    its complete suite and self-tests still use synthetic mini-suites. Publication boundary: docs/design/publication-failure.md
-    supplies the scoped successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010,
-    REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit
-    scope. After the first successful destination replacement, later failure may leave individually complete
+    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report
+    event eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second
+    normalization or storage migration. Own current composed REQ-VERIFY-024 evidence across reads, relative
+    scheduling and relative report/cursor-boundary parsing. Retained T15 Reporter._boundary projects its
+    command time into parse_boundary for calendar arithmetic; that projection is permitted and must not
+    be rejected for losing subsecond command precision. Inspect retained source and focused evidence,
+    permit no change when compatible, and adapt actual caller/test mismatches within existing scope if
+    demonstrated. Reconcile any stale strict command-now subsecond assertions to full-second before/equal/after
+    and existing calendar/timezone cases; retain exact storage/order, absolute boundary/event-window,
+    output-before-cursor and cleanup tests. Reuse adequate dependency evidence and preserve nested-parent
+    alias behavior through public composition without duplicating a full case matrix. Compose T19 precise
+    APIs across all consumers and adapt any remaining fakes/call sites only for demonstrated integration
+    defects. Add a representative public detail/report regression using actual adapter, persisted state
+    and rendering with >6-digit provider timestamps: exact order and cursor survive reload while human
+    templates remain unchanged. Reuse focused dependency evidence for detailed null/invalid/ordering cases;
+    scripts/check includes the new domain/local cases once in its complete suite and self-tests still
+    use synthetic mini-suites. Publication boundary: docs/design/publication-failure.md supplies the scoped
+    successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007
+    and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit scope.
+    After the first successful destination replacement, later failure may leave individually complete
     mixed files requiring explicit recovery; never promise a usable old snapshot or accept a mixed view.
     Preserve pre-publication files, pending-history content, exact timestamps, remote outcome classification
-    and no mutation replay. Own composed CLI diagnostics and SIGINT policy for the new boundary. Reuse focused
-    sync/init/lifecycle/report evidence and add representative public refresh and accepted-mutation publication
-    failures, with a later binding failure or handled interruption at the changed boundary. Verify nonzero
-    (1 ordinary, 130 SIGINT), no synchronized normal output, correct accepted/unknown/unattempted receipts,
-    complete old/candidate destination files, zero-HTTP new-process mixed-set refusal and useful existing
-    recovery advice without promising refresh always works. Stop later remote operations and preserve cursor/history
-    finalization ordering. Adapt stale fixtures/diagnostics in declared runtime/test scope only for demonstrated
-    gaps; no storage redesign or broadened full-suite schedule.'
+    and no mutation replay. Own composed CLI diagnostics and SIGINT policy for the new boundary. Reuse
+    focused sync/init/lifecycle/report evidence and add representative public refresh and accepted-mutation
+    publication failures, with a later binding failure or handled interruption at the changed boundary.
+    Verify nonzero (1 ordinary, 130 SIGINT), no synchronized normal output, correct accepted/unknown/unattempted
+    receipts, complete old/candidate destination files, zero-HTTP new-process mixed-set refusal and useful
+    existing recovery advice without promising refresh always works. Stop later remote operations and
+    preserve cursor/history finalization ordering. Adapt stale fixtures/diagnostics in declared runtime/test
+    scope only for demonstrated gaps; no storage redesign or broadened full-suite schedule. Scoped first-init
+    exception: apply REQ-INIT-009/REQ-VERIFY-025 and OUT-INIT-001 before earlier rerun/recoverable-history
+    wording only for failed local first-init publication before coherence. Compose T11 failure facts into
+    truthful failed-phase/nonzero diagnostics and mixed-state refusal; identify the existing explicit
+    full-directory fresh start with pending-history/cursor loss and remote-data-unchanged disclosure when
+    needed. Never promise every partial first-init state can be repaired by init rerun, including changed-account-timezone/unbound-floating-history
+    failure. No storage repair, guard bypass, new repair/reset command or automatic deletion is assigned.
+    Reuse T11 representative evidence and add public diagnostics coverage only for a demonstrated composition
+    gap. Preserve successful first init, valid-binding repeat history/cursor, partial remote-provisioning
+    reuse, normal current-truth/timezone behavior and all other publication/subsecond agreements. Keep
+    current normal task/note evidence reconciliation through CLI composition; do not treat the exception
+    as approval to drop edits, authoritative nulls, own comments or ancestry, retain deleted/out-of-scope
+    data, ignore config validation, or reset normal history.'
   requirement_refs:
   - REQ-VERIFY-024
   - REQ-PROD-004
@@ -2693,7 +2807,46 @@ tasks:
   - REQ-CACHE-009
   - REQ-CACHE-010
   - REQ-VERIFY-023
-  exclusion_refs: *command_time_exclusions
+  - REQ-INIT-009
+  - REQ-VERIFY-025
+  exclusion_refs:
+  - OUT-PLAN-001
+  - OUT-DATA-001
+  - OUT-PLAT-001
+  - OUT-PLAT-002
+  - OUT-I18N-001
+  - OUT-OUTPUT-001
+  - OUT-OUTPUT-005
+  - OUT-SELECT-001
+  - OUT-AUTH-001
+  - OUT-COLLAB-001
+  - OUT-SEARCH-001
+  - OUT-BACKEND-001
+  - OUT-OPS-001
+  - OUT-OPS-003
+  - OUT-FEATURE-001
+  - OUT-TIME-001
+  - OUT-PACKAGE-001
+  - OUT-SEC-001
+  - OUT-PRIVACY-001
+  - OUT-HISTORY-001
+  - OUT-ARCHIVE-001
+  - OUT-TEST-001
+  - OUT-NFR-001
+  - OUT-NFR-002
+  - OUT-NFR-003
+  - OUT-NFR-004
+  - OUT-CONC-001
+  - OUT-SIGNAL-001
+  - OUT-REPORT-001
+  - OUT-LOGGING-001
+  - OUT-PROVISION-002
+  - OUT-BUNDLE-001
+  - OUT-USABILITY-001
+  - OUT-DIAG-001
+  - OUT-LOCAL-001
+  - OUT-TIME-002
+  - OUT-INIT-001
   component_refs:
   - domain
   - local
@@ -2861,32 +3014,48 @@ tasks:
     Ordinary timezone-aware datetime projection is permitted for urgency, countdowns, relative attention
     scheduling and relative report-boundary parsing; preserve one applicable command-time reference, full-second
     distinctions, account timezone/calendar/DST correctness and exact templates. Preserve precise stored
-    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report event
-    eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second normalization
-    or storage migration. Audit the current scoped precision policy in implementation, tests and copied-runtime
-    evidence. Ordinary command-time projection, including T15 relative boundary parsing, is accepted; do
-    not reintroduce the superseded exact-command-time review demand. Reuse T10/T12/T16 evidence for meaningful
-    full-second and calendar/timezone distinctions, verifying unchanged precise persisted ordering and absolute
-    report/cursor/event eligibility separately. Keep the existing single final-delivery broad gate and fill
-    only demonstrated coverage gaps. Audit the T19 precision repair and consumer regressions against REQ-DOM-014,
-    REQ-SYNC-027, REQ-CLI-021 and existing report/full-instant requirements. In an existing copied-runtime
-    read/report probe retain precise creation/comment/occurrence values through persisted reload, observe
-    submicrosecond order and exact final cursor, and verify known-to-null is preserved where supplied. Reuse
-    matching source evidence for detailed malformed/failure cases; do not multiply a workflow per timestamp
-    field. Record actual subjects and limitations in acceptance-evidence.md. The existing final-delivery
-    gate remains the single full-suite/copy acceptance path on the settled subject. Publication boundary:
-    docs/design/publication-failure.md supplies the scoped successors to the earlier cache/history/interruption
-    promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions
-    remain binding outside that explicit scope. After the first successful destination replacement, later
-    failure may leave individually complete mixed files requiring explicit recovery; never promise a usable
-    old snapshot or accept a mixed view. Preserve pre-publication files, pending-history content, exact
-    timestamps, remote outcome classification and no mutation replay. Own final REQ-VERIFY-023 evidence
-    and operational documentation for the accepted limitation. Reuse observed T08/T11/T18/T16 evidence for
-    pre-first/later replacement and SIGINT where adequate; fill only concrete gaps. Document partial publication,
-    possibly unusable saved snapshots, mixed-set refusal, optional read-only refresh where applicable and
-    manual consistent-set restoration/init rerun where validation blocks it. Preserve pending history in
-    recoverable files and disclose full-directory reset loss. Audit ordinary refresh and accepted recurring
-    mutation recovery without another completion/undo. The sole final-delivery broad gate remains unchanged.'
+    values, full-instant ordering, explicit absolute inputs and exact no-op semantics, resolved report
+    event eligibility and finalization/cleanup. Do not add an exact-clock API repair, forced whole-second
+    normalization or storage migration. Audit the current scoped precision policy in implementation, tests
+    and copied-runtime evidence. Ordinary command-time projection, including T15 relative boundary parsing,
+    is accepted; do not reintroduce the superseded exact-command-time review demand. Reuse T10/T12/T16
+    evidence for meaningful full-second and calendar/timezone distinctions, verifying unchanged precise
+    persisted ordering and absolute report/cursor/event eligibility separately. Keep the existing single
+    final-delivery broad gate and fill only demonstrated coverage gaps. Audit the T19 precision repair
+    and consumer regressions against REQ-DOM-014, REQ-SYNC-027, REQ-CLI-021 and existing report/full-instant
+    requirements. In an existing copied-runtime read/report probe retain precise creation/comment/occurrence
+    values through persisted reload, observe submicrosecond order and exact final cursor, and verify known-to-null
+    is preserved where supplied. Reuse matching source evidence for detailed malformed/failure cases;
+    do not multiply a workflow per timestamp field. Record actual subjects and limitations in acceptance-evidence.md.
+    The existing final-delivery gate remains the single full-suite/copy acceptance path on the settled
+    subject. Publication boundary: docs/design/publication-failure.md supplies the scoped successors to
+    the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036
+    to this task; old selected definitions remain binding outside that explicit scope. After the first
+    successful destination replacement, later failure may leave individually complete mixed files requiring
+    explicit recovery; never promise a usable old snapshot or accept a mixed view. Preserve pre-publication
+    files, pending-history content, exact timestamps, remote outcome classification and no mutation replay.
+    Own final REQ-VERIFY-023 evidence and operational documentation for the accepted limitation. Reuse
+    observed T08/T11/T18/T16 evidence for pre-first/later replacement and SIGINT where adequate; fill
+    only concrete gaps. Document partial publication, possibly unusable saved snapshots, mixed-set refusal,
+    optional read-only refresh where applicable and manual consistent-set restoration/init rerun where
+    validation blocks it. Preserve pending history in recoverable files and disclose full-directory reset
+    loss. Audit ordinary refresh and accepted recurring mutation recovery without another completion/undo.
+    The sole final-delivery broad gate remains unchanged. Own final REQ-VERIFY-025 audit and operational
+    documentation for the REQ-INIT-009/OUT-INIT-001 scoped manual-recovery boundary. Earlier partial-publication/rerun
+    wording applies outside that explicit exception. Reuse representative T11/T16 evidence for clear failed-phase/nonzero
+    first-init write failure, individually complete destinations, preservation before the first replacement
+    and refusal of mixed/unusable sets. Do not require successful init-rerun recovery of every partial
+    local first-init state, including a timezone change with old unbound floating history. Document the
+    existing explicit procedure: stop todo processes, optionally back up wanted local data, delete the
+    entire ~/.todo directory and rerun todo init; disclose local configuration/binding/cache/pending-history/report-cursor
+    loss, possible loss of unreported observations, new initial report boundary on success and unchanged
+    remote Todoist data. No automatic deletion, new recovery command or shared-store repair. Existing
+    safe reruns may remain, and successful first init, valid-binding repeat history/cursor preservation,
+    partial remote-provisioning reuse and ordinary synchronization/timezone/current-truth obligations
+    remain required. Audit that normal init retains actual task/note edits, nulls, pending ancestry and
+    comments across read omissions/reload while later explicit changes/deletions/scope/ownership evidence
+    win; reuse current T11/T16 regressions and fill only concrete composed/copy gaps. Keep the existing
+    final-delivery gate and subsecond/publication agreements unchanged.'
   requirement_refs:
   - REQ-PLAT-002
   - REQ-BUILD-002
@@ -2895,6 +3064,7 @@ tasks:
   - REQ-OPS-001
   - REQ-VERIFY-022
   - REQ-VERIFY-023
+  - REQ-VERIFY-025
   constraint_refs:
   - REQ-TIME-001
   - REQ-VERIFY-024
@@ -3000,7 +3170,45 @@ tasks:
   - REQ-CACHE-010
   - REQ-LOCAL-007
   - REQ-CLI-036
-  exclusion_refs: *command_time_exclusions
+  - REQ-INIT-009
+  exclusion_refs:
+  - OUT-PLAN-001
+  - OUT-DATA-001
+  - OUT-PLAT-001
+  - OUT-PLAT-002
+  - OUT-I18N-001
+  - OUT-OUTPUT-001
+  - OUT-OUTPUT-005
+  - OUT-SELECT-001
+  - OUT-AUTH-001
+  - OUT-COLLAB-001
+  - OUT-SEARCH-001
+  - OUT-BACKEND-001
+  - OUT-OPS-001
+  - OUT-OPS-003
+  - OUT-FEATURE-001
+  - OUT-TIME-001
+  - OUT-PACKAGE-001
+  - OUT-SEC-001
+  - OUT-PRIVACY-001
+  - OUT-HISTORY-001
+  - OUT-ARCHIVE-001
+  - OUT-TEST-001
+  - OUT-NFR-001
+  - OUT-NFR-002
+  - OUT-NFR-003
+  - OUT-NFR-004
+  - OUT-CONC-001
+  - OUT-SIGNAL-001
+  - OUT-REPORT-001
+  - OUT-LOGGING-001
+  - OUT-PROVISION-002
+  - OUT-BUNDLE-001
+  - OUT-USABILITY-001
+  - OUT-DIAG-001
+  - OUT-LOCAL-001
+  - OUT-TIME-002
+  - OUT-INIT-001
   component_refs:
   - domain
   - local
@@ -3302,6 +3510,8 @@ stages:
   - REQ-LOCAL-007
   - REQ-CLI-036
   - REQ-VERIFY-023
+  - REQ-INIT-009
+  - REQ-VERIFY-025
   satisfied_requirement_refs: []
   deferred_requirement_refs: []
   check_refs:
