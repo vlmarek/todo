@@ -1,6 +1,6 @@
 # Prepared ownership and evidence
 
-The accepted design is authoritative. This protected planning ledger assigns all 104 requirements to the complete first release; none are deferred. It is planned coverage, not observed acceptance. Execution writes observations to acceptance-evidence.md.
+The accepted design is authoritative. This protected planning ledger assigns all 109 requirements to the complete first release; none are deferred. It is planned coverage, not observed acceptance. Execution writes observations to acceptance-evidence.md.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -441,4 +441,29 @@ requirements:
     stage_status: active
     primary_owner: T17
     planned_evidence: *id011
+  REQ-CACHE-009:
+    stage_status: active
+    primary_owner: T08
+    planned_evidence:
+    - t08-focused
+  REQ-CACHE-010:
+    stage_status: active
+    primary_owner: T08
+    planned_evidence:
+    - t08-focused
+  REQ-LOCAL-007:
+    stage_status: active
+    primary_owner: T16
+    planned_evidence:
+    - t16-focused
+  REQ-CLI-036:
+    stage_status: active
+    primary_owner: T16
+    planned_evidence:
+    - t16-focused
+  REQ-VERIFY-023:
+    stage_status: active
+    primary_owner: T17
+    planned_evidence:
+    - final-delivery
 ```

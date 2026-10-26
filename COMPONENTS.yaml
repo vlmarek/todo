@@ -205,14 +205,17 @@ interfaces:
 - id: synchronized-state
   owner: workflows
   status: provisional
-  description: todo_lib.workflows.sync loads consistent state under caller-held lock, performs current
-    retrieval then required evidence-based disappearance/lifecycle reconciliation using history retrieval,
-    merges protected pending history and publishes a complete valid snapshot/history/binding timezone
-    association. refresh(clear_cache=False) deletes only cache when explicitly authorized; read_local()
-    performs zero HTTP. Return Snapshot/history/one command time plus classified failure, last successful
-    cache and safe read-only recovery facts. Mutation callers invoke reconciliation after every accepted
-    operation; unknown outcomes cannot publish invented acceptance. Retain old cache and pending history
-    on failure, without persisted validity modes.
+  description: todo_lib.workflows.sync loads consistent state under caller-held lock, performs current retrieval
+    then required evidence-based disappearance/lifecycle reconciliation using history retrieval, merges
+    protected pending history and publishes a complete valid snapshot/history/binding timezone association.
+    refresh(clear_cache=False) deletes only cache when explicitly authorized; read_local() performs zero
+    HTTP. Return Snapshot/history/one command time plus classified failure and applicable saved-state/read-only
+    recovery facts. Mutation callers invoke reconciliation after every accepted operation; unknown outcomes
+    cannot publish invented acceptance. Before first replacement retain prior files unless explicitly cleared.
+    Publication is per-file atomic under REQ-CACHE-009/010 and REQ-LOCAL-007; after a successful replacement
+    later failure may leave a mixed set requiring explicit recovery. Preserve pending-history content and
+    reject incompatible associations. Failure facts follow REQ-CLI-036 without claiming old-snapshot usability
+    or automatic repair; no persisted validity modes.
 - id: rendered-documents
   owner: presentation
   status: provisional

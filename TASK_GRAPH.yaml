@@ -1,7 +1,7 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-002
-predecessor_revision_id: TODO3-PLAN-001
+revision_id: TODO3-PLAN-003
+predecessor_revision_id: TODO3-PLAN-002
 contract_sources:
 - COMPONENTS.yaml
 - docs/implementation/provider-contracts.md
@@ -13,6 +13,7 @@ contract_sources:
 - docs/design/out-of-scope.md
 - docs/design/output-contract.md
 - docs/design/product.md
+- docs/design/publication-failure.md
 - docs/design/quality-requirements.md
 - docs/design/security.md
 - docs/design/todoist-adapter.md
@@ -197,14 +198,17 @@ interfaces:
   source_path: COMPONENTS.yaml
 - id: synchronized-state
   owner: workflows
-  description: todo_lib.workflows.sync loads consistent state under caller-held lock, performs current
-    retrieval then required evidence-based disappearance/lifecycle reconciliation using history retrieval,
-    merges protected pending history and publishes a complete valid snapshot/history/binding timezone
-    association. refresh(clear_cache=False) deletes only cache when explicitly authorized; read_local()
-    performs zero HTTP. Return Snapshot/history/one command time plus classified failure, last successful
-    cache and safe read-only recovery facts. Mutation callers invoke reconciliation after every accepted
-    operation; unknown outcomes cannot publish invented acceptance. Retain old cache and pending history
-    on failure, without persisted validity modes.
+  description: todo_lib.workflows.sync loads consistent state under caller-held lock, performs current retrieval
+    then required evidence-based disappearance/lifecycle reconciliation using history retrieval, merges
+    protected pending history and publishes a complete valid snapshot/history/binding timezone association.
+    refresh(clear_cache=False) deletes only cache when explicitly authorized; read_local() performs zero
+    HTTP. Return Snapshot/history/one command time plus classified failure and applicable saved-state/read-only
+    recovery facts. Mutation callers invoke reconciliation after every accepted operation; unknown outcomes
+    cannot publish invented acceptance. Before first replacement retain prior files unless explicitly cleared.
+    Publication is per-file atomic under REQ-CACHE-009/010 and REQ-LOCAL-007; after a successful replacement
+    later failure may leave a mixed set requiring explicit recovery. Preserve pending-history content and
+    reject incompatible associations. Failure facts follow REQ-CLI-036 without claiming old-snapshot usability
+    or automatic repair; no persisted validity modes.
   source_path: COMPONENTS.yaml
 - id: rendered-documents
   owner: presentation
@@ -1174,32 +1178,51 @@ tasks:
     Preserve known objects/comments/ancestry on externally established completion, reconcile reopen/moves/deletions/scope
     departure and let current truth override observations including known-to-null added_at. Missing active
     identity alone proves nothing: fetch supported lifecycle evidence or fail. Merge pending history independently
-    of cache and retain it through failed refresh/publication and explicit cache clear, with identity/publication
-    consistency. Newly invalid remote state prevents synchronized normal output/mutations but preserves
-    old cache; subsequent offline reads can use it with age warning (>24 elapsed hours). Clear only after
-    syntax/config/binding/path/lock validation, disclose deletion even if rebuild fails. No persisted
-    clean/outdated/blocked mode or automatic sync-token classifier. Expose post-accepted-operation reconciliation
-    and errors distinguishing remote outcome from local failure, without replay or false external-repair
-    advice.'
+    of cache and retain required contents through failed refresh and explicit cache clear, with per-file
+    protection on publication, with identity/publication consistency. Newly invalid remote state prevents
+    synchronized normal output/mutations but preserves old cache before publication begins; subsequent offline
+    reads can use a consistent saved snapshot with age warning (>24 elapsed hours). Clear only after syntax/config/binding/path/lock
+    validation, disclose deletion even if rebuild fails. No persisted clean/outdated/blocked mode or automatic
+    sync-token classifier. Expose post-accepted-operation reconciliation and errors distinguishing remote
+    outcome from local failure, without replay or false external-repair advice.'
   failure_domain: External lifecycle changes survive refresh/restart/cache rebuild until finalized reporting
     releases them.
-  verification_rationale: Start by observing open A and nested B with own comment through real adapter
-    mapping, then fake a supported external completion while A remains open. Observe retention after refresh,
-    new process reload and clear/rebuild; do not seed completed history. Compare old cache/cursor bytes
-    after failed delta, invalid remote state or file replace and verify later offline access has zero
-    HTTP. Confirmed deletion/departure removes managed data from both stores; unresolved disappearance
-    fails. Corrupt/missing required history survives clear attempt unchanged; no silent reset. Account/timezone/publication
-    mismatch and unrelated-data disk/output checks cover inherited constraints. Run the named focused
-    unittest command while implementing; it is a starting point for relevant dependency checks. Required
-    tests must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly
-    run a full suite for each role.
-  correction_instructions: Use T19 precise state/history/model contracts throughout current-truth merge,
+  verification_rationale: Start by observing open A and nested B with own comment through real adapter mapping,
+    then fake a supported external completion while A remains open. Observe retention after refresh, new
+    process reload and clear/rebuild; do not seed completed history. Compare old cache/cursor bytes after
+    failed delta, invalid remote state or failure before the first successful replacement and verify later
+    coherent offline access has zero HTTP; later-file failure follows REQ-VERIFY-023. Confirmed deletion/departure
+    removes managed data from both stores; unresolved disappearance fails. Corrupt/missing required history
+    survives clear attempt unchanged; no silent reset. Account/timezone/publication mismatch and unrelated-data
+    disk/output checks cover inherited constraints. Run the named focused unittest command while implementing;
+    it is a starting point for relevant dependency checks. Required tests must not silently skip. The runner
+    owns settled integrated/final broad checks; do not repeatedly run a full suite for each role.
+  correction_instructions: 'Use T19 precise state/history/model contracts throughout current-truth merge,
     pending observations and publication. Extend the existing observed-open -> supported external completion
     -> refresh/restart -> cache-clear/rebuild slice with a >6-digit creation value and precise comment/completion
     evidence. Read the public store after serialization/reload and assert exact keys/text rather than a
     datetime projection; a later authoritative null must replace an older known creation value in both applicable
-    stores. Preserve pending context and old bytes on failed sync/publication. No raw-wire timestamp side
-    channel.
+    stores. Preserve pending context and old bytes before publication begins; later-file failure follows
+    the current per-file boundary. No raw-wire timestamp side channel. Publication boundary: docs/design/publication-failure.md
+    supplies the scoped successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010,
+    REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit
+    scope. After the first successful destination replacement, later failure may leave individually complete
+    mixed files requiring explicit recovery; never promise a usable old snapshot or accept a mixed view.
+    Preserve pre-publication files, pending-history content, exact timestamps, remote outcome classification
+    and no mutation replay. Use the accepted local StateStore publisher as supplied: its per-file cache/history/(initial
+    cursor)/binding sequence and mixed-set refusal are intended, not a storage defect to repair. Start from
+    todo_lib/local/store.py StateStore.load_consistent_state/prepare_candidates/publish_snapshot and accepted
+    adapter APIs. Classify retrieval, candidate preparation and local publication failures separately. Report
+    actual cache clearing and publication uncertainty truthfully, including that a new cache file may already
+    have been written; remove any unconditional "no new complete cache published"/"history preserved" claim
+    after later-file failure. Existing read-only refresh is advice only where local validation permits it;
+    otherwise identify consistent-set restoration or applicable init rerun. Do not bypass required history/binding
+    validation. In tests/workflows/sync, retain failed-retrieval/first-replacement byte preservation, and
+    add a controlled later-history or binding replacement failure through the actual store. Observe complete
+    destination bytes and needed pending-history content, then perform a new-process offline read with zero
+    HTTP and require mixed-set refusal or coherent saved-state loading. This verifies the current publisher;
+    no rollback, journal, extra storage task or local source edit is requested. Retained incident evidence
+    is historical; abandoned candidate edits are not a new task input.'
   requirement_refs:
   - REQ-SYNC-005
   - REQ-CACHE-008
@@ -1207,6 +1230,8 @@ tasks:
   - REQ-CACHE-005
   - REQ-CLI-029
   - REQ-SEC-007
+  - REQ-CACHE-009
+  - REQ-CACHE-010
   constraint_refs:
   - REQ-ARCH-002
   - REQ-CLI-032
@@ -1227,7 +1252,45 @@ tasks:
   - REQ-VERIFY-013
   - REQ-VERIFY-020
   - REQ-VERIFY-022
-  exclusion_refs: *id001
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  exclusion_refs: &publication_exclusions
+  - OUT-PLAN-001
+  - OUT-DATA-001
+  - OUT-PLAT-001
+  - OUT-PLAT-002
+  - OUT-I18N-001
+  - OUT-OUTPUT-001
+  - OUT-OUTPUT-005
+  - OUT-SELECT-001
+  - OUT-AUTH-001
+  - OUT-COLLAB-001
+  - OUT-SEARCH-001
+  - OUT-BACKEND-001
+  - OUT-OPS-001
+  - OUT-OPS-003
+  - OUT-FEATURE-001
+  - OUT-TIME-001
+  - OUT-PACKAGE-001
+  - OUT-SEC-001
+  - OUT-PRIVACY-001
+  - OUT-HISTORY-001
+  - OUT-ARCHIVE-001
+  - OUT-TEST-001
+  - OUT-NFR-001
+  - OUT-NFR-002
+  - OUT-NFR-003
+  - OUT-NFR-004
+  - OUT-CONC-001
+  - OUT-SIGNAL-001
+  - OUT-REPORT-001
+  - OUT-LOGGING-001
+  - OUT-PROVISION-002
+  - OUT-BUNDLE-001
+  - OUT-USABILITY-001
+  - OUT-DIAG-001
+  - OUT-LOCAL-001
   component_refs:
   - workflows
   provides_interface_refs:
@@ -1400,12 +1463,21 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: Consume precise persisted snapshots/history and adapted rendering. Extend the
+  correction_instructions: 'Consume precise persisted snapshots/history and adapted rendering. Extend the
     existing cache-first recursive inspection case with reverse-ID siblings differing below a microsecond
     and a null sibling; after store reload the known newer child precedes the older child, unknown remains
     last, and owner comments retain exact chronological order without extra HTTP or changed compact text.
     Use shared instant helpers for any lifecycle selector keys; preserve existing no-match versus state-error
-    behavior.
+    behavior. Publication boundary: docs/design/publication-failure.md supplies the scoped successors to
+    the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036
+    to this task; old selected definitions remain binding outside that explicit scope. After the first successful
+    destination replacement, later failure may leave individually complete mixed files requiring explicit
+    recovery; never promise a usable old snapshot or accept a mixed view. Preserve pre-publication files,
+    pending-history content, exact timestamps, remote outcome classification and no mutation replay. Propagate
+    synchronized-state publication errors without rendering partial results, translating them to no-match,
+    or initiating HTTP on an offline read. In the existing refresh-failure/read case use an actual mixed
+    publication fixture and assert zero-HTTP refusal; keep valid older coherent snapshots readable with
+    the ordinary age warning.'
   requirement_refs:
   - REQ-CLI-034
   - REQ-CLI-027
@@ -1433,7 +1505,11 @@ tasks:
   - REQ-VERIFY-017
   - REQ-VERIFY-020
   - REQ-VERIFY-022
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  exclusion_refs: *publication_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -1520,11 +1596,21 @@ tasks:
     implementing; it is a starting point for relevant dependency checks. Required tests must not silently
     skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
     each role.
-  correction_instructions: Use T19 precise local/model contracts for preflight and initialization candidates.
+  correction_instructions: 'Use T19 precise local/model contracts for preflight and initialization candidates.
     Through the actual current adapter and public store, retain a >6-digit creation timestamp through first
     publication and reload, and preserve pending precise history/cursor on repeat initialization. Null creation
     stays valid and required malformed timestamps still block provisioning. Extend existing initialization
-    fixtures; do not add another setup workflow or new public option.
+    fixtures; do not add another setup workflow or new public option. Publication boundary: docs/design/publication-failure.md
+    supplies the scoped successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010,
+    REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit
+    scope. After the first successful destination replacement, later failure may leave individually complete
+    mixed files requiring explicit recovery; never promise a usable old snapshot or accept a mixed view.
+    Preserve pre-publication files, pending-history content, exact timestamps, remote outcome classification
+    and no mutation replay. First and repeat init use the same per-file boundary. Preserve existing cursor
+    and all still-required pending observations in candidates; after partial publication retain available
+    bytes and disclose failure/accepted remote provisions rather than claiming whole-set preservation. Reuse
+    partial-binding initialization evidence and distinguish an idempotent init rerun from a mixed existing
+    binding/history set requiring manual consistent-set restoration.'
   requirement_refs:
   - REQ-INIT-005
   - REQ-INIT-008
@@ -1552,7 +1638,12 @@ tasks:
   - REQ-VERIFY-018
   - REQ-VERIFY-019
   - REQ-VERIFY-022
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  exclusion_refs: *publication_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -1641,11 +1732,21 @@ tasks:
     T16 supplies public composition. Run the named focused unittest command while implementing; it is
     a starting point for relevant dependency checks. Required tests must not silently skip. The runner
     owns settled integrated/final broad checks; do not repeatedly run a full suite for each role.
-  correction_instructions: Preserve precise timestamps and nullable creation values in copied/replaced/reconciled
+  correction_instructions: 'Preserve precise timestamps and nullable creation values in copied/replaced/reconciled
     model records using T19 helpers; scalar changes and creation-time completion must not round unrelated
     fields. Extend an existing scheduling/creation after-state fixture with a precise known sibling and
     a null creation value, verifying exact fields through returned/published state. General recursive existing-tree
     done belongs to T18; the original goal reference to T13 is a stale pointer, not lifecycle ownership.
+    Publication boundary: docs/design/publication-failure.md supplies the scoped successors to the earlier
+    cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this
+    task; old selected definitions remain binding outside that explicit scope. After the first successful
+    destination replacement, later failure may leave individually complete mixed files requiring explicit
+    recovery; never promise a usable old snapshot or accept a mixed view. Preserve pre-publication files,
+    pending-history content, exact timestamps, remote outcome classification and no mutation replay. Creation/scalar/scheduling
+    workflows consume synchronized-state failure facts. Preserve accepted/unknown/unattempted remote receipts
+    after failed publication and do not replay to repair local state. Adapt existing controlled after-state/failure
+    fixtures to the scoped boundary; detailed publisher evidence is supplied by T08 and recurring mutation
+    evidence by T18.'
   requirement_refs:
   - REQ-CREATE-007
   - REQ-CREATE-008
@@ -1680,7 +1781,11 @@ tasks:
   - REQ-VERIFY-011
   - REQ-VERIFY-018
   - REQ-VERIFY-021
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  exclusion_refs: *publication_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -1770,11 +1875,20 @@ tasks:
     unittest command while implementing; it is a starting point for relevant dependency checks. Required
     tests must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly
     run a full suite for each role.
-  correction_instructions: Keep T19 precise creation/completion/comment values and authoritative null intact
+  correction_instructions: 'Keep T19 precise creation/completion/comment values and authoritative null intact
     across subtree category moves, attachment and promotion. Extend an existing deep-subtree move/reload
     case with a >6-digit known creation timestamp and null on another descendant; compare exact keys/text
     after reconciliation/publication, preserving all stable identities and own comments. Any ordering uses
-    shared exact keys, not datetime projection.
+    shared exact keys, not datetime projection. Publication boundary: docs/design/publication-failure.md
+    supplies the scoped successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010,
+    REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit
+    scope. After the first successful destination replacement, later failure may leave individually complete
+    mixed files requiring explicit recovery; never promise a usable old snapshot or accept a mixed view.
+    Preserve pre-publication files, pending-history content, exact timestamps, remote outcome classification
+    and no mutation replay. Moves retain accepted/unknown/unattempted remote outcomes after local publication
+    failure. Preserve needed history in candidate construction, reject mixed saved sets and give applicable
+    read-only/manual recovery without replaying the move. Adapt the existing accepted-move/local-failure
+    case; reuse T08 publisher-boundary evidence.'
   requirement_refs:
   - REQ-MUT-004
   - REQ-VERIFY-012
@@ -1803,7 +1917,11 @@ tasks:
   - REQ-VERIFY-003
   - REQ-VERIFY-011
   - REQ-VERIFY-022
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  exclusion_refs: *publication_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -1897,12 +2015,23 @@ tasks:
     Run the named focused unittest command while implementing; it is a starting point for relevant dependency
     checks. Required tests must not silently skip. The runner owns settled integrated/final broad checks;
     do not repeatedly run a full suite for each role.
-  correction_instructions: Use T19 exact sibling/completion order and recent lifecycle helpers with precise
+  correction_instructions: 'Use T19 exact sibling/completion order and recent lifecycle helpers with precise
     stored cursor and provider occurrence values. Extend nested completion preview/postorder with reverse-ID
     submicrosecond creation ordering and null-last behavior. At recent reopen/deletion boundaries, distinguish
     cursor, eligible completion and fixed end within one microsecond, and select the true latest recurring
     occurrence before undo. Preserve unrelated creation/comment timestamps through reconciliation and publication;
-    use datetime conversion only for displayed timestamps, never eligibility or proof.
+    use datetime conversion only for displayed timestamps, never eligibility or proof. Publication boundary:
+    docs/design/publication-failure.md supplies the scoped successors to the earlier cache/history/interruption
+    promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions
+    remain binding outside that explicit scope. After the first successful destination replacement, later
+    failure may leave individually complete mixed files requiring explicit recovery; never promise a usable
+    old snapshot or accept a mixed view. Preserve pre-publication files, pending-history content, exact
+    timestamps, remote outcome classification and no mutation replay. In the existing accepted-recurring-operation/local-publication-failure
+    case inject a later replacement failure through the actual store: retain truthful accepted/unknown outcome
+    and stop later operations, require complete destination files and zero-HTTP mixed-set refusal or coherent
+    loading. Show read-only recovery does not complete/undo another occurrence, and identify manual restore
+    when required local validation blocks refresh. Preserve pre-publication failure coverage and pending-history
+    content; do not require an intact old snapshot after replacement has begun.'
   requirement_refs:
   - REQ-MUT-003
   - REQ-COMP-005
@@ -1937,7 +2066,12 @@ tasks:
   - REQ-VERIFY-003
   - REQ-VERIFY-011
   - REQ-VERIFY-022
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  exclusion_refs: *publication_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -2024,11 +2158,21 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: Use T19 exact keys when ordering existing owner comments into editor blocks and
-    adapted rendering for timestamp display. Extend an existing editor case with reverse-ID comments whose
-    original posted_at values differ below a microsecond, preserving oldest-first blocks, stable IDs and
-    exact timestamps of unchanged comments after reconciliation. Keep nullable posted_at handling, current
-    ownership, concurrent-change rules and all confirmation/partial-failure behavior unchanged.
+  correction_instructions: 'Use T19 exact keys when ordering existing owner comments into editor blocks
+    and adapted rendering for timestamp display. Extend an existing editor case with reverse-ID comments
+    whose original posted_at values differ below a microsecond, preserving oldest-first blocks, stable IDs
+    and exact timestamps of unchanged comments after reconciliation. Keep nullable posted_at handling, current
+    ownership, concurrent-change rules and all confirmation/partial-failure behavior unchanged. Publication
+    boundary: docs/design/publication-failure.md supplies the scoped successors to the earlier cache/history/interruption
+    promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions
+    remain binding outside that explicit scope. After the first successful destination replacement, later
+    failure may leave individually complete mixed files requiring explicit recovery; never promise a usable
+    old snapshot or accept a mixed view. Preserve pre-publication files, pending-history content, exact
+    timestamps, remote outcome classification and no mutation replay. Comment creation/editor reconciliation
+    consumes truthful publication failure facts, keeps accepted operations and later unattempted edits distinct,
+    and retains buffer/terminal/lock cleanup. Adapt existing partial/editor failure fixtures where they
+    assumed usable old state after partial publication; reuse T08 shared publisher evidence rather than
+    another publication matrix.'
   requirement_refs:
   - REQ-COMMENT-008
   - REQ-COMMENT-007
@@ -2053,7 +2197,11 @@ tasks:
   - REQ-SYNC-026
   - REQ-VERIFY-003
   - REQ-VERIFY-011
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  exclusion_refs: *publication_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -2119,15 +2267,15 @@ tasks:
   goal: Implement report-finalization using full behavior/report and provider-contract notes. Local show/set
     cursor requires no HTTP/cache; setter accepts explicitly valid supplied boundary with missing/readable-corrupt
     prior value, one accurate warning and documented confirmation/--yes, never cleanup. Report validates
-    syntax before lock then reloads state and captures one fixed end immediately before HTTP; current
-    resources/comments remain current truth, events/completions filter (start,end]. Required history capabilities/current
-    retention boundary checked without plan_name lookup. Retrieve every required page/window/owner/own-comment
-    before normal report output, fail unavailable archived metadata rather than omit/fabricate/delete.
-    Build Finished root-task occurrences, Progress deep-step occurrences/latest qualifying surviving comment
-    edits, recurring undo pairing and current Hidden snapshot with context once. Honor current role/category/scope/survival,
-    precise sorting/ties and all exact framing. Preview including explicit intervals/pager early quit
-    never changes cursor/history. Final always bypasses pager, complete in-memory render/write/flush then
-    atomic fixed-end cursor then safe covered-history cleanup retaining newer context. A cleanup error
+    syntax before lock then reloads state and captures one fixed end immediately before HTTP; current resources/comments
+    remain current truth, events/completions filter (start,end]. Required history capabilities/current retention
+    boundary checked without plan_name lookup. Retrieve every required page/window/owner/own-comment before
+    normal report output, fail unavailable archived metadata rather than omit/fabricate/delete. Build Finished
+    root-task occurrences, Progress deep-step occurrences/latest qualifying surviving comment edits, recurring
+    undo pairing and current Hidden snapshot with context once. Honor current role/category/scope/survival,
+    precise sorting/ties and all exact framing. Preview including explicit intervals/pager early quit never
+    advances cursor or releases pending history. Final always bypasses pager, complete in-memory render/write/flush
+    then atomic fixed-end cursor then safe covered-history cleanup retaining newer context. A cleanup error
     leaves successful cursor/output and reports safe extra data; every earlier failure preserves cursor/pending
     data.
   failure_domain: A report covers exactly its fixed interval and advances/releases history only after
@@ -2135,22 +2283,35 @@ tasks:
   verification_rationale: 'Compose actual retrieval/persistence/rendering with independent endpoint fixtures
     and failure injection: exact cursor/end/subsecond windows, repeated/missing pages, string annotations,
     current post-boundary text but next-interval event, paired recurring undo, step-owner comment without
-    interval completion and unresolved archived parent. Test capability false/0/-1/positive and start
-    at/before retained boundary, warning suppression never hard-failure suppression. Output/flush/broken
-    pipe/render/cursor failures and SIGINT preserve bytes; successful empty final advances. Separate processes
-    acquire lock before reading cursor. History newer-context cleanup and cleanup-failure ordering are
-    observed, not preseeded eligibility; use T08-produced pending records and no guessed archive endpoint.
-    Run the named focused unittest command while implementing; it is a starting point for relevant dependency
-    checks. Required tests must not silently skip. The runner owns settled integrated/final broad checks;
-    do not repeatedly run a full suite for each role.'
-  correction_instructions: Use T19 parse_boundary and exact instant helpers for report/cursor validation,
+    interval completion and unresolved archived parent. Test capability false/0/-1/positive and start at/before
+    retained boundary, warning suppression never hard-failure suppression. Output/flush/broken pipe/render/cursor
+    failures and SIGINT preserve the cursor and required pending-history content; snapshot refresh follows
+    the per-file boundary; successful empty final advances. Separate processes acquire lock before reading
+    cursor. History newer-context cleanup and cleanup-failure ordering are observed, not preseeded eligibility;
+    use T08-produced pending records and no guessed archive endpoint. Run the named focused unittest command
+    while implementing; it is a starting point for relevant dependency checks. Required tests must not silently
+    skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
+    each role.'
+  correction_instructions: 'Use T19 parse_boundary and exact instant helpers for report/cursor validation,
     no-op comparisons, event ordering, (start,fixed end] filtering, latest comment edit/recurring undo pairing
     and history cleanup authorization. Safely widen coarse wire windows while preserving exact local endpoints.
     A distinguishing integrated case places cursor, eligible activity and fixed end within one microsecond
-    with reverse-ID events and newer pending descendant context beyond the end. Preview preserves bytes;
-    successful final writes/flushes complete output, persists the exact fixed end, then prunes only covered
-    observations. Reload cursor/history to prove the newer context survives. Preserve required pre-cursor-save
-    failure behavior and unchanged compact/absolute output templates.
+    with reverse-ID events and newer pending descendant context beyond the end. Preview preserves cursor
+    bytes and required pending-history content without cleanup; successful final writes/flushes complete
+    output, persists the exact fixed end, then prunes only covered observations. Reload cursor/history to
+    prove the newer context survives. Preserve required pre-cursor-save failure behavior and unchanged compact/absolute
+    output templates. Publication boundary: docs/design/publication-failure.md supplies the scoped successors
+    to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036
+    to this task; old selected definitions remain binding outside that explicit scope. After the first successful
+    destination replacement, later failure may leave individually complete mixed files requiring explicit
+    recovery; never promise a usable old snapshot or accept a mixed view. Preserve pre-publication files,
+    pending-history content, exact timestamps, remote outcome classification and no mutation replay. The
+    publication limitation concerns snapshot sets; it does not weaken report output-before-cursor or cleanup-after-finalization.
+    If report preparation refresh partially publishes, fail before normal report output/cursor advance and
+    retain available pending-history bytes without resetting association. Keep cursor-write/output/flush
+    failures preserving the old cursor and required history and cleanup failure retaining newer context.
+    Adapt only any whole-set-preservation assertions in refresh failure fixtures; retain independent report
+    failure expectations.'
   requirement_refs:
   - REQ-REPORT-013
   - REQ-REPORT-014
@@ -2179,7 +2340,12 @@ tasks:
   - REQ-VERIFY-013
   - REQ-VERIFY-018
   - REQ-VERIFY-022
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  exclusion_refs: *publication_exclusions
   component_refs:
   - workflows
   provides_interface_refs:
@@ -2315,7 +2481,20 @@ tasks:
     using actual adapter, persisted state and rendering with >6-digit provider timestamps: exact order and
     cursor survive reload while human templates remain unchanged. Reuse focused dependency evidence for
     detailed null/invalid/ordering cases; scripts/check includes the new domain/local cases once in its
-    complete suite and self-tests still use synthetic mini-suites.'
+    complete suite and self-tests still use synthetic mini-suites. Publication boundary: docs/design/publication-failure.md
+    supplies the scoped successors to the earlier cache/history/interruption promises. Apply REQ-CACHE-009/010,
+    REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions remain binding outside that explicit
+    scope. After the first successful destination replacement, later failure may leave individually complete
+    mixed files requiring explicit recovery; never promise a usable old snapshot or accept a mixed view.
+    Preserve pre-publication files, pending-history content, exact timestamps, remote outcome classification
+    and no mutation replay. Own composed CLI diagnostics and SIGINT policy for the new boundary. Reuse focused
+    sync/init/lifecycle/report evidence and add representative public refresh and accepted-mutation publication
+    failures, with a later binding failure or handled interruption at the changed boundary. Verify nonzero
+    (1 ordinary, 130 SIGINT), no synchronized normal output, correct accepted/unknown/unattempted receipts,
+    complete old/candidate destination files, zero-HTTP new-process mixed-set refusal and useful existing
+    recovery advice without promising refresh always works. Stop later remote operations and preserve cursor/history
+    finalization ordering. Adapt stale fixtures/diagnostics in declared runtime/test scope only for demonstrated
+    gaps; no storage redesign or broadened full-suite schedule.'
   requirement_refs:
   - REQ-PROD-004
   - REQ-PROD-005
@@ -2330,6 +2509,8 @@ tasks:
   - REQ-VERIFY-011
   - REQ-VERIFY-018
   - REQ-VERIFY-020
+  - REQ-LOCAL-007
+  - REQ-CLI-036
   constraint_refs:
   - REQ-ARCH-002
   - REQ-BUILD-002
@@ -2422,7 +2603,10 @@ tasks:
   - REQ-VERIFY-019
   - REQ-VERIFY-021
   - REQ-VERIFY-022
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-VERIFY-023
+  exclusion_refs: *publication_exclusions
   component_refs:
   - domain
   - local
@@ -2585,13 +2769,25 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: Audit the T19 precision repair and consumer regressions against REQ-DOM-014,
+  correction_instructions: 'Audit the T19 precision repair and consumer regressions against REQ-DOM-014,
     REQ-SYNC-027, REQ-CLI-021 and existing report/full-instant requirements. In an existing copied-runtime
     read/report probe retain precise creation/comment/occurrence values through persisted reload, observe
     submicrosecond order and exact final cursor, and verify known-to-null is preserved where supplied. Reuse
     matching source evidence for detailed malformed/failure cases; do not multiply a workflow per timestamp
     field. Record actual subjects and limitations in acceptance-evidence.md. The existing final-delivery
-    gate remains the single full-suite/copy acceptance path on the settled subject.
+    gate remains the single full-suite/copy acceptance path on the settled subject. Publication boundary:
+    docs/design/publication-failure.md supplies the scoped successors to the earlier cache/history/interruption
+    promises. Apply REQ-CACHE-009/010, REQ-LOCAL-007 and REQ-CLI-036 to this task; old selected definitions
+    remain binding outside that explicit scope. After the first successful destination replacement, later
+    failure may leave individually complete mixed files requiring explicit recovery; never promise a usable
+    old snapshot or accept a mixed view. Preserve pre-publication files, pending-history content, exact
+    timestamps, remote outcome classification and no mutation replay. Own final REQ-VERIFY-023 evidence
+    and operational documentation for the accepted limitation. Reuse observed T08/T11/T18/T16 evidence for
+    pre-first/later replacement and SIGINT where adequate; fill only concrete gaps. Document partial publication,
+    possibly unusable saved snapshots, mixed-set refusal, optional read-only refresh where applicable and
+    manual consistent-set restoration/init rerun where validation blocks it. Preserve pending history in
+    recoverable files and disclose full-directory reset loss. Audit ordinary refresh and accepted recurring
+    mutation recovery without another completion/undo. The sole final-delivery broad gate remains unchanged.'
   requirement_refs:
   - REQ-PLAT-002
   - REQ-BUILD-002
@@ -2599,6 +2795,7 @@ tasks:
   - REQ-VERIFY-005
   - REQ-OPS-001
   - REQ-VERIFY-022
+  - REQ-VERIFY-023
   constraint_refs:
   - REQ-ARCH-002
   - REQ-CACHE-005
@@ -2698,7 +2895,11 @@ tasks:
   - REQ-VERIFY-019
   - REQ-VERIFY-020
   - REQ-VERIFY-021
-  exclusion_refs: *id001
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  exclusion_refs: *publication_exclusions
   component_refs:
   - domain
   - local
@@ -2993,6 +3194,11 @@ stages:
   - REQ-VERIFY-020
   - REQ-VERIFY-021
   - REQ-VERIFY-022
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
   satisfied_requirement_refs: []
   deferred_requirement_refs: []
   check_refs:
