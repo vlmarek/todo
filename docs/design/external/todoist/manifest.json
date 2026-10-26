@@ -1,0 +1,26 @@
+{
+  "source_url": "https://developer.todoist.com/api/v1/",
+  "retrieved_at": "2026-10-24T14:36:15.204899+00:00",
+  "provider_version": "1",
+  "openapi_version": "3.1.0",
+  "provider_revision": "No date/build revision supplied by info.version; 1 is the API version, not an immutable release.",
+  "source_sha256": "85bba920a17775bef721448bbcb83a763611514bfb4e192987f60dca03837d04",
+  "source_size": 4268992,
+  "retained_file": "upstream/api-v1.openapi.json",
+  "sha256": "9a7c4816042e5c1b66935f2be1cf83da953dc459649ee606ac364d1acbc4764c",
+  "size": 768312,
+  "extraction": "Unchanged complete JSON object at spec.data in the published HTML __redoc_state; exact UTF-8 bytes extracted, no reserialization.",
+  "byte_offset": 3039971,
+  "additional_sources": [
+    {
+      "source_url": "https://www.todoist.com/help/todoist/features/use-sub-tasks-in-todoist-kMamDo",
+      "retrieved_at": "2026-10-24T15:17:27.658779+00:00",
+      "provider_updated_at": "2026-10-15",
+      "provider_revision": "Public help article; no immutable version identifier supplied",
+      "retained_file": "upstream/subtasks-help.html",
+      "sha256": "25cc94ba28f3926a1523ebf5fc2c5d1b6087990b9c29e7f72b8fda7cf01f280f",
+      "size": 245058,
+      "extraction": "Unchanged complete HTTP response body"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+source_url: https://www.todoist.com/help/todoist/features/set-a-fixed-time-or-floating-time-for-a-task-YUYVp27q
+resolved_url: https://www.todoist.com/help/todoist/features/set-a-fixed-time-or-floating-time-for-a-task-YUYVp27q
+retrieved_at: '2026-10-24T18:22:06.712138+00:00'
+sha256: 8195a0d7fb47daf072d3c5bfe6456d91e4667f84969b581e6f70d5c6adaa2f9d
+size: 154112
+purpose: Supplement existing pinned API evidence for floating versus fixed wall times;
+  no published fold/gap resolution identified. Not live-provider conformance.
+retained_file: floating-time-help.txt
+format: Unchanged HTML response bytes retained as .txt within supported prepared-input
+  suffix boundary.

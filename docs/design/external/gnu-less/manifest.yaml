@@ -1,0 +1,11 @@
+{
+  "provider": "GNU less",
+  "retrieved_on": "2026-10-25",
+  "version": "590",
+  "source_url": "https://www.greenwoodsoftware.com/less/less-590.tar.gz",
+  "archive_member": "less-590/less.nro",
+  "retained_file": "upstream/less-590.txt",
+  "sha256": "8e2b2378fc56bf9cbc0e4039cea27a2cc5c1132e82b9fd116d1d76cde6a5c1c4",
+  "bytes": 76476,
+  "note": "Original upstream man source, unchanged. Version 590 matches the local feasibility probe; it is an evidence baseline, not a mandatory minimum or latest-version claim."
+}
