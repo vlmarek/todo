@@ -173,6 +173,22 @@ else:
         self.assertNotIn('timezone', raw)
         self.assertEqual(raw['sync_token'], 'delta-token')
 
+    def test_stored_project_seed_then_shared_change_preserves_state(self):
+        # setUp retrieved is_shared-only projects through full plus freshness,
+        # then published them. Refresh reloads the internal saved representation.
+        workflow, _ = self.workflow([self.sync('delta-token', delta())])
+        workflow.refresh()
+        state = StateStore(self.root).load_consistent_state()
+        self.assertFalse(state.snapshot.root.shared)
+        self.assertFalse(state.snapshot.categories['cat'].shared)
+        before = self.bytes()
+        workflow, _ = self.workflow([self.sync('delta-token', delta(projects=[
+            project(is_shared=True, shared=False)]))])
+        with self.assertRaises(SyncError) as caught:
+            workflow.refresh()
+        self.assertEqual(caught.exception.phase, 'current retrieval')
+        self.assertEqual(self.bytes(), before)
+
     def test_authoritative_null_and_reopen_replace_both_stores(self):
         workflow, _ = self.workflow(self.external())
         workflow.refresh()

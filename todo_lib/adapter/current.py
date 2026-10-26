@@ -11,6 +11,9 @@ Wire authority: retained api-v1.openapi.json, Sync tag (Read resources,
 Incremental sync, Projects, Tasks, Task comments, Reminders, User plan limits),
 Due dates tag and ItemSyncView/NoteSyncView; inspected 2026-10-26. There is no
 pinned invalid-sync-token discriminator. No HTTP error triggers replacement.
+Project sharing follows required boolean is_shared in PersonalProjectSyncView/
+WorkspaceProjectSyncView (inspected 2026-10-26); the retained Sync prose says
+shared instead. Only the typed-schema spelling is supported.
 """
 from copy import deepcopy
 from dataclasses import dataclass
@@ -27,7 +30,7 @@ RESOURCE_TYPES = ('user', 'user_plan_limits', 'projects', 'items', 'labels',
                   'notes', 'reminders')
 _COLLECTIONS = RESOURCE_TYPES[2:]
 _FIELDS = {
-    'projects': ('id', 'name', 'parent_id', 'shared', 'inbox_project',
+    'projects': ('id', 'name', 'parent_id', 'is_shared', 'inbox_project',
                  'workspace_id', 'is_archived', 'is_deleted'),
     'items': ('id', 'project_id', 'parent_id', 'content', 'description', 'priority',
               'checked', 'labels', 'due', 'added_at', 'completed_at', 'is_deleted'),
@@ -110,7 +113,12 @@ def _account(user, limits, binding):
 
 def _project(raw):
     _bool(_required(raw, 'is_deleted'), 'project.is_deleted')
-    shared = _bool(_required(raw, 'shared'), 'project.shared')
+    if 'is_shared' not in raw:
+        raise CurrentError('missing required project.is_shared; expected boolean')
+    value = raw['is_shared']
+    if value is None:
+        raise CurrentError('project.is_shared is null; expected boolean')
+    shared = _bool(value, 'project.is_shared')
     archived = _bool(_required(raw, 'is_archived'), 'project.is_archived')
     inbox = _bool(raw.get('inbox_project', False), 'project.inbox_project')
     workspace = raw.get('workspace_id')
@@ -161,7 +169,7 @@ def _seed(snapshot):
     state = {name: {} for name in _COLLECTIONS}
     for p in (snapshot.root, *snapshot.categories.values()):
         state['projects'][p.id] = dict(id=p.id, name=p.name, parent_id=p.parent_id,
-            shared=p.shared, workspace_id=p.workspace_id, is_archived=p.archived,
+            is_shared=p.shared, workspace_id=p.workspace_id, is_archived=p.archived,
             is_deleted=p.deleted)
     def stamp(value):
         return None if value is None else instant_text(value)

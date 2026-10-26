@@ -194,3 +194,63 @@ The observation text was finalized after the run; no executable/runtime/test byt
 changed after the recorded fingerprint/gate. The exact immutable Docker digest is
 a runner-side provenance limitation, and live provider/smoke behavior remains
 unverified. These are not represented as additional observed acceptance passes.
+
+
+### T20 revision 6 repair observations (2026-10-26, offline)
+
+Subject: the assigned T20 worktree, with provider sharing interpretation and
+wizard discovery diagnostics repaired after the accepted T01-T19 history above.
+Historical evidence bytes are retained. Offline inspection of retained
+`docs/design/external/todoist/upstream/api-v1.openapi.json` confirmed that
+`PersonalProjectSyncView` and `WorkspaceProjectSyncView` require boolean
+`is_shared`, define no `shared` property, and conflict with the retained Sync
+Projects prose's `shared` spelling. This repair follows the selected typed-schema
+contract; it does not refresh upstream evidence or establish live provider facts.
+
+`_FIELDS`, mapping and saved-snapshot seeding now consume/reconstruct `is_shared`;
+internal `Project.shared` and the saved representation remain unchanged. Missing,
+null, numeric 0/1, string and array sharing values fail with field/boolean facts,
+even with `shared:false`. Valid `is_shared` ignores conflicting or malformed
+unknown `shared`. Duplicate comparisons consume the corrected key; tombstones,
+unrelated-data discard and the other existing mappings remain covered. Existing
+adapter full-plus-one-delta and codec seed cases, normal wizard/populated init,
+post-provision checks and repeat-init cursor/pending-history cases now use the
+corrected shared factory. Added cases prove shared/Inbox/workspace choice
+exclusion, managed root/category rejection including `is_shared:true` with
+`shared:false`, storage reload plus omitted-project refresh, and preservation of
+saved bytes after a later shared-project change.
+
+Public `cli.main(['init'])` cases compose the actual Initializer, current mapper
+and Transport with request-checking ControlledHTTP. Missing/null `is_shared`,
+HTTP 401 and network failure return status 1 with `remote discovery failed`, no
+terminal remedy, no secret/provider-body disclosure, no fallback/provisioning,
+and no configuration or snapshot publication. Only the protected setup directory
+and lock are created. Existing stdin/stdout checks and a strengthened hidden-input
+failure case retain terminal diagnostics. Existing saved-config/preflight,
+provisioning, cancellation and publication/manual-recovery cases are reused.
+
+Observed checks:
+
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.workflows.init.test_init tests.workflows.sync.test_sync tests.cli.test_composition.PublicInit -v`
+  completed with exit 0: 111 tests, no skips (final captured output:
+  `/tmp/t20-focused-verified.log`). An initial run passed; an intermediate rerun
+  exposed a new test assertion expecting "hidden" where the retained diagnostic
+  says "cannot hide input". The assertion was corrected before the final pass.
+- A temporary-copy Python harness copied the unchanged launcher/module tree and
+  the corrected independent `tests/delivery/final/copy_probe.py`, then ran
+  `python3.11 -I -B <outside>/copy_probe.py <install>` with protected temporary
+  HOME, allowlisted environment and copied launcher on PATH. Exit 0: all 11
+  separate-process phases passed (init, mutation, repeat, external, read, rebuild,
+  read, preview, failure, final, cleanup); runtime bytes matched after execution.
+  Captured output: `/tmp/t20-copy-probe.log`. This targeted delivery probe was
+  selected because its independent provider literal changed; it is not a claim
+  that the entire final-delivery gate ran here.
+- `git diff --check` passed after the repair and evidence append.
+
+All responses and credentials were synthetic; no real account, real ~/.todo,
+authenticated live request or live mutation was used. No live-provider observation
+or user smoke result is claimed. The complete `scripts/verify-clean` final-delivery
+and integrated runner gates remain CML responsibilities at their eligible
+boundaries. Existing subsecond and per-file publication/manual-recovery limits
+remain unchanged; no migration, compatibility fallback or recovery mechanism was
+added.
