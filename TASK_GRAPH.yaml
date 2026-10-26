@@ -1,7 +1,7 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-001
-predecessor_revision_id: null
+revision_id: TODO3-PLAN-002
+predecessor_revision_id: TODO3-PLAN-001
 contract_sources:
 - COMPONENTS.yaml
 - docs/implementation/provider-contracts.md
@@ -301,6 +301,64 @@ interfaces:
     no generated state. CPython 3.11/Bash/stdlib only. Self-tests use tiny synthetic suites rather than
     recursively launching the application suite. scripts/verify-clean from T17 composes this check once
     with distinct copied-runtime probes; it does not run scripts/check again through tests.
+  source_path: COMPONENTS.yaml
+- id: managed-model-precise
+  owner: domain
+  supersedes_ref: managed-model
+  description: Successor of managed-model, preserving its identity, hierarchy, validation, own-field,
+    null and lifecycle semantics. todo_lib.domain exports instant_from_wire(text), instant_key(value),
+    instant_text(value) and instant_datetime(value). The parser accepts valid aware RFC 3339 instants
+    without losing supplied fractional digits; malformed, naive and wrong-type values raise DomainError.
+    The shared immutable precision-carrying value and aware datetime inputs have one exact UTC instant
+    interpretation. instant_key returns a mutually comparable exact key for both; instant_text emits UTC
+    RFC 3339 preserving all supplied fractional precision; instant_datetime returns an aware datetime
+    projection for display/calendar operations only. No float or bounded-precision arithmetic may round
+    semantic comparisons. Item.added_at/completed_at, Comment.added_at, Occurrence.completed_at and LifecycleCandidate.completed_at
+    accept the shared value and existing aware datetime inputs; existing positional model construction
+    remains usable. None is valid only where the existing field contract permits it, and authoritative
+    null never falls back to old data. Validation, ordered_siblings, traversal/completion order, latest
+    occurrence and recent lifecycle interval helpers use exact keys, including mixed datetime boundaries.
+    Export and document concrete symbols/types in the domain API. Datetime projection is never the persistence,
+    delta-seeding, equality or ordering authority.
+  source_path: COMPONENTS.yaml
+- id: time-policy-precise
+  owner: domain
+  supersedes_ref: time-policy
+  description: Successor of time-policy preserving attention/reminder grammar, raw due/recurrence data,
+    exact no-op versus reconciliation tolerance, one supplied now and account-timezone/DST policy. parse_boundary
+    keeps its existing arguments and accepted date/offset-free/offset/relative forms and DomainError behavior,
+    but preserves the full supplied fractional instant using managed-model-precise values where datetime
+    is insufficient. Relative dates retain wall-clock semantics; explicit offsets retain exact instant
+    semantics. Consumers compare/persist through instant_key/instant_text and use instant_datetime only
+    for display, calendar window arithmetic or coarse retrieval bounds that are safely widened before
+    exact filtering. Existing ordinary aware-datetime clock inputs remain valid. Do not replace the existing
+    Attention API or change due tolerances as part of this correction.
+  source_path: COMPONENTS.yaml
+- id: state-store-precise
+  owner: local
+  supersedes_ref: state-store
+  description: Successor of state-store with unchanged protected path/mode checks, schema/identity/publication
+    association, single binding timezone, binding-last atomic publication and failure preservation. Existing
+    StateStore, LocalState, prepare_candidates, publish_snapshot, load_consistent_state and write_cursor
+    entry points consume/preserve managed-model-precise timestamp values as well as existing aware datetime
+    inputs. Serialize timestamps as UTC RFC 3339 strings with all supplied fractional digits and restore
+    exact instants for item/comment/occurrence fields, synced_at and report cursor. Existing valid schema-1
+    timestamp strings, including null only on nullable fields, remain readable without discarding binding/history/cursor
+    or an automatic reset. Reject malformed required timestamps with LocalError and preserve bytes. No
+    timestamp sidecar or second timezone authority. Codec dataclass conversion must explicitly serialize
+    shared timestamp values rather than leaking their internals.
+  source_path: COMPONENTS.yaml
+- id: history-store-precise
+  owner: local
+  supersedes_ref: history-store
+  description: Successor of history-store preserving separate protected pending history, stable-ID/current-truth
+    merge, required ancestors, coverage and explicit post-finalization-only cleanup. History snapshot
+    fields, observation times and Coverage endpoints retain managed-model-precise instants through merge/save/reload
+    and prune comparisons. Exact instants newer than the finalized cursor retain their required context
+    even within the same microsecond. Existing aware datetime callers and valid schema-1 files remain
+    usable. Authoritative null remains null; required completion/coverage times cannot become unknown.
+    Missing, corrupt, foreign or mixed required history fails without resetting it. Cache clear/cursor
+    set never authorize cleanup, and cleanup failure never rolls back a successful output/cursor.
   source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
@@ -805,10 +863,10 @@ tasks:
   observable_outcome: Pinned full/delta current data maps into a complete scoped model without inventing
     provider fields.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T04
     kind: interface
     interface_ref: http-transport
@@ -836,7 +894,16 @@ tasks:
     implementing; it is a starting point for relevant dependency checks. Required tests must not silently
     skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
     each role.
-  correction_instructions: null
+  correction_instructions: 'Use T19 managed-model-precise/time-policy-precise helpers for wire creation/completion/comment
+    timestamps and Snapshot-seeded delta reconstruction; never round through datetime.fromisoformat/isoformat
+    or display projections. Exercise supplied .123456789Z through full retrieval and an item-omitting unchanged
+    delta, including offset-equivalent instants, authoritative known-to-null and invalid required input.
+    Preserve complete comments/reminders when an item or project enters managed scope: unchanged owned resources
+    are not guaranteed to be re-emitted on moves. Enroll valid new direct-child categories before item filtering
+    and expose the resulting binding to the caller. Preserve documented nullable comment posted_at and ownership-first
+    validation; do not impose an unsupported comment length cap. Establish these cases through actual transport
+    and domain mapping in tests/adapter/current. Related failure evidence is INC-55fc7ee8a23146a3 and INC-71113ba8c52b455d;
+    historical correction claims are not current acceptance.'
   requirement_refs:
   - REQ-SYNC-021
   - REQ-SYNC-027
@@ -870,8 +937,8 @@ tasks:
   provides_interface_refs:
   - current-retrieval
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - http-transport
   expected_paths:
   - todo_lib/adapter/current.py
@@ -893,10 +960,10 @@ tasks:
   observable_outcome: Required completed/activity/comment pages cover the exact product interval or fail
     explicitly.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T04
     kind: interface
     interface_ref: http-transport
@@ -926,7 +993,13 @@ tasks:
     focused unittest command while implementing; it is a starting point for relevant dependency checks.
     Required tests must not silently skip. The runner owns settled integrated/final broad checks; do not
     repeatedly run a full suite for each role.
-  correction_instructions: null
+  correction_instructions: 'Consume the T19 precise model/time contract for completed Item creation/completion
+    fields, Occurrence times, activity event times and current Comment timestamps. Preserve exact values
+    in returned records and exact (start,end] eligibility; widen documented wire bounds as needed without
+    changing eligibility. A distinguishing fixture places cursor, eligible event and fixed end within one
+    microsecond: exclude the cursor event, include the fixed-end event and exclude a later event, across
+    pages/window overlap. Preserve nullable creation/comment alternatives only where the endpoint permits
+    them; required event/completion times remain required. Do not create an adapter-only timestamp representation.'
   requirement_refs:
   - REQ-SYNC-025
   constraint_refs:
@@ -952,8 +1025,8 @@ tasks:
   provides_interface_refs:
   - history-retrieval
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - http-transport
   - current-retrieval
   expected_paths:
@@ -976,10 +1049,10 @@ tasks:
   observable_outcome: Direct commands return proven accepted, rejected or unknown outcomes without duplicate
     or compensating mutations.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T04
     kind: interface
     interface_ref: http-transport
@@ -1016,7 +1089,12 @@ tasks:
     command while implementing; it is a starting point for relevant dependency checks. Required tests
     must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run
     a full suite for each role.'
-  correction_instructions: null
+  correction_instructions: Use T19 precise model/time values from current/history dependencies without datetime
+    reconstruction during operation attribution and reconciliation. Preserve exact timestamps and authoritative
+    null in accepted/rejected/unknown after-state results; occurrence proof must distinguish events that
+    differ below a microsecond. Keep command UUID/temp-ID proof and attention reconciliation tolerance unchanged.
+    Adapt tests/adapter/commands fakes to the actual dependency types and include precise after-state preservation
+    in an existing reconciliation case.
   requirement_refs:
   - REQ-SYNC-026
   constraint_refs:
@@ -1045,8 +1123,8 @@ tasks:
   provides_interface_refs:
   - mutation-gateway
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - http-transport
   - current-retrieval
   - history-retrieval
@@ -1070,10 +1148,11 @@ tasks:
   observable_outcome: External lifecycle changes survive refresh/restart/cache rebuild until finalized
     reporting releases them.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, state-store-precise,
+      history-store-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -1114,7 +1193,13 @@ tasks:
     unittest command while implementing; it is a starting point for relevant dependency checks. Required
     tests must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly
     run a full suite for each role.
-  correction_instructions: null
+  correction_instructions: Use T19 precise state/history/model contracts throughout current-truth merge,
+    pending observations and publication. Extend the existing observed-open -> supported external completion
+    -> refresh/restart -> cache-clear/rebuild slice with a >6-digit creation value and precise comment/completion
+    evidence. Read the public store after serialization/reload and assert exact keys/text rather than a
+    datetime projection; a later authoritative null must replace an older known creation value in both applicable
+    stores. Preserve pending context and old bytes on failed sync/publication. No raw-wire timestamp side
+    channel.
   requirement_refs:
   - REQ-SYNC-005
   - REQ-CACHE-008
@@ -1148,10 +1233,10 @@ tasks:
   provides_interface_refs:
   - synchronized-state
   consumes_interface_refs:
-  - managed-model
+  - managed-model-precise
   - configuration
-  - state-store
-  - history-store
+  - state-store-precise
+  - history-store-precise
   - exclusive-lock
   - current-retrieval
   - history-retrieval
@@ -1178,10 +1263,10 @@ tasks:
   observable_outcome: Supplied view data renders exact complete documents and reaches stdout or the configured
     pager with correct failures.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -1208,7 +1293,13 @@ tasks:
     implementing; it is a starting point for relevant dependency checks. Required tests must not silently
     skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
     each role.
-  correction_instructions: null
+  correction_instructions: 'Implement timestamp formatting and sorting against T19: use instant_datetime
+    only for account-local compact or absolute display and instant_key for semantic order in shared formatting,
+    owner-comment ordering and report-event rendering. Verify newest-first siblings via ordered_siblings
+    and oldest-first own comments whose timestamps differ only below a microsecond, with IDs chosen to oppose
+    the required time order; retain equal-instant stable-ID ties, nullable timestamps and exact existing
+    minute/second display templates. Datetime projection must not become a sort key. Pager behavior and
+    all existing output requirements remain binding.'
   requirement_refs:
   - REQ-OUT-019
   - REQ-OUT-015
@@ -1244,8 +1335,8 @@ tasks:
   - rendered-documents
   - document-delivery
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
   expected_paths:
   - todo_lib/presentation/**
@@ -1267,10 +1358,10 @@ tasks:
   observable_outcome: All public read populations, matching, ambiguity and refresh behavior work through
     one workflow API.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -1309,7 +1400,12 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: null
+  correction_instructions: Consume precise persisted snapshots/history and adapted rendering. Extend the
+    existing cache-first recursive inspection case with reverse-ID siblings differing below a microsecond
+    and a null sibling; after store reload the known newer child precedes the older child, unknown remains
+    last, and owner comments retain exact chronological order without extra HTTP or changed compact text.
+    Use shared instant helpers for any lifecycle selector keys; preserve existing no-match versus state-error
+    behavior.
   requirement_refs:
   - REQ-CLI-034
   - REQ-CLI-027
@@ -1343,8 +1439,8 @@ tasks:
   provides_interface_refs:
   - read-commands
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
   - command-grammar
   - prompt-input
@@ -1371,10 +1467,11 @@ tasks:
   observable_outcome: A new or populated configuration initializes the chosen managed scope safely without
     resetting prior binding/history/cursor.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, state-store-precise,
+      history-store-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -1423,7 +1520,11 @@ tasks:
     implementing; it is a starting point for relevant dependency checks. Required tests must not silently
     skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
     each role.
-  correction_instructions: null
+  correction_instructions: Use T19 precise local/model contracts for preflight and initialization candidates.
+    Through the actual current adapter and public store, retain a >6-digit creation timestamp through first
+    publication and reload, and preserve pending precise history/cursor on repeat initialization. Null creation
+    stays valid and required malformed timestamps still block provisioning. Extend existing initialization
+    fixtures; do not add another setup workflow or new public option.
   requirement_refs:
   - REQ-INIT-005
   - REQ-INIT-008
@@ -1457,10 +1558,10 @@ tasks:
   provides_interface_refs:
   - initialization
   consumes_interface_refs:
-  - managed-model
+  - managed-model-precise
   - configuration
-  - state-store
-  - history-store
+  - state-store-precise
+  - history-store-precise
   - exclusive-lock
   - command-grammar
   - prompt-input
@@ -1488,10 +1589,10 @@ tasks:
   observable_outcome: Validated creation and scheduling requests produce actual reconciled task/step state
     with ordered partial outcomes.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -1517,18 +1618,18 @@ tasks:
     interface_ref: rendered-documents
     reason: Consume completed capabilities rendered-documents and their actual exported APIs.
   goal: Implement capture-scheduling from canonical requests. Validate complete batch and proposed observable
-    result, all active sibling sets/tree hiding/capability/depth before first mutation. New tasks P2,
-    steps copy synchronized parent effective priority; repeated steps are siblings, inline steps on one
-    parent unscheduled, several parents plus inline steps invalid. Parent/inline completion order uses
-    gateway ordinary completion semantics; general recursive existing-tree done belongs to T13. Execute
-    one object and options before next, stop first failure/unknown with no rollback. Scheduling locally
-    understood values preserves recurring due metadata; unknown parser expressions only submit when required
-    comparisons are possible. Preserve reminders absent marker, replace/clear explicitly, accept minute-zero
-    only and reject duplicate equivalent offsets. hide requires future own attention day, optional reason
-    independent label, whole-ancestor/descendant validation and missing label init advice only when adding.
-    unhide preserves date/rule/reminders and reports inherited suppression; full clear removes all scheduling/hiding.
-    Reconcile actual attention <=2s only under strict day/rule/zone; print actual creation Due and truthful
-    accepted/unknown recovery.
+    result, all active sibling sets/tree hiding/capability/depth before first mutation. New tasks P2, steps
+    copy synchronized parent effective priority; repeated steps are siblings, inline steps on one parent
+    unscheduled, several parents plus inline steps invalid. Parent/inline completion order uses gateway
+    ordinary completion semantics; general recursive existing-tree done belongs to T18. Execute one object
+    and options before next, stop first failure/unknown with no rollback. Scheduling locally understood
+    values preserves recurring due metadata; unknown parser expressions only submit when required comparisons
+    are possible. Preserve reminders absent marker, replace/clear explicitly, accept minute-zero only and
+    reject duplicate equivalent offsets. hide requires future own attention day, optional reason independent
+    label, whole-ancestor/descendant validation and missing label init advice only when adding. unhide preserves
+    date/rule/reminders and reports inherited suppression; full clear removes all scheduling/hiding. Reconcile
+    actual attention <=2s only under strict day/rule/zone; print actual creation Due and truthful accepted/unknown
+    recovery.
   failure_domain: Validated creation and scheduling requests produce actual reconciled task/step state
     with ordered partial outcomes.
   verification_rationale: Workflow tests use real grammar, gateway request assertions and independent
@@ -1540,7 +1641,11 @@ tasks:
     T16 supplies public composition. Run the named focused unittest command while implementing; it is
     a starting point for relevant dependency checks. Required tests must not silently skip. The runner
     owns settled integrated/final broad checks; do not repeatedly run a full suite for each role.
-  correction_instructions: null
+  correction_instructions: Preserve precise timestamps and nullable creation values in copied/replaced/reconciled
+    model records using T19 helpers; scalar changes and creation-time completion must not round unrelated
+    fields. Extend an existing scheduling/creation after-state fixture with a precise known sibling and
+    a null creation value, verifying exact fields through returned/published state. General recursive existing-tree
+    done belongs to T18; the original goal reference to T13 is a stale pointer, not lifecycle ownership.
   requirement_refs:
   - REQ-CREATE-007
   - REQ-CREATE-008
@@ -1581,8 +1686,8 @@ tasks:
   provides_interface_refs:
   - capture-scheduling
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
   - command-grammar
   - prompt-input
@@ -1611,10 +1716,10 @@ tasks:
   observable_outcome: A known subtree changes category or parent with preserved identities and a valid
     resulting hierarchy.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -1665,7 +1770,11 @@ tasks:
     unittest command while implementing; it is a starting point for relevant dependency checks. Required
     tests must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly
     run a full suite for each role.
-  correction_instructions: null
+  correction_instructions: Keep T19 precise creation/completion/comment values and authoritative null intact
+    across subtree category moves, attachment and promotion. Extend an existing deep-subtree move/reload
+    case with a >6-digit known creation timestamp and null on another descendant; compare exact keys/text
+    after reconciliation/publication, preserving all stable identities and own comments. Any ordering uses
+    shared exact keys, not datetime projection.
   requirement_refs:
   - REQ-MUT-004
   - REQ-VERIFY-012
@@ -1700,8 +1809,8 @@ tasks:
   provides_interface_refs:
   - hierarchy-moves
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
   - command-grammar
   - prompt-input
@@ -1730,10 +1839,10 @@ tasks:
   observable_outcome: Selected work changes lifecycle with correct occurrence bounds, postorder and truthful
     partial results.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -1788,7 +1897,12 @@ tasks:
     Run the named focused unittest command while implementing; it is a starting point for relevant dependency
     checks. Required tests must not silently skip. The runner owns settled integrated/final broad checks;
     do not repeatedly run a full suite for each role.
-  correction_instructions: null
+  correction_instructions: Use T19 exact sibling/completion order and recent lifecycle helpers with precise
+    stored cursor and provider occurrence values. Extend nested completion preview/postorder with reverse-ID
+    submicrosecond creation ordering and null-last behavior. At recent reopen/deletion boundaries, distinguish
+    cursor, eligible completion and fixed end within one microsecond, and select the true latest recurring
+    occurrence before undo. Preserve unrelated creation/comment timestamps through reconciliation and publication;
+    use datetime conversion only for displayed timestamps, never eligibility or proof.
   requirement_refs:
   - REQ-MUT-003
   - REQ-COMP-005
@@ -1829,8 +1943,8 @@ tasks:
   provides_interface_refs:
   - lifecycle-transitions
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
   - command-grammar
   - prompt-input
@@ -1859,15 +1973,15 @@ tasks:
   observable_outcome: Comment creation and editing preserve stable owner identity and apply only validated
     ordered changes.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, state-store-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
-    reason: Consume completed capabilities configuration, state-store, exclusive-lock and their actual
-      exported APIs.
+    reason: Consume completed capabilities configuration, state-store, exclusive-lock and their actual exported
+      APIs.
   - task_ref: T03
     kind: interface
     interface_ref: command-grammar
@@ -1910,7 +2024,11 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: null
+  correction_instructions: Use T19 exact keys when ordering existing owner comments into editor blocks and
+    adapted rendering for timestamp display. Extend an existing editor case with reverse-ID comments whose
+    original posted_at values differ below a microsecond, preserving oldest-first blocks, stable IDs and
+    exact timestamps of unchanged comments after reconciliation. Keep nullable posted_at handling, current
+    ownership, concurrent-change rules and all confirmation/partial-failure behavior unchanged.
   requirement_refs:
   - REQ-COMMENT-008
   - REQ-COMMENT-007
@@ -1941,9 +2059,9 @@ tasks:
   provides_interface_refs:
   - comment-editing
   consumes_interface_refs:
-  - managed-model
+  - managed-model-precise
   - configuration
-  - state-store
+  - state-store-precise
   - exclusive-lock
   - command-grammar
   - prompt-input
@@ -1971,10 +2089,11 @@ tasks:
   observable_outcome: A report covers exactly its fixed interval and advances/releases history only after
     complete final output and saved cursor.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise,
+      state-store-precise, history-store-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -2024,7 +2143,14 @@ tasks:
     Run the named focused unittest command while implementing; it is a starting point for relevant dependency
     checks. Required tests must not silently skip. The runner owns settled integrated/final broad checks;
     do not repeatedly run a full suite for each role.'
-  correction_instructions: null
+  correction_instructions: Use T19 parse_boundary and exact instant helpers for report/cursor validation,
+    no-op comparisons, event ordering, (start,fixed end] filtering, latest comment edit/recurring undo pairing
+    and history cleanup authorization. Safely widen coarse wire windows while preserving exact local endpoints.
+    A distinguishing integrated case places cursor, eligible activity and fixed end within one microsecond
+    with reverse-ID events and newer pending descendant context beyond the end. Preview preserves bytes;
+    successful final writes/flushes complete output, persists the exact fixed end, then prunes only covered
+    observations. Reload cursor/history to prove the newer context survives. Preserve required pre-cursor-save
+    failure behavior and unchanged compact/absolute output templates.
   requirement_refs:
   - REQ-REPORT-013
   - REQ-REPORT-014
@@ -2059,11 +2185,11 @@ tasks:
   provides_interface_refs:
   - report-finalization
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
-  - state-store
-  - history-store
+  - state-store-precise
+  - history-store-precise
   - exclusive-lock
   - command-grammar
   - prompt-input
@@ -2091,10 +2217,11 @@ tasks:
   observable_outcome: The copied-layout public CLI reaches every canonical workflow and scripts/check
     exercises the complete offline implementation.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise,
+      state-store-precise, history-store-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -2183,7 +2310,12 @@ tasks:
     not repeated per role. Run the named focused unittest command while implementing; it is a starting
     point for relevant dependency checks. Required tests must not silently skip. The runner owns settled
     integrated/final broad checks; do not repeatedly run a full suite for each role.
-  correction_instructions: null
+  correction_instructions: 'Compose T19 precise APIs across all consumers and adapt any remaining fakes/call
+    sites only for demonstrated integration defects. Add a representative public detail/report regression
+    using actual adapter, persisted state and rendering with >6-digit provider timestamps: exact order and
+    cursor survive reload while human templates remain unchanged. Reuse focused dependency evidence for
+    detailed null/invalid/ordering cases; scripts/check includes the new domain/local cases once in its
+    complete suite and self-tests still use synthetic mini-suites.'
   requirement_refs:
   - REQ-PROD-004
   - REQ-PROD-005
@@ -2304,11 +2436,11 @@ tasks:
   - public-cli
   - routine-check
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
-  - state-store
-  - history-store
+  - state-store-precise
+  - history-store-precise
   - exclusive-lock
   - command-grammar
   - prompt-input
@@ -2348,10 +2480,11 @@ tasks:
   observable_outcome: The complete release is evidenced in the pinned Linux/amd64 Python 3.11 environment
     and works as an unchanged copied runtime.
   dependencies:
-  - task_ref: T01
+  - task_ref: T19
     kind: interface
-    interface_ref: managed-model
-    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+    interface_ref: managed-model-precise
+    reason: 'Consume the completed shared precision repair: managed-model-precise, time-policy-precise,
+      state-store-precise, history-store-precise.'
   - task_ref: T02
     kind: interface
     interface_ref: configuration
@@ -2452,7 +2585,13 @@ tasks:
     while implementing; it is a starting point for relevant dependency checks. Required tests must not
     silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
     suite for each role.
-  correction_instructions: null
+  correction_instructions: Audit the T19 precision repair and consumer regressions against REQ-DOM-014,
+    REQ-SYNC-027, REQ-CLI-021 and existing report/full-instant requirements. In an existing copied-runtime
+    read/report probe retain precise creation/comment/occurrence values through persisted reload, observe
+    submicrosecond order and exact final cursor, and verify known-to-null is preserved where supplied. Reuse
+    matching source evidence for detailed malformed/failure cases; do not multiply a workflow per timestamp
+    field. Record actual subjects and limitations in acceptance-evidence.md. The existing final-delivery
+    gate remains the single full-suite/copy acceptance path on the settled subject.
   requirement_refs:
   - REQ-PLAT-002
   - REQ-BUILD-002
@@ -2571,11 +2710,11 @@ tasks:
   - delivery
   provides_interface_refs: []
   consumes_interface_refs:
-  - managed-model
-  - time-policy
+  - managed-model-precise
+  - time-policy-precise
   - configuration
-  - state-store
-  - history-store
+  - state-store-precise
+  - history-store-precise
   - exclusive-lock
   - command-grammar
   - prompt-input
@@ -2617,6 +2756,135 @@ tasks:
   - t17-focused
   - final-delivery
   - docs/implementation/acceptance-evidence.md
+- id: T19
+  title: Repair shared exact timestamps and persistent round trips
+  origin_stage_ref: release-1
+  observable_outcome: Full supplied timestamp precision and authoritative null survive shared-model validation,
+    exact ordering, cache/history/cursor serialization and reload before adapters and presentation consume
+    the repaired contract.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Repair accepted domain implementation through new successor work while preserving original
+      assignment and still-required model/time behavior.
+  - task_ref: T02
+    kind: interface
+    interface_ref: state-store
+    reason: Repair accepted codec/history/store implementation in the same coherent task; preserve configuration,
+      locking, file safety and publication semantics.
+  goal: Implement managed-model-precise, time-policy-precise, state-store-precise and history-store-precise
+    as successors to the accepted T01/T02 implementation, without editing their frozen assignments. Start
+    from todo_lib/domain/model.py Item/Comment/Occurrence/LifecycleCandidate, _sibling_key and recent
+    lifecycle helpers; domain/time.py parse_boundary; local/codec.py instant/parse_instant/snapshot_data/snapshot_from;
+    local/history.py History/Coverage/validate_history/merge_history/prune_history; and local/store.py
+    StateStore/LocalState/prepare_candidates. Introduce one minimal shared exact-instant value and the
+    four public helper exports defined by managed-model-precise; document concrete types, allowed inputs
+    and errors in domain/API.md and affected module docstrings. Preserve existing model positional construction
+    and aware datetime inputs, exact equality for equivalent offsets, arbitrary supplied fraction digits
+    without float/context rounding, null only on nullable fields, exact sibling/lifecycle ordering and
+    report-boundary parsing. Keep display/calendar datetime conversion explicitly separate from exact
+    comparison/serialization; no adapter-only side channel or implicit projection authority. Adapt persistence
+    and pruning together so an integrated repaired model remains serializable, including asdict handling
+    of any new value. Keep existing valid schema-1 UTC timestamp strings readable; do not add a migration/reset,
+    new file or second timezone. Preserve all account/root/publication checks, binding-last fresh association,
+    safe atomic replacement, explicit cleanup authorization and current-truth merge, including known-to-null.
+    Existing due/Attention behavior, configuration, credential policy and lock APIs remain required; avoid
+    unrelated refactoring.
+  failure_domain: Shared timestamp representation, exact semantic comparison and lossless protected persistence
+    must agree in one usable prerequisite.
+  verification_rationale: 'Reuse t01-focused and t02-focused on the changed subject: they run the domain
+    and local packages separately before any adapter/workflow is required. Extend tests/domain/test_model.py,
+    tests/domain/test_time.py and tests/local/test_local.py rather than create a new harness. First establish
+    a coherent parser -> Item -> cache/history publish/reload -> ordered_siblings slice; then cover affected
+    lifecycle, comment/occurrence and pruning consumers in the same suites. Distinguishing data: .123456001Z
+    and .123456999Z with IDs opposing time order, .123456789Z round trips, offset-equivalent instants
+    and a long supplied fraction that cannot silently round through Decimal default context. Check null-last
+    siblings, known-to-null merge and malformed/naive/ wrong-type required timestamps. Compare exact keys/text
+    after public StateStore save/reload for cache and separate pending history; round-trip an exact report
+    cursor. At a finalized cursor inside one microsecond, retain later observations and their ancestor/comment
+    context; cleanup still requires completed output and saved cursor. Preserve existing safety/failure/identity,
+    DST-fold interval, hierarchy, recurrence and unknown-time tests; update fixtures only for the documented
+    successor type without weakening expectations. Future T05 owns actual HTTP/unchanged-delta evidence,
+    T09 human rendering, and T15 report orchestration; this task does not require those unavailable modules.
+    Run the two named focused commands; the runner owns whole-product gates.'
+  correction_instructions: The observed baseline truncates .123456789Z to .123456+00:00 and orders two
+    submicrosecond siblings by ID. INC-55fc7ee8a23146a3 and diagnosis DIAG-9f6ae98a53774e97 identify this
+    prerequisite gap. These are evidence, not permission to weaken precision. This task may modify accepted
+    domain/local source and tests in its declared scope; T01/T02 remain accepted historical assignments.
+    No implementation/test changes are imported by this planning revision.
+  requirement_refs: []
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-DOM-014
+  - REQ-DOM-009
+  - REQ-DOM-006
+  - REQ-DOM-012
+  - REQ-CLI-021
+  - REQ-COMP-006
+  - REQ-OUT-015
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-LOCAL-005
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-REPORT-003
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-SCHED-013
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-027
+  - REQ-SYNC-025
+  - REQ-VERIFY-003
+  - REQ-VERIFY-022
+  exclusion_refs:
+  - OUT-DATA-001
+  - OUT-OPS-003
+  - OUT-SEARCH-001
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-NFR-001
+  - OUT-NFR-003
+  - OUT-TIME-001
+  - OUT-LOGGING-001
+  - OUT-PLAT-001
+  - OUT-PLAT-002
+  - OUT-SEC-001
+  - OUT-OUTPUT-005
+  - OUT-REPORT-001
+  component_refs:
+  - domain
+  - local
+  provides_interface_refs:
+  - managed-model-precise
+  - time-policy-precise
+  - state-store-precise
+  - history-store-precise
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - state-store
+  - history-store
+  expected_paths:
+  - todo_lib/domain/**
+  - tests/domain/**
+  - todo_lib/local/**
+  - tests/local/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t01-focused
+  - t02-focused
+  required_evidence:
+  - t01-focused
+  - t02-focused
 stages:
 - id: release-1
   final_project: true

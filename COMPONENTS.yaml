@@ -309,3 +309,61 @@ interfaces:
     no generated state. CPython 3.11/Bash/stdlib only. Self-tests use tiny synthetic suites rather than
     recursively launching the application suite. scripts/verify-clean from T17 composes this check once
     with distinct copied-runtime probes; it does not run scripts/check again through tests.
+- id: managed-model-precise
+  owner: domain
+  supersedes_ref: managed-model
+  description: Successor of managed-model, preserving its identity, hierarchy, validation, own-field,
+    null and lifecycle semantics. todo_lib.domain exports instant_from_wire(text), instant_key(value),
+    instant_text(value) and instant_datetime(value). The parser accepts valid aware RFC 3339 instants
+    without losing supplied fractional digits; malformed, naive and wrong-type values raise DomainError.
+    The shared immutable precision-carrying value and aware datetime inputs have one exact UTC instant
+    interpretation. instant_key returns a mutually comparable exact key for both; instant_text emits UTC
+    RFC 3339 preserving all supplied fractional precision; instant_datetime returns an aware datetime
+    projection for display/calendar operations only. No float or bounded-precision arithmetic may round
+    semantic comparisons. Item.added_at/completed_at, Comment.added_at, Occurrence.completed_at and LifecycleCandidate.completed_at
+    accept the shared value and existing aware datetime inputs; existing positional model construction
+    remains usable. None is valid only where the existing field contract permits it, and authoritative
+    null never falls back to old data. Validation, ordered_siblings, traversal/completion order, latest
+    occurrence and recent lifecycle interval helpers use exact keys, including mixed datetime boundaries.
+    Export and document concrete symbols/types in the domain API. Datetime projection is never the persistence,
+    delta-seeding, equality or ordering authority.
+  status: provisional
+- id: time-policy-precise
+  owner: domain
+  supersedes_ref: time-policy
+  description: Successor of time-policy preserving attention/reminder grammar, raw due/recurrence data,
+    exact no-op versus reconciliation tolerance, one supplied now and account-timezone/DST policy. parse_boundary
+    keeps its existing arguments and accepted date/offset-free/offset/relative forms and DomainError behavior,
+    but preserves the full supplied fractional instant using managed-model-precise values where datetime
+    is insufficient. Relative dates retain wall-clock semantics; explicit offsets retain exact instant
+    semantics. Consumers compare/persist through instant_key/instant_text and use instant_datetime only
+    for display, calendar window arithmetic or coarse retrieval bounds that are safely widened before
+    exact filtering. Existing ordinary aware-datetime clock inputs remain valid. Do not replace the existing
+    Attention API or change due tolerances as part of this correction.
+  status: provisional
+- id: state-store-precise
+  owner: local
+  supersedes_ref: state-store
+  description: Successor of state-store with unchanged protected path/mode checks, schema/identity/publication
+    association, single binding timezone, binding-last atomic publication and failure preservation. Existing
+    StateStore, LocalState, prepare_candidates, publish_snapshot, load_consistent_state and write_cursor
+    entry points consume/preserve managed-model-precise timestamp values as well as existing aware datetime
+    inputs. Serialize timestamps as UTC RFC 3339 strings with all supplied fractional digits and restore
+    exact instants for item/comment/occurrence fields, synced_at and report cursor. Existing valid schema-1
+    timestamp strings, including null only on nullable fields, remain readable without discarding binding/history/cursor
+    or an automatic reset. Reject malformed required timestamps with LocalError and preserve bytes. No
+    timestamp sidecar or second timezone authority. Codec dataclass conversion must explicitly serialize
+    shared timestamp values rather than leaking their internals.
+  status: provisional
+- id: history-store-precise
+  owner: local
+  supersedes_ref: history-store
+  description: Successor of history-store preserving separate protected pending history, stable-ID/current-truth
+    merge, required ancestors, coverage and explicit post-finalization-only cleanup. History snapshot
+    fields, observation times and Coverage endpoints retain managed-model-precise instants through merge/save/reload
+    and prune comparisons. Exact instants newer than the finalized cursor retain their required context
+    even within the same microsecond. Existing aware datetime callers and valid schema-1 files remain
+    usable. Authoritative null remains null; required completion/coverage times cannot become unknown.
+    Missing, corrupt, foreign or mixed required history fails without resetting it. Cache clear/cursor
+    set never authorize cleanup, and cleanup failure never rolls back a successful output/cursor.
+  status: provisional
