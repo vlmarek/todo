@@ -13,6 +13,7 @@ import time
 import unittest
 import uuid
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from todo_lib import domain as d
 from todo_lib.local import *
@@ -56,6 +57,100 @@ class LocalTests(unittest.TestCase):
     def initialize(self):
         with exclusive_lock('init', self.root):
             self.store.publish_snapshot(self.candidates())
+
+    def test_exact_model_public_round_trip_and_pruning(self):
+        early = d.instant_from_wire('2026-01-02T00:00:00.123456001Z')
+        late = d.instant_from_wire('2026-01-02T00:00:00.123456999Z')
+        exact = d.instant_from_wire('2026-01-02T00:00:00.123456789Z')
+        long = d.instant_from_wire('2026-01-02T00:00:00.123456789012345678901234567890123456789Z')
+        boundary = d.instant_from_wire('2026-01-02T00:00:00.123456500Z')
+        s = replace(self.snapshot, items={
+            'parent': replace(self.snapshot.items['parent'], added_at=long),
+            'child': replace(self.snapshot.items['child'], added_at=exact, completed=True, completed_at=exact),
+            'a': d.Item('a', 'cat', 'Early', added_at=early),
+            'z': d.Item('z', 'cat', 'Late', added_at=late),
+            'null': d.Item('null', 'cat', 'Unknown')},
+            comments={'comment': d.Comment('comment', 'parent', 'Context', early),
+                      'unknown': d.Comment('unknown', 'child', 'Unknown', None)},
+            occurrences={'occ': d.Occurrence('occ', 'child', exact)})
+        h = History(s, {'child': late}, (Coverage(early, late),))
+        context = replace(s, items={k: v for k, v in self.snapshot.items.items()},
+                          comments={'comment': d.Comment('comment', 'parent', 'Context', early)},
+                          occurrences={})
+        variants = (
+            History(context, {'child': late}),
+            History(replace(context, occurrences={'o': d.Occurrence('o', 'child', late)})),
+            History(replace(context, comments={**context.comments,
+                'new': d.Comment('new', 'child', 'Later', late)})),
+            History(replace(context, items={**context.items,
+                'child': replace(context.items['child'], completed=True, completed_at=late)})),
+        )
+        for pending in variants:
+            with self.subTest(pending=pending):
+                retained = prune_history(pending, boundary, output_finalized=True, saved_cursor=boundary)
+                self.assertEqual(set(retained.snapshot.items), {'parent', 'child'})
+                self.assertIn('comment', retained.snapshot.comments)
+        old = History(context, {'child': early})
+        self.assertEqual(prune_history(old, boundary, output_finalized=True,
+                                      saved_cursor=boundary).snapshot.items, {})
+
+        with exclusive_lock('init', self.root):
+            self.store.publish_snapshot(prepare_candidates(s, h, account_display='Person',
+                sync_token='synthetic-token', synced_at=long, initial_cursor=boundary))
+        state = self.store.load_consistent_state()
+        for saved in (state.snapshot, state.history.snapshot):
+            self.assertEqual(d.instant_text(saved.items['child'].added_at), '2026-01-02T00:00:00.123456789Z')
+            self.assertEqual(d.instant_text(saved.items['parent'].added_at), d.instant_text(long))
+            self.assertEqual([i.id for i in d.ordered_siblings(saved, 'cat')], ['z', 'parent', 'a', 'null'])
+            self.assertEqual(d.instant_key(saved.occurrences['occ'].completed_at), d.instant_key(exact))
+            self.assertEqual(d.instant_text(saved.items['child'].completed_at), '2026-01-02T00:00:00.123456789Z')
+            self.assertEqual(d.instant_text(saved.comments['comment'].added_at), d.instant_text(early))
+            self.assertIsNone(saved.comments['unknown'].added_at)
+        self.assertEqual(d.instant_text(state.synced_at), d.instant_text(long))
+        self.assertEqual(d.instant_text(state.cursor), '2026-01-02T00:00:00.123456500Z')
+        self.assertEqual(d.instant_key(state.history.observations['child']), d.instant_key(late))
+        self.assertEqual(d.instant_text(state.history.coverage[0].end), d.instant_text(late))
+        with self.assertRaises(LocalError):
+            prune_history(state.history, boundary, saved_cursor=boundary)
+        with self.assertRaises(LocalError):
+            prune_history(state.history, boundary, output_finalized=True, saved_cursor=early)
+        pruned = prune_history(state.history, boundary, output_finalized=True, saved_cursor=boundary)
+        self.assertEqual(set(pruned.snapshot.items), {'parent', 'child'})
+        self.assertIn('comment', pruned.snapshot.comments)
+        self.assertIn('occ', pruned.snapshot.occurrences)
+        self.assertEqual(d.instant_text(pruned.coverage[0].start), d.instant_text(boundary))
+        with exclusive_lock('report-final', self.root):
+            self.store.write_cursor(exact)
+            self.store.save_history(pruned)
+        self.assertEqual(d.instant_text(self.store.load_cursor()), d.instant_text(exact))
+        self.assertEqual(self.store.load_history(), pruned)
+        incoming = History(replace(s, items={**s.items, 'child': replace(s.items['child'], added_at=None)},
+                                   comments={**s.comments, 'comment': replace(s.comments['comment'], added_at=None)}),
+                           {'child': None})
+        merged = merge_history(h, incoming)
+        self.assertIsNone(merged.snapshot.items['child'].added_at)
+        self.assertIsNone(merged.snapshot.comments['comment'].added_at)
+        self.assertIsNone(merged.observations['child'])
+        with exclusive_lock('sync', self.root):
+            self.store.save_history(merged)
+        self.assertIsNone(self.store.load_history().snapshot.items['child'].added_at)
+
+    def test_malformed_required_exact_times_preserve_stored_bytes(self):
+        self.initialize()
+        for name in ('cache.json', 'history.json'):
+            original = (self.root / name).read_bytes()
+            for bad in (None, 42, '2026-01-02T00:00:00', 'bad'):
+                raw = loads(original)
+                if name == 'cache.json':
+                    raw['synced_at'] = bad
+                else:
+                    raw['coverage'] = [{'start': bad, 'end': '2026-01-02T00:00:00Z'}]
+                content = dumps(raw)
+                self.put(name, content)
+                with self.subTest(name=name, bad=bad), self.assertRaises(LocalError):
+                    self.store.load_consistent_state()
+                self.assertEqual((self.root / name).read_bytes(), content)
+            self.put(name, original)
 
     def test_config_states_schema_and_unknowns(self):
         self.assertEqual(inspect_config(self.root), ConfigState.MISSING)
@@ -467,6 +562,37 @@ with exclusive_lock('refresh', root):
         self.assertEqual((self.root / 'history.json').read_bytes(), original)
         self.assertEqual(self.store.load_cursor(), NOW - timedelta(days=1))
 
+    def test_fold_coverage_merge_reload_and_prune(self):
+        wall = datetime(2026, 10, 25, 2, 30, tzinfo=ZoneInfo('Europe/Prague'), fold=1)
+        exact = d.instant_from_wire('2026-10-25T01:30:00.000000000Z')
+        end = d.instant_from_wire('2026-10-25T01:30:00.000000999Z')
+        cursor = d.instant_from_wire('2026-10-25T01:30:00.000000500Z')
+        old = History(self.snapshot, {'child': end}, (Coverage(wall, end),))
+        incoming = History(self.snapshot, {'child': end}, (Coverage(exact, end),))
+        distinct = replace(incoming, coverage=(Coverage(wall.replace(fold=0), end),))
+        self.assertEqual(len(merge_history(old, distinct).coverage), 2)
+        for index, (first, second) in enumerate(((old, incoming), (incoming, old))):
+            with self.subTest(first=first.coverage):
+                merged = merge_history(first, second)
+                self.assertEqual(len(merged.coverage), 1)
+                with exclusive_lock('init', self.root):
+                    self.store.publish_snapshot(prepare_candidates(self.snapshot, merged,
+                        account_display='Person', sync_token='synthetic-token',
+                        synced_at=end, initial_cursor=cursor if index == 0 else None))
+                restored = self.store.load_consistent_state().history
+                again = merge_history(restored, old)
+                self.assertEqual(len(again.coverage), 1)
+                pruned = prune_history(again, cursor, output_finalized=True, saved_cursor=cursor)
+                self.assertEqual(len(pruned.coverage), 1)
+                self.assertEqual(d.instant_text(pruned.coverage[0].start),
+                                 '2026-10-25T01:30:00.000000500Z')
+                self.assertEqual(d.instant_text(pruned.coverage[0].end),
+                                 '2026-10-25T01:30:00.000000999Z')
+                self.assertEqual(set(pruned.snapshot.items), {'parent', 'child'})
+                with exclusive_lock('refresh', self.root):
+                    self.store.save_history(pruned)
+                self.assertEqual(self.store.load_history(), pruned)
+
     def test_history_merge_prune_newer_shared_context_and_departures(self):
         boundary = NOW
         s = replace(self.snapshot, comments={}, occurrences={
@@ -492,8 +618,9 @@ with exclusive_lock('refresh', root):
         self.initialize()
         code = '''import sys
 from todo_lib.local import exclusive_lock, StateStore
+from todo_lib.domain import instant_text
 with exclusive_lock('report-final', sys.argv[1]):
- print(StateStore(sys.argv[1]).load_cursor().isoformat(), flush=True)
+ print(instant_text(StateStore(sys.argv[1]).load_cursor()), flush=True)
  sys.stdin.readline()
 '''
         child = subprocess.Popen([sys.executable, '-B', '-c', code, str(self.root)],

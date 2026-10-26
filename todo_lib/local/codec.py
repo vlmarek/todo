@@ -1,6 +1,14 @@
-"""Version-one JSON codec for the accepted domain model, without a zone copy."""
+"""Schema-1 codec with lossless UTC timestamps and no timezone copy.
+
+instant accepts domain.ExactInstant or aware datetime; parse_instant accepts
+aware RFC 3339 text and returns ExactInstant. Invalid timestamps raise LocalError.
+Null is decoded only at nullable model fields; domain validation checks required
+completion times. asdict keeps the immutable non-dataclass value intact and the
+record converter explicitly serializes it, never its internal slots. Attention
+retains its established datetime projection plus exact due metadata contract.
+"""
 from dataclasses import asdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
 import json
 from todo_lib import domain as d
@@ -8,24 +16,21 @@ from .safety import LocalError
 
 
 def instant(value):
-    d.require_aware(value)
-    return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+    try:
+        return d.instant_text(value)
+    except d.DomainError:
+        raise LocalError('timestamp must be an exact instant or aware datetime') from None
 
 
 def parse_instant(value):
-    if not isinstance(value, str):
-        raise LocalError('timestamp must be an aware RFC 3339 instant')
-    import re
-    if not re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)', value):
-        raise LocalError('timestamp must be an aware RFC 3339 instant')
     try:
-        return d.require_aware(datetime.fromisoformat(value.replace('Z', '+00:00'))).astimezone(timezone.utc)
-    except (ValueError, TypeError):
-        raise LocalError('invalid timestamp') from None
+        return d.instant_from_wire(value)
+    except d.DomainError:
+        raise LocalError('timestamp must be an aware RFC 3339 instant') from None
 
 
 def _default(value):
-    if isinstance(value, datetime):
+    if isinstance(value, (datetime, d.ExactInstant)):
         return instant(value)
     if isinstance(value, date):
         return value.isoformat()
@@ -57,8 +62,14 @@ def loads(content):
 
 
 def snapshot_data(snapshot):
-    d.validate(snapshot)
-    data = asdict(snapshot)
+    try:
+        d.validate(snapshot)
+    except d.DomainError as error:
+        raise LocalError(str(error)) from None
+    def record(entries):
+        return {k: instant(v) if isinstance(v, (d.ExactInstant, datetime)) else v
+                for k, v in entries}
+    data = asdict(snapshot, dict_factory=record)
     del data['account']['timezone']
     return data
 
@@ -82,7 +93,7 @@ def snapshot_from(data, zone):
                 if a.get('date_value') is not None:
                     a['date_value'] = date.fromisoformat(a['date_value'])
                 if a.get('instant') is not None:
-                    a['instant'] = parse_instant(a['instant'])
+                    a['instant'] = d.instant_datetime(parse_instant(a['instant']))
                 if a.get('epoch_seconds') is not None:
                     a['epoch_seconds'] = Decimal(a['epoch_seconds'])
                 value['attention'] = d.Attention(**a)

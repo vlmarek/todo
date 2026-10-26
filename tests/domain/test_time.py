@@ -2,8 +2,10 @@
 import unittest
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, Inexact, localcontext
+from zoneinfo import ZoneInfo
 from todo_lib.domain import (
+    ExactInstant, instant_from_wire, instant_key, instant_text, instant_datetime,
     DomainError, parse_attention, parse_boundary, parse_reminder,
     resolve_remote_due, same_attention, reconciles_attention, retain_recurrence,
     exact_attention, validate_reminder_offsets,
@@ -18,6 +20,71 @@ class TimeTests(unittest.TestCase):
     def setUp(self):
         self.now = dt('2026-10-23T08:12:34.123456Z')
         self.zone = 'Europe/Prague'
+
+    def test_lossless_shared_instant_contract(self):
+        text = '2026-10-23T08:00:00.123456789012345678901234567890123456789000Z'
+        exact = instant_from_wire(text)
+        self.assertEqual(instant_text(exact), text)
+        later = instant_from_wire(text.replace('789000Z', '789001Z'))
+        self.assertLess(instant_key(exact), instant_key(later))
+        self.assertNotEqual(exact, later)
+        from decimal import localcontext
+        with localcontext() as context:
+            context.prec = 2
+            self.assertLess(instant_key(exact), instant_key(later))
+            self.assertEqual(instant_text(exact), text)
+
+        self.assertEqual(exact, instant_from_wire(text.replace('08:00:00', '10:00:00')[:-1] + '+02:00'))
+        self.assertEqual(instant_datetime(exact), dt('2026-10-23T08:00:00.123456Z'))
+        self.assertGreater(instant_key(exact), instant_key(instant_datetime(exact)))
+        a = instant_from_wire('2026-10-23T08:00:00.123456000Z')
+        self.assertEqual(a, dt('2026-10-23T10:00:00.123456+02:00'))
+        with self.assertRaises(TypeError):
+            hash(a)
+        self.assertEqual(instant_text(instant_from_wire('2026-10-23T08:00:00.000000000Z')),
+                         '2026-10-23T08:00:00.000000000Z')
+        with self.assertRaises(AttributeError):
+            exact._fraction = '0'
+        for bad in (None, 1, dt('2026-10-23T08:00:00Z'), '2026-10-23T08:00:00',
+                    '2026-02-30T08:00:00Z', '2026-10-23T08:00:00+00:60',
+                    '2026-10-23T08:00:60Z', 'garbage'):
+            with self.subTest(bad=bad), self.assertRaises(DomainError):
+                instant_from_wire(bad)
+        for bad in (None, '2026-10-23T08:00:00Z', datetime(2026, 1, 1), 4):
+            for helper in (instant_key, instant_text, instant_datetime):
+                with self.subTest(helper=helper, bad=bad), self.assertRaises(DomainError):
+                    helper(bad)
+
+    def test_mixed_fold_equality_uses_explicit_hash_keys(self):
+        zone = ZoneInfo('Europe/Prague')
+        for fold, utc in ((0, '2026-10-25T00:30:00Z'), (1, '2026-10-25T01:30:00Z')):
+            with self.subTest(fold=fold):
+                wall = datetime(2026, 10, 25, 2, 30, tzinfo=zone, fold=fold)
+                exact = instant_from_wire(utc)
+                self.assertEqual(exact, wall)
+                self.assertEqual(wall, exact)
+                # Native datetime hashes ignore fold; callers must normalize keys.
+                with self.assertRaises(TypeError):
+                    hash(exact)
+                values = {instant_key(wall): 'found'}
+                self.assertEqual(values[instant_key(exact)], 'found')
+                self.assertEqual(hash(instant_key(wall)), hash(instant_key(exact)))
+
+    def test_precise_boundary_offsets_and_wall_policy(self):
+        fraction = '123456789012345678901234567890123456789'
+        expected = '2026-10-23T08:00:00.' + fraction + 'Z'
+        for value in ('2026-10-23T08:00:00.' + fraction + 'Z',
+                      '2026-10-23T10:00:00.' + fraction + '+02:00',
+                      '2026-10-23T10:00:00.' + fraction):
+            with self.subTest(value=value), localcontext() as context:
+                context.prec = 2
+                context.traps[Inexact] = True
+                boundary = parse_boundary(value, self.now, self.zone)
+                self.assertEqual(instant_text(boundary), expected)
+                self.assertEqual(instant_key(boundary), instant_key(instant_from_wire(expected)))
+        for value in ('2026-10-25T02:30:00.123456789', '2026-03-29T02:30:00.123456789'):
+            with self.assertRaises(DomainError):
+                parse_boundary(value, self.now, self.zone)
 
     def test_month_direct_add_and_clamp(self):
         for start, expr, expected in [

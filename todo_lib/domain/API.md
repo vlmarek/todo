@@ -19,7 +19,8 @@ The five collections are ID-keyed mappings. All identities are strings.
 - `Item` has one category ID, an optional immediate item parent ID, own title,
   description, product priority 1–4, attention, labels and lifecycle fields.
   `added_at=None` means unknown and is never filled from another observation.
-  Known timestamps are aware `datetime` values and retain microsecond precision.
+  Known timestamps accept `ExactInstant` or aware `datetime` and retain full
+  supplied precision. `completed_at` is required when `completed=True`.
   Role derives from the current parent: no parent means task, otherwise step.
 - `Comment` and `Reminder` belong to an item ID. `Reminder.minutes=0` is present.
 - `Occurrence` records a completion fact separately from the current item. A
@@ -75,8 +76,8 @@ minutes/hours use elapsed time. Months add directly and clamp only the target.
 An unresolved expression is distinct from absent attention (`None`). Workflows
 requiring a local comparison must reject it; calling `day(zone)` diagnoses it.
 
-`parse_boundary(value, now, account_zone)` returns a UTC aware datetime for ISO
-input or positive `Nd` / `N days ago`, without attention weekday grammar or
+`parse_boundary(value, now, account_zone)` returns `ExactInstant` for fractional
+ISO date-times, otherwise a UTC aware `datetime`, for ISO input or positive `Nd` / `N days ago`, without attention weekday grammar or
 workflow interval/future enforcement. `parse_reminder(value)` returns whole
 minutes; command markers, arity and clearing belong to syntax/workflows.
 
@@ -95,3 +96,50 @@ for recurring rules and unresolved expressions; parser language metadata does no
 change the equality of resolved nonrecurring occurrences. Raw metadata is retained.
 `retain_recurrence` copies existing rule metadata onto a resolved occurrence move;
 a newly supplied unresolved provider expression can replace the rule instead.
+
+## Shared exact instants
+
+`ExactInstant` is an immutable non-dataclass value exported by `todo_lib.domain`.
+Its concrete constructor is `ExactInstant(second, fraction='')`: `second` must be
+an aware whole-second UTC `datetime`, and `fraction` must be empty or ASCII digits.
+Prefer `instant_from_wire(text)` to construct it from a provider timestamp.
+
+- `instant_from_wire(text: str) -> ExactInstant` accepts aware RFC 3339 calendar
+  date-times with seconds, optional decimal fraction of any length, and `Z` or
+  a numeric `+/-HH:MM` offset (also lowercase `t`/`z`). Invalid dates, leap seconds,
+  naive strings and wrong types raise `DomainError`. UTC must fit datetime years
+  1–9999. Supplied trailing zeros are preserved; equivalent offsets compare equal.
+- `instant_key(value: ExactInstant | datetime) -> fractions.Fraction` returns
+  exact UTC seconds since the Unix epoch. Mixed keys are mutually comparable,
+  including across DST folds. Arithmetic uses unbounded integers, with no float
+  or Decimal context rounding, even for very long fractions.
+- `instant_text(value: ExactInstant | datetime) -> str` emits UTC RFC 3339 with
+  every supplied fractional digit. Datetime inputs retain their microseconds.
+- `instant_datetime(value: ExactInstant | datetime) -> datetime` explicitly
+  projects to an aware UTC datetime, truncating beyond microseconds. Use it only
+  for human display, calendar arithmetic or safely widened retrieval bounds;
+  filter exact intervals with `instant_key` afterward.
+
+The last three helpers reject None, naive datetimes, strings and other types with
+`DomainError`. `ExactInstant` equality/order use exact keys, including with aware
+datetime inputs. The value is deliberately unhashable (`hash` raises `TypeError`):
+Python datetime hashes ignore `fold`, so a single hash cannot agree with every
+aware datetime that denotes the same exact instant. Use `instant_key(value)` for
+both representations in dictionaries/sets; history coverage deduplication uses
+these normalized endpoint keys. Model positional argument order is unchanged. `Item.added_at`,
+`Item.completed_at`, `Comment.added_at`, `Occurrence.completed_at` and
+`LifecycleCandidate.completed_at` accept either type. Only Item/Comment creation
+and an uncompleted Item's completion field may be null; Occurrence completion and
+lifecycle/boundary times are required. Validation never replaces null with an
+older observation. Siblings/traversal/completion order, latest recurring occurrence
+and recent lifecycle intervals use exact keys, retaining original candidate times.
+
+Local schema-1 cache, separate pending history, coverage, observations, synced_at
+and report cursor serialize these values as UTC strings and reload ExactInstant.
+Existing schema-1 timestamp strings remain valid. Observations alone may also
+be unknown (None); coverage endpoints, synced_at and cursor are required.
+`dataclasses.asdict` retains immutable ExactInstant values for explicit codec
+serialization rather than exposing internal slots. Local malformed required
+stored timestamps raise `LocalError` without resetting bytes. No projection is
+an authority for persistence, delta seeding, equality or ordering. Attention's
+existing raw due/epoch_seconds API and reconciliation tolerance are unchanged.
