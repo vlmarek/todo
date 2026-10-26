@@ -1,0 +1,311 @@
+schema_version: 1
+map_id: todo-3-components
+components:
+- id: domain
+  responsibility: Offline identity, recursive hierarchy, text, time, scheduling, selection predicates
+    and invariants.
+  paths:
+  - todo_lib/__init__.py
+  - todo_lib/domain/**
+  - tests/__init__.py
+  - tests/domain/**
+  allowed_dependencies: []
+- id: local
+  responsibility: Protected configuration, binding, cursor, cache/history storage and exclusive process
+    coordination.
+  paths:
+  - todo_lib/local/**
+  - tests/local/**
+  allowed_dependencies:
+  - domain
+- id: syntax
+  responsibility: Lossless CLI grammar, shared interactive input and command help.
+  paths:
+  - todo_lib/syntax/**
+  - tests/syntax/**
+  allowed_dependencies:
+  - domain
+- id: adapter
+  responsibility: Pinned Todoist transport, current/history mapping and operation-attributed mutation
+    results.
+  paths:
+  - todo_lib/adapter/**
+  - tests/adapter/**
+  - tests/support/**
+  allowed_dependencies:
+  - domain
+- id: presentation
+  responsibility: Pure exact human rendering, color and direct/pager document delivery.
+  paths:
+  - todo_lib/presentation/**
+  - tests/presentation/**
+  allowed_dependencies:
+  - domain
+  - local
+- id: workflows
+  responsibility: Coordinate synchronization, local publication, init, reads, mutations, editing and reporting.
+  paths:
+  - todo_lib/workflows/**
+  - tests/workflows/**
+  allowed_dependencies:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+- id: cli
+  responsibility: Executable copied launcher and public command composition, status/signal/error boundary.
+  paths:
+  - todo
+  - todo_lib/cli.py
+  - tests/cli/**
+  allowed_dependencies:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+- id: delivery
+  responsibility: Offline verification scripts, copied-installation acceptance, operational documentation
+    and observed evidence.
+  paths:
+  - scripts/**
+  - tests/delivery/**
+  - README.md
+  - docs/user/**
+  - docs/implementation/acceptance-evidence.md
+  allowed_dependencies:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+interfaces:
+- id: managed-model
+  owner: domain
+  status: provisional
+  description: todo_lib.domain supplies a shared Snapshot/model with string account/root/category/item/comment/reminder
+    IDs, ID-keyed collections, immediate parent links, own fields, explicit lifecycle/occurrence records,
+    nullable aware added_at, capabilities and raw due representation. validate(snapshot, hidden_names)
+    returns a complete valid model or a domain error naming the invalid field/invariant without raw unrelated
+    payloads. Helpers return ancestor paths, ordered siblings, subtree depths, visibility, effective priority
+    and eligible lifecycle candidates. Domain code has no I/O. Producers document exact exported symbols/docstrings
+    in their code; consumers import that accepted dependency API rather than invent parallel model types.
+- id: time-policy
+  owner: domain
+  status: provisional
+  description: todo_lib.domain exposes parse_attention(expression, now, account_zone), parse_boundary(value,
+    now, account_zone), parse_reminder(value), and resolve_remote_due(raw_due, account_zone). Inputs retain
+    original scalar text; results distinguish date-only, exact fixed/floating instant, unresolved provider
+    expression and invalid input. One supplied aware now is used. Local DST ambiguity/gap is an error;
+    remote floating overlap chooses earlier instant and gap shifts by its actual size. Preserve recurrence/raw
+    fractions, and use exact local no-op comparison versus separate <=2-second reconciliation tolerance
+    with strict day/rule/zone checks.
+- id: configuration
+  owner: local
+  status: provisional
+  description: 'todo_lib.local loads ~/.todo/config only after path/mode validation, returning typed project/default_sections/hidden_from_now,
+    warning/color/pager settings and a redacted credential resolver. Resolve token once: nonempty environment
+    first, then config; wizard may supply a hidden token. Missing/empty/populated config states stay distinct.
+    Invalid recognized settings fail before HTTP; unknown settings are ignored. Pager/editor argv uses
+    direct shlex parsing, never shell expansion. Secret-bearing objects must not expose tokens in repr/errors.'
+- id: state-store
+  owner: local
+  status: provisional
+  description: todo_lib.local reads/writes binding.json, report-cursor and disposable cache.json with
+    schema, string IDs and account/root/publication association; timezone has one authority in binding.
+    APIs load_consistent_state(), prepare_candidates(), publish_snapshot() and write_cursor(aware_utc)
+    or equivalent named exports validate complete candidates and atomically replace restrictive same-directory
+    files. Binding is final initialization publication point; reject mixed sets without automatic repair.
+    A failed individual replacement retains its prior complete destination; partial multi-file initialization
+    is detected, not rolled back. Ignore temporary candidates. Cursor setter supports readable corrupt/missing
+    old content, not unsafe/unreadable paths. Cache/token publish together; clearing touches only current
+    cache.
+- id: history-store
+  owner: local
+  status: provisional
+  description: todo_lib.local uses protected history.json separate from cache.json, initially explicitly
+    incomplete. Load/save accepts account/root/publication association and managed observations, occurrences,
+    own comments, necessary ancestors and coverage. Missing required/corrupt/foreign history fails without
+    resetting bytes. Stable-ID merge and post-finalization cleanup retain context for newer pending work;
+    authoritative deletes/departures remove related observations. Primitive storage has no HTTP or report
+    side effects; workflow supplies the evidence and finalized cursor. Cleanup is idempotent and cannot
+    roll back an advanced cursor.
+- id: exclusive-lock
+  owner: local
+  status: provisional
+  description: todo_lib.local exclusive_lock(operation) is a fail-fast POSIX process-lock context acquired
+    before coordinated reads. It reports busy status, releases on handled failure/SIGINT and never queues/waits.
+    Offline readers are lock-free and reject inconsistent publications. All stored sensitive paths are
+    real files/directories with 0600/0700 before content access; wizard permission repair is an explicit
+    separately confirmed operation, never an ordinary load side effect.
+- id: command-grammar
+  owner: syntax
+  status: provisional
+  description: todo_lib.syntax parse(argv) returns a normalized command request preserving selector phrase/term
+    boundaries, original creation groups, literal insertions, empty promotion destination, singleton/repeatable
+    options and scalar values. Syntax failures carry status 2, offending input, synopsis/example; no config/HTTP
+    is read. Leading scalar noun actions consume adjacent VALUE before task or parent/step operands; canonical
+    rename/move boundaries remain distinct. Alias normalization reaches the same canonical request type.
+    Help requests are independent of state; T16 completes public help wiring.
+- id: prompt-input
+  owner: syntax
+  status: provisional
+  description: One todo_lib.syntax prompt/input function checks both stdin/stdout TTY, writes and flushes
+    stdout before reading, supports hidden token input without echo, EOF/cancel/default/validation and
+    restoration. Selection receives explicit numbered candidates and returns the chosen stable object
+    or cancellation; no new --yes bypass. All workflow questions use this path, including wizard and delete-all.
+    Noninteractive ambiguity prints candidates but never a prompt/detail. Callbacks/streams may be supplied
+    by offline tests.
+- id: http-transport
+  owner: adapter
+  status: provisional
+  description: 'todo_lib.adapter.transport performs authenticated API-v1 requests against https://api.todoist.com/api/v1
+    with method/path/form/query/JSON explicitly supplied, 30-second timeout and the accepted four-attempt
+    status/delay policy. It accepts controlled opener/sleep/clock hooks, emits redacted stderr retry facts,
+    returns decoded response or typed rejected/transport/protocol/outcome-unknown error. Mutation requests
+    carry a caller-owned UUID/replay classification: ambiguous outcomes return to reconciliation before
+    any replay. The retained API is the wire authority. Tests/support provides small request-recording
+    controlled HTTP helpers without a general provider emulator.'
+- id: current-retrieval
+  owner: adapter
+  status: provisional
+  description: todo_lib.adapter.current retrieves raw Sync current resources and merges full/deltas by
+    stable ID, returning a validated managed Snapshot plus token/account/timezone/current capabilities.
+    Fetch initial/client replacement with * then exactly one freshness delta; a server full_sync=true
+    requires the same bounded follow-up. Required full fields and optional unchanged delta omissions differ.
+    Scope projects broadly before managed ownership-first mapping. No activity resource or history access
+    is needed for initial live preflight. API accepts prior cache/token and binding, reports unresolved
+    disappeared known identities for lifecycle reconciliation by T08, and never writes local files.
+- id: history-retrieval
+  owner: adapter
+  status: provisional
+  description: todo_lib.adapter.history completed(start,end,scope), activities(start,end,scope) and comments(owner_id)
+    return complete endpoint-shaped mapped records with source/ownership context, continuation evidence
+    and precise times, or explicit incompleteness. Completed UTC requests span <=3 months each, use items
+    and documented terminal next_cursor omission; activities/comments require results and next_cursor
+    with null terminal. All query parameters remain fixed across pages. Widen wire [start,end) to cover
+    product (start,end], then filter exactly, retaining fractions and split edges. Current scoped REST
+    comments need no item_id. Archived owner resolution uses only supported current evidence; active GET
+    404 is unresolved, never deletion proof.
+- id: mutation-gateway
+  owner: adapter
+  status: provisional
+  description: todo_lib.adapter.commands accepts one validated semantic operation with stable target,
+    command UUID and create temp ID, serializes exact Sync commands and reports accepted/rejected/unknown
+    with operation-attributable IDs/evidence. Preserve UUID across safe retries; require exact sync_status
+    and create temp_id_mapping. Reconcile ambiguous results read-only using current/history retrieval;
+    matching text or unchanged recurrence never proves an operation. Export direct provision/create/update/comment/reminder/move/complete/reopen/delete
+    calls, with item_move one destination and recurring is_forward/reset_subtasks semantics. Return actual
+    state/evidence; workflow revalidates complete invariants and publishes, never the gateway. No compensating
+    rollback.
+- id: synchronized-state
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.sync loads consistent state under caller-held lock, performs current
+    retrieval then required evidence-based disappearance/lifecycle reconciliation using history retrieval,
+    merges protected pending history and publishes a complete valid snapshot/history/binding timezone
+    association. refresh(clear_cache=False) deletes only cache when explicitly authorized; read_local()
+    performs zero HTTP. Return Snapshot/history/one command time plus classified failure, last successful
+    cache and safe read-only recovery facts. Mutation callers invoke reconciliation after every accepted
+    operation; unknown outcomes cannot publish invented acceptance. Retain old cache and pending history
+    on failure, without persisted validity modes.
+- id: rendered-documents
+  owner: presentation
+  status: provisional
+  description: todo_lib.presentation pure functions render_now/detail/comments/waiting/someday/search/ambiguity/receipts/report
+    from shared model, selected populations/events, one now and binding timezone. Return complete stdout/stderr
+    documents rather than performing I/O or refetching. Named TPL text and edge newline normalization
+    are authoritative; IDs stay internal. Shared attention/ancestor/waiting-reason formatting supplies
+    all consumers. report receives already selected Finished/Progress/Hidden view data; presentation does
+    not decide interval eligibility or cursor updates.
+- id: document-delivery
+  owner: presentation
+  status: provisional
+  description: todo_lib.presentation deliver(document, settings, original_streams, view_kind) writes/flushes
+    directly or directly invokes configured pager argv for eligible read-only TTY views. Complete rendered
+    text/colors are chosen against original stdout, not a child pipe. Normal pager quit succeeds; true
+    failure warns and prints complete original direct output without HTTP. Final reports always bypass
+    the pager and expose write/flush failure to finalization. SIGINT restores terminal/temporary state
+    and propagates status 130; it never starts fallback.
+- id: read-commands
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.reads executes cache-first now/waiting/someday/detail/comments/search/category/implicit
+    lookup requests, using read_local or explicit refresh before selection, shared model matching and
+    shared chooser/render/delivery. Return status/documents or useful typed local/sync/ambiguity errors.
+    Detail/search combine compatible pending history without duplicates, disclose coverage, preserve nested
+    ownership/paths and never perform HTTP absent refresh. This capability does not create comments or
+    mutate objects.
+- id: initialization
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.init executes populated-config/repeat init or interactive missing/zero-byte-config
+    wizard with the shared prompt. Preflight live managed tasks read-only before any structural creation;
+    use current retrieval without activity dependency. Return accepted/unknown/unattempted provisioning
+    and staged publication facts. Bind stable account/root/category IDs, preserve existing cursor/history,
+    save confirmed protected INI then continue same invocation, publish binding last. Discovery catalogue
+    is transient. No doctor, --rebind or populated-config rewrite.
+- id: capture-scheduling
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.capture/scheduling execute task/step creation, priority/rename/category
+    creation, schedule/reminder/hide/unhide requests. Consume normalized grammar, synchronize/choose,
+    validate complete proposed batch/tree/capability/no-op before first mutation, execute ordered gateway
+    calls, reconcile each accepted result and publish via sync. Return actual receipt/outcome records
+    for presentation. Inline steps, recurring due preservation, hidden-category restrictions and supported
+    zero reminders use shared model/time APIs; no duplicate alias workflows.
+- id: hierarchy-moves
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.moves executes positional/marker category moves, attachment/reparenting
+    and explicit promotion on tasks/steps. It selects source then typed destination, validates complete
+    known resulting depth/siblings/hiding and preserves all stable item/comment identities and raw own
+    fields. Reconcile available known surviving descendants without all-history childlessness proof; return
+    changed parent/category and resulting role or classified failure with no rollback.
+- id: lifecycle-transitions
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.lifecycle executes done/reopen/delete on tasks/steps. Validate full
+    known subtrees and recent occurrence interval, confirm only where allowed, order postorder completions,
+    reconcile archived completion and restored ancestors and stop on first failure/unknown. Done comments
+    use gateway on the same archived owner after completion. Return structured actual operations and unattempted
+    remainder; no rollback, all-history deletion preview or blind recurrence replay.
+- id: comment-editing
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.comments executes ordinary ordered comment creation and locked editor
+    reconciliation. Buffer codec round-trips protective backslashes/header text, validates all blocks
+    against originally shown IDs, computes edits/additions/deletions, confirms all-shown deletion, and
+    preserves externally added comments. Direct editor argv, 0600 buffer and shared prompts survive failure/SIGINT
+    cleanup. Return exact all-success counts or ordered partial outcomes; no heuristic interior-header-loss
+    detection.
+- id: report-finalization
+  owner: workflows
+  status: provisional
+  description: todo_lib.workflows.report executes show/set cursor locally and preview/final report online.
+    Under one exclusive lock reload cursor/binding then capture fixed end before HTTP; fully retrieve
+    current state, bounded completions/activity and current own comments. Assemble current-truth Finished/Progress/Hidden,
+    cancellation pairs and latest eligible comment events or fail before normal output. Final direct complete
+    write+flush precedes atomic fixed-end cursor save, which precedes cleanup. Preview/set cursor cannot
+    prune. Return success/diagnostic facts; cleanup failure leaves successful output/cursor and safe extra
+    history.
+- id: public-cli
+  owner: cli
+  status: provisional
+  description: Executable ./todo and todo_lib.cli.main(argv) compose all normalized commands, prompt/renderer/delivery
+    and workflow APIs with exact exit status, help/state independence, secret redaction and SIGINT boundaries.
+    The unchanged launcher/module tree runs copied together through PATH on CPython 3.11 without repository/tests/site-packages.
+    No runtime dependency installation or production test-server flag. Offline test injection stays in
+    tests through supplied transport/process hooks.
+- id: routine-check
+  owner: delivery
+  status: provisional
+  description: Executable scripts/check performs syntax/shebang/regular executable/import checks plus
+    exactly one complete current offline unittest suite, fails absent required suites or skips and leaves
+    no generated state. CPython 3.11/Bash/stdlib only. Self-tests use tiny synthetic suites rather than
+    recursively launching the application suite. scripts/verify-clean from T17 composes this check once
+    with distinct copied-runtime probes; it does not run scripts/check again through tests.

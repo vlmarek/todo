@@ -1,0 +1,2741 @@
+schema_version: 5
+graph_id: todo-3
+revision_id: TODO3-PLAN-001
+predecessor_revision_id: null
+contract_sources:
+- COMPONENTS.yaml
+- docs/implementation/provider-contracts.md
+- docs/design/architecture.md
+- docs/design/behavior.md
+- docs/design/command-interface.md
+- docs/design/domain-model.md
+- docs/design/operations.md
+- docs/design/out-of-scope.md
+- docs/design/output-contract.md
+- docs/design/product.md
+- docs/design/quality-requirements.md
+- docs/design/security.md
+- docs/design/todoist-adapter.md
+components:
+- id: domain
+  responsibility: Offline identity, recursive hierarchy, text, time, scheduling, selection predicates
+    and invariants.
+  paths:
+  - todo_lib/__init__.py
+  - todo_lib/domain/**
+  - tests/__init__.py
+  - tests/domain/**
+  source_path: COMPONENTS.yaml
+- id: local
+  responsibility: Protected configuration, binding, cursor, cache/history storage and exclusive process
+    coordination.
+  paths:
+  - todo_lib/local/**
+  - tests/local/**
+  source_path: COMPONENTS.yaml
+- id: syntax
+  responsibility: Lossless CLI grammar, shared interactive input and command help.
+  paths:
+  - todo_lib/syntax/**
+  - tests/syntax/**
+  source_path: COMPONENTS.yaml
+- id: adapter
+  responsibility: Pinned Todoist transport, current/history mapping and operation-attributed mutation
+    results.
+  paths:
+  - todo_lib/adapter/**
+  - tests/adapter/**
+  - tests/support/**
+  source_path: COMPONENTS.yaml
+- id: presentation
+  responsibility: Pure exact human rendering, color and direct/pager document delivery.
+  paths:
+  - todo_lib/presentation/**
+  - tests/presentation/**
+  source_path: COMPONENTS.yaml
+- id: workflows
+  responsibility: Coordinate synchronization, local publication, init, reads, mutations, editing and reporting.
+  paths:
+  - todo_lib/workflows/**
+  - tests/workflows/**
+  source_path: COMPONENTS.yaml
+- id: cli
+  responsibility: Executable copied launcher and public command composition, status/signal/error boundary.
+  paths:
+  - todo
+  - todo_lib/cli.py
+  - tests/cli/**
+  source_path: COMPONENTS.yaml
+- id: delivery
+  responsibility: Offline verification scripts, copied-installation acceptance, operational documentation
+    and observed evidence.
+  paths:
+  - scripts/**
+  - tests/delivery/**
+  - README.md
+  - docs/user/**
+  - docs/implementation/acceptance-evidence.md
+  source_path: COMPONENTS.yaml
+interfaces:
+- id: managed-model
+  owner: domain
+  description: todo_lib.domain supplies a shared Snapshot/model with string account/root/category/item/comment/reminder
+    IDs, ID-keyed collections, immediate parent links, own fields, explicit lifecycle/occurrence records,
+    nullable aware added_at, capabilities and raw due representation. validate(snapshot, hidden_names)
+    returns a complete valid model or a domain error naming the invalid field/invariant without raw unrelated
+    payloads. Helpers return ancestor paths, ordered siblings, subtree depths, visibility, effective priority
+    and eligible lifecycle candidates. Domain code has no I/O. Producers document exact exported symbols/docstrings
+    in their code; consumers import that accepted dependency API rather than invent parallel model types.
+  source_path: COMPONENTS.yaml
+- id: time-policy
+  owner: domain
+  description: todo_lib.domain exposes parse_attention(expression, now, account_zone), parse_boundary(value,
+    now, account_zone), parse_reminder(value), and resolve_remote_due(raw_due, account_zone). Inputs retain
+    original scalar text; results distinguish date-only, exact fixed/floating instant, unresolved provider
+    expression and invalid input. One supplied aware now is used. Local DST ambiguity/gap is an error;
+    remote floating overlap chooses earlier instant and gap shifts by its actual size. Preserve recurrence/raw
+    fractions, and use exact local no-op comparison versus separate <=2-second reconciliation tolerance
+    with strict day/rule/zone checks.
+  source_path: COMPONENTS.yaml
+- id: configuration
+  owner: local
+  description: 'todo_lib.local loads ~/.todo/config only after path/mode validation, returning typed project/default_sections/hidden_from_now,
+    warning/color/pager settings and a redacted credential resolver. Resolve token once: nonempty environment
+    first, then config; wizard may supply a hidden token. Missing/empty/populated config states stay distinct.
+    Invalid recognized settings fail before HTTP; unknown settings are ignored. Pager/editor argv uses
+    direct shlex parsing, never shell expansion. Secret-bearing objects must not expose tokens in repr/errors.'
+  source_path: COMPONENTS.yaml
+- id: state-store
+  owner: local
+  description: todo_lib.local reads/writes binding.json, report-cursor and disposable cache.json with
+    schema, string IDs and account/root/publication association; timezone has one authority in binding.
+    APIs load_consistent_state(), prepare_candidates(), publish_snapshot() and write_cursor(aware_utc)
+    or equivalent named exports validate complete candidates and atomically replace restrictive same-directory
+    files. Binding is final initialization publication point; reject mixed sets without automatic repair.
+    A failed individual replacement retains its prior complete destination; partial multi-file initialization
+    is detected, not rolled back. Ignore temporary candidates. Cursor setter supports readable corrupt/missing
+    old content, not unsafe/unreadable paths. Cache/token publish together; clearing touches only current
+    cache.
+  source_path: COMPONENTS.yaml
+- id: history-store
+  owner: local
+  description: todo_lib.local uses protected history.json separate from cache.json, initially explicitly
+    incomplete. Load/save accepts account/root/publication association and managed observations, occurrences,
+    own comments, necessary ancestors and coverage. Missing required/corrupt/foreign history fails without
+    resetting bytes. Stable-ID merge and post-finalization cleanup retain context for newer pending work;
+    authoritative deletes/departures remove related observations. Primitive storage has no HTTP or report
+    side effects; workflow supplies the evidence and finalized cursor. Cleanup is idempotent and cannot
+    roll back an advanced cursor.
+  source_path: COMPONENTS.yaml
+- id: exclusive-lock
+  owner: local
+  description: todo_lib.local exclusive_lock(operation) is a fail-fast POSIX process-lock context acquired
+    before coordinated reads. It reports busy status, releases on handled failure/SIGINT and never queues/waits.
+    Offline readers are lock-free and reject inconsistent publications. All stored sensitive paths are
+    real files/directories with 0600/0700 before content access; wizard permission repair is an explicit
+    separately confirmed operation, never an ordinary load side effect.
+  source_path: COMPONENTS.yaml
+- id: command-grammar
+  owner: syntax
+  description: todo_lib.syntax parse(argv) returns a normalized command request preserving selector phrase/term
+    boundaries, original creation groups, literal insertions, empty promotion destination, singleton/repeatable
+    options and scalar values. Syntax failures carry status 2, offending input, synopsis/example; no config/HTTP
+    is read. Leading scalar noun actions consume adjacent VALUE before task or parent/step operands; canonical
+    rename/move boundaries remain distinct. Alias normalization reaches the same canonical request type.
+    Help requests are independent of state; T16 completes public help wiring.
+  source_path: COMPONENTS.yaml
+- id: prompt-input
+  owner: syntax
+  description: One todo_lib.syntax prompt/input function checks both stdin/stdout TTY, writes and flushes
+    stdout before reading, supports hidden token input without echo, EOF/cancel/default/validation and
+    restoration. Selection receives explicit numbered candidates and returns the chosen stable object
+    or cancellation; no new --yes bypass. All workflow questions use this path, including wizard and delete-all.
+    Noninteractive ambiguity prints candidates but never a prompt/detail. Callbacks/streams may be supplied
+    by offline tests.
+  source_path: COMPONENTS.yaml
+- id: http-transport
+  owner: adapter
+  description: 'todo_lib.adapter.transport performs authenticated API-v1 requests against https://api.todoist.com/api/v1
+    with method/path/form/query/JSON explicitly supplied, 30-second timeout and the accepted four-attempt
+    status/delay policy. It accepts controlled opener/sleep/clock hooks, emits redacted stderr retry facts,
+    returns decoded response or typed rejected/transport/protocol/outcome-unknown error. Mutation requests
+    carry a caller-owned UUID/replay classification: ambiguous outcomes return to reconciliation before
+    any replay. The retained API is the wire authority. Tests/support provides small request-recording
+    controlled HTTP helpers without a general provider emulator.'
+  source_path: COMPONENTS.yaml
+- id: current-retrieval
+  owner: adapter
+  description: todo_lib.adapter.current retrieves raw Sync current resources and merges full/deltas by
+    stable ID, returning a validated managed Snapshot plus token/account/timezone/current capabilities.
+    Fetch initial/client replacement with * then exactly one freshness delta; a server full_sync=true
+    requires the same bounded follow-up. Required full fields and optional unchanged delta omissions differ.
+    Scope projects broadly before managed ownership-first mapping. No activity resource or history access
+    is needed for initial live preflight. API accepts prior cache/token and binding, reports unresolved
+    disappeared known identities for lifecycle reconciliation by T08, and never writes local files.
+  source_path: COMPONENTS.yaml
+- id: history-retrieval
+  owner: adapter
+  description: todo_lib.adapter.history completed(start,end,scope), activities(start,end,scope) and comments(owner_id)
+    return complete endpoint-shaped mapped records with source/ownership context, continuation evidence
+    and precise times, or explicit incompleteness. Completed UTC requests span <=3 months each, use items
+    and documented terminal next_cursor omission; activities/comments require results and next_cursor
+    with null terminal. All query parameters remain fixed across pages. Widen wire [start,end) to cover
+    product (start,end], then filter exactly, retaining fractions and split edges. Current scoped REST
+    comments need no item_id. Archived owner resolution uses only supported current evidence; active GET
+    404 is unresolved, never deletion proof.
+  source_path: COMPONENTS.yaml
+- id: mutation-gateway
+  owner: adapter
+  description: todo_lib.adapter.commands accepts one validated semantic operation with stable target,
+    command UUID and create temp ID, serializes exact Sync commands and reports accepted/rejected/unknown
+    with operation-attributable IDs/evidence. Preserve UUID across safe retries; require exact sync_status
+    and create temp_id_mapping. Reconcile ambiguous results read-only using current/history retrieval;
+    matching text or unchanged recurrence never proves an operation. Export direct provision/create/update/comment/reminder/move/complete/reopen/delete
+    calls, with item_move one destination and recurring is_forward/reset_subtasks semantics. Return actual
+    state/evidence; workflow revalidates complete invariants and publishes, never the gateway. No compensating
+    rollback.
+  source_path: COMPONENTS.yaml
+- id: synchronized-state
+  owner: workflows
+  description: todo_lib.workflows.sync loads consistent state under caller-held lock, performs current
+    retrieval then required evidence-based disappearance/lifecycle reconciliation using history retrieval,
+    merges protected pending history and publishes a complete valid snapshot/history/binding timezone
+    association. refresh(clear_cache=False) deletes only cache when explicitly authorized; read_local()
+    performs zero HTTP. Return Snapshot/history/one command time plus classified failure, last successful
+    cache and safe read-only recovery facts. Mutation callers invoke reconciliation after every accepted
+    operation; unknown outcomes cannot publish invented acceptance. Retain old cache and pending history
+    on failure, without persisted validity modes.
+  source_path: COMPONENTS.yaml
+- id: rendered-documents
+  owner: presentation
+  description: todo_lib.presentation pure functions render_now/detail/comments/waiting/someday/search/ambiguity/receipts/report
+    from shared model, selected populations/events, one now and binding timezone. Return complete stdout/stderr
+    documents rather than performing I/O or refetching. Named TPL text and edge newline normalization
+    are authoritative; IDs stay internal. Shared attention/ancestor/waiting-reason formatting supplies
+    all consumers. report receives already selected Finished/Progress/Hidden view data; presentation does
+    not decide interval eligibility or cursor updates.
+  source_path: COMPONENTS.yaml
+- id: document-delivery
+  owner: presentation
+  description: todo_lib.presentation deliver(document, settings, original_streams, view_kind) writes/flushes
+    directly or directly invokes configured pager argv for eligible read-only TTY views. Complete rendered
+    text/colors are chosen against original stdout, not a child pipe. Normal pager quit succeeds; true
+    failure warns and prints complete original direct output without HTTP. Final reports always bypass
+    the pager and expose write/flush failure to finalization. SIGINT restores terminal/temporary state
+    and propagates status 130; it never starts fallback.
+  source_path: COMPONENTS.yaml
+- id: read-commands
+  owner: workflows
+  description: todo_lib.workflows.reads executes cache-first now/waiting/someday/detail/comments/search/category/implicit
+    lookup requests, using read_local or explicit refresh before selection, shared model matching and
+    shared chooser/render/delivery. Return status/documents or useful typed local/sync/ambiguity errors.
+    Detail/search combine compatible pending history without duplicates, disclose coverage, preserve nested
+    ownership/paths and never perform HTTP absent refresh. This capability does not create comments or
+    mutate objects.
+  source_path: COMPONENTS.yaml
+- id: initialization
+  owner: workflows
+  description: todo_lib.workflows.init executes populated-config/repeat init or interactive missing/zero-byte-config
+    wizard with the shared prompt. Preflight live managed tasks read-only before any structural creation;
+    use current retrieval without activity dependency. Return accepted/unknown/unattempted provisioning
+    and staged publication facts. Bind stable account/root/category IDs, preserve existing cursor/history,
+    save confirmed protected INI then continue same invocation, publish binding last. Discovery catalogue
+    is transient. No doctor, --rebind or populated-config rewrite.
+  source_path: COMPONENTS.yaml
+- id: capture-scheduling
+  owner: workflows
+  description: todo_lib.workflows.capture/scheduling execute task/step creation, priority/rename/category
+    creation, schedule/reminder/hide/unhide requests. Consume normalized grammar, synchronize/choose,
+    validate complete proposed batch/tree/capability/no-op before first mutation, execute ordered gateway
+    calls, reconcile each accepted result and publish via sync. Return actual receipt/outcome records
+    for presentation. Inline steps, recurring due preservation, hidden-category restrictions and supported
+    zero reminders use shared model/time APIs; no duplicate alias workflows.
+  source_path: COMPONENTS.yaml
+- id: hierarchy-moves
+  owner: workflows
+  description: todo_lib.workflows.moves executes positional/marker category moves, attachment/reparenting
+    and explicit promotion on tasks/steps. It selects source then typed destination, validates complete
+    known resulting depth/siblings/hiding and preserves all stable item/comment identities and raw own
+    fields. Reconcile available known surviving descendants without all-history childlessness proof; return
+    changed parent/category and resulting role or classified failure with no rollback.
+  source_path: COMPONENTS.yaml
+- id: lifecycle-transitions
+  owner: workflows
+  description: todo_lib.workflows.lifecycle executes done/reopen/delete on tasks/steps. Validate full
+    known subtrees and recent occurrence interval, confirm only where allowed, order postorder completions,
+    reconcile archived completion and restored ancestors and stop on first failure/unknown. Done comments
+    use gateway on the same archived owner after completion. Return structured actual operations and unattempted
+    remainder; no rollback, all-history deletion preview or blind recurrence replay.
+  source_path: COMPONENTS.yaml
+- id: comment-editing
+  owner: workflows
+  description: todo_lib.workflows.comments executes ordinary ordered comment creation and locked editor
+    reconciliation. Buffer codec round-trips protective backslashes/header text, validates all blocks
+    against originally shown IDs, computes edits/additions/deletions, confirms all-shown deletion, and
+    preserves externally added comments. Direct editor argv, 0600 buffer and shared prompts survive failure/SIGINT
+    cleanup. Return exact all-success counts or ordered partial outcomes; no heuristic interior-header-loss
+    detection.
+  source_path: COMPONENTS.yaml
+- id: report-finalization
+  owner: workflows
+  description: todo_lib.workflows.report executes show/set cursor locally and preview/final report online.
+    Under one exclusive lock reload cursor/binding then capture fixed end before HTTP; fully retrieve
+    current state, bounded completions/activity and current own comments. Assemble current-truth Finished/Progress/Hidden,
+    cancellation pairs and latest eligible comment events or fail before normal output. Final direct complete
+    write+flush precedes atomic fixed-end cursor save, which precedes cleanup. Preview/set cursor cannot
+    prune. Return success/diagnostic facts; cleanup failure leaves successful output/cursor and safe extra
+    history.
+  source_path: COMPONENTS.yaml
+- id: public-cli
+  owner: cli
+  description: Executable ./todo and todo_lib.cli.main(argv) compose all normalized commands, prompt/renderer/delivery
+    and workflow APIs with exact exit status, help/state independence, secret redaction and SIGINT boundaries.
+    The unchanged launcher/module tree runs copied together through PATH on CPython 3.11 without repository/tests/site-packages.
+    No runtime dependency installation or production test-server flag. Offline test injection stays in
+    tests through supplied transport/process hooks.
+  source_path: COMPONENTS.yaml
+- id: routine-check
+  owner: delivery
+  description: Executable scripts/check performs syntax/shebang/regular executable/import checks plus
+    exactly one complete current offline unittest suite, fails absent required suites or skips and leaves
+    no generated state. CPython 3.11/Bash/stdlib only. Self-tests use tiny synthetic suites rather than
+    recursively launching the application suite. scripts/verify-clean from T17 composes this check once
+    with distinct copied-runtime probes; it does not run scripts/check again through tests.
+  source_path: COMPONENTS.yaml
+checks:
+- id: merge-hygiene
+  command: git diff --check
+  prerequisite_task_refs: []
+  evidence: {}
+- id: t01-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/domain -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T01
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t02-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/local -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T02
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t03-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/syntax -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T03
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t04-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/transport -p
+    "test_*.py" -v
+  prerequisite_task_refs:
+  - T04
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t05-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/current -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T05
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t06-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T06
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t07-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/commands -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T07
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t08-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T08
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t09-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/presentation -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T09
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t10-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/reads -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T10
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t11-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/init -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T11
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t12-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/capture -p
+    "test_*.py" -v
+  prerequisite_task_refs:
+  - T12
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t13-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/moves -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T13
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t18-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/lifecycle -p
+    "test_*.py" -v
+  prerequisite_task_refs:
+  - T18
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t14-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/comments -p
+    "test_*.py" -v
+  prerequisite_task_refs:
+  - T14
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t15-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T15
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t16-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/cli -p "test_*.py" -v
+  prerequisite_task_refs:
+  - T16
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t17-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/delivery/final -p "test_*.py"
+    -v
+  prerequisite_task_refs:
+  - T17
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: integrated-complete
+  command: if test -x scripts/verify-clean; then git diff --check; else ./scripts/check; fi
+  prerequisite_task_refs:
+  - T16
+  evidence: {}
+- id: final-delivery
+  command: ./scripts/verify-clean
+  prerequisite_task_refs:
+  - T17
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+tasks:
+- id: T01
+  title: Offline recursive model and account-time rules
+  origin_stage_ref: release-1
+  observable_outcome: A supplied managed snapshot can be validated, traversed and classified offline with
+    exact account-time semantics.
+  dependencies: []
+  goal: Create the shared model and time APIs described by managed-model/time-policy, including title/body
+    validation, optional canonical waiting blocks, role-from-parent relationships, active sibling uniqueness,
+    depths 0-4, known/unknown timestamps, effective priority for creation versus own-value urgency, own/ancestor/category
+    hiding and recent lifecycle eligibility. Implement local attention/reminder/boundary parsers as reusable
+    pure policy; parser command arity belongs to T03 and remote wire mapping to T05. Include month direct-add/clamping,
+    business/calendar versus elapsed arithmetic, strict next weekday/Monday, remote floating fold/gap
+    policy and local DST refusal. Preserve raw due data/fractions and separate exact no-op from reconciliation
+    slack. Do not compute report current-truth/event eligibility here. Export documented concrete types/helpers
+    for downstream tasks; do not add a generic framework.
+  failure_domain: A supplied managed snapshot can be validated, traversed and classified offline with
+    exact account-time semantics.
+  verification_rationale: 'Pure supplied-value tests decide hierarchy/order, text/waiting-block negatives
+    and date semantics before any adapter exists. Distinguishing cases: out-of-order nested depth 4 valid
+    versus depth 5/cycle/orphan/completed ancestor; authoritative null creation; P1 grandchild changes
+    copied effective priority but never parent NOW rank; exact due equality versus 1 second either side;
+    date-only +7/+8; Prague remote overlap 00:30Z and gap 01:30Z with fractions versus local refusal;
+    Jan 31 +2 months March 31. Run the named focused unittest command while implementing; it is a starting
+    point for relevant dependency checks. Required tests must not silently skip. The runner owns settled
+    integrated/final broad checks; do not repeatedly run a full suite for each role.'
+  correction_instructions: null
+  requirement_refs:
+  - REQ-DOM-001
+  - REQ-DOM-009
+  - REQ-DOM-014
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-SCHED-013
+  - REQ-ARCH-002
+  constraint_refs:
+  - REQ-CLI-021
+  - REQ-COMP-006
+  - REQ-CREATE-007
+  - REQ-OUT-019
+  - REQ-REPORT-013
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-014
+  - REQ-SEC-007
+  - REQ-SYNC-021
+  - REQ-SYNC-026
+  - REQ-VERIFY-003
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-022
+  exclusion_refs: &id001
+  - OUT-PLAN-001
+  - OUT-DATA-001
+  - OUT-PLAT-001
+  - OUT-PLAT-002
+  - OUT-I18N-001
+  - OUT-OUTPUT-001
+  - OUT-OUTPUT-005
+  - OUT-SELECT-001
+  - OUT-AUTH-001
+  - OUT-COLLAB-001
+  - OUT-SEARCH-001
+  - OUT-BACKEND-001
+  - OUT-OPS-001
+  - OUT-OPS-003
+  - OUT-FEATURE-001
+  - OUT-TIME-001
+  - OUT-PACKAGE-001
+  - OUT-SEC-001
+  - OUT-PRIVACY-001
+  - OUT-HISTORY-001
+  - OUT-ARCHIVE-001
+  - OUT-TEST-001
+  - OUT-NFR-001
+  - OUT-NFR-002
+  - OUT-NFR-003
+  - OUT-NFR-004
+  - OUT-CONC-001
+  - OUT-SIGNAL-001
+  - OUT-REPORT-001
+  - OUT-LOGGING-001
+  - OUT-PROVISION-002
+  - OUT-BUNDLE-001
+  - OUT-USABILITY-001
+  - OUT-DIAG-001
+  component_refs:
+  - domain
+  provides_interface_refs:
+  - managed-model
+  - time-policy
+  consumes_interface_refs: []
+  expected_paths:
+  - todo_lib/__init__.py
+  - todo_lib/domain/**
+  - tests/__init__.py
+  - tests/domain/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t01-focused
+  required_evidence:
+  - t01-focused
+- id: T02
+  title: Protected configuration and persistent local state
+  origin_stage_ref: release-1
+  observable_outcome: Consistent protected local state survives ordinary failed writes, restart and explicit
+    current-cache deletion.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model and their actual exported APIs.
+  goal: Implement configuration, state-store, history-store and exclusive-lock contracts with history.json
+    as the separate pending-history file. Keep timezone solely authoritative in binding; choose a minimal
+    publication association and reject mixed sets without a journal/rollback. Expose candidate validation
+    and binding-last publication to init/sync; individual writes remain atomic, not a transaction. Preserve
+    missing versus empty/populated config, corrupt readable cursor versus unsafe file, explicit empty
+    hidden list and credential precedence. Validate sensitive directory/file modes and symlinks before
+    credential reads; expose only the wizard-specific owned real empty-config/directory mode-repair operation
+    for T11 to confirm. Provide history merge/prune primitives retaining newer shared context; only T15
+    may authorize report cleanup after finalized output/cursor. Do not perform network calls or prune
+    on cache clear/cursor set.
+  failure_domain: Consistent protected local state survives ordinary failed writes, restart and explicit
+    current-cache deletion.
+  verification_rationale: Use temporary homes and injected replace/write failure to compare old bytes,
+    check 0700/0600 and symlink/permissive-mode refusal before secret access, config negatives/unknown
+    keys and redaction. Separate processes demonstrate fail-fast lock and release plus consistent lock-free
+    reads. Reload nullable timestamps, foreign identity/publication mismatch, missing/corrupt required
+    history; clearing cache leaves history and cursor byte-identical. Post-finalization cleanup eligibility
+    is tested as a primitive; workflow ordering belongs to T15. Run the named focused unittest command
+    while implementing; it is a starting point for relevant dependency checks. Required tests must not
+    silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
+    suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-LOCAL-005
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-029
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-OUT-019
+  - REQ-REPORT-003
+  - REQ-REPORT-013
+  - REQ-SEC-007
+  - REQ-VERIFY-003
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - local
+  provides_interface_refs:
+  - configuration
+  - state-store
+  - history-store
+  - exclusive-lock
+  consumes_interface_refs:
+  - managed-model
+  expected_paths:
+  - todo_lib/local/**
+  - tests/local/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t02-focused
+  required_evidence:
+  - t02-focused
+- id: T03
+  title: Lossless command grammar and one prompt path
+  origin_stage_ref: release-1
+  observable_outcome: Canonical commands and aliases produce the same lossless request, and every interactive
+    question can share one safe input path.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  goal: 'Implement canonical grammar/alias normalization and the shared prompt/input contract. Read the
+    full command-interface and operation synopses: preserve original shell-argument groups through scalar
+    extraction, leading scalar noun-action adjacency, fixed-priority arity, repeated independent comment/step
+    groups, explicit literal insertions, one-selector shorthand and multi-term marker forms. Preserve
+    positional move first source plus joined destination and exactly empty promotion; marker forms retain
+    their separate grammar. Enforce duplicate/global conflicts and invalid combinations before config/HTTP.
+    Unknown top-level words become full implicit selectors. Supply independent help data/dispatch; T16
+    completes discoverable help across all commands. Shared prompts flush before blocking, enforce both
+    TTYs, hide token echo and restore on cancel/SIGINT. Runtime workflows in later tasks must use it.'
+  failure_domain: Canonical commands and aliases produce the same lossless request, and every interactive
+    question can share one safe input path.
+  verification_rationale: Table-driven argv-to-request tests provide direct feedback without full CLI
+    or HTTP. Compare alias canonical requests with original text/literals retained, including --due=VALUE
+    before step operands, multiword scalar, edge-space split trigger, literal option-like title, empty
+    versus whitespace promotion and bad combinations with zero side effects. Prompt stream callbacks verify
+    flush-before-read, both-TTY refusal, hidden input failure and EOF/cancel; workflow-specific confirmation
+    tests remain with their consumers. Run the named focused unittest command while implementing; it is
+    a starting point for relevant dependency checks. Required tests must not silently skip. The runner
+    owns settled integrated/final broad checks; do not repeatedly run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-CLI-031
+  - REQ-CLI-012
+  - REQ-CLI-033
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-032
+  - REQ-CLI-035
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-008
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-INIT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-OUT-019
+  - REQ-REPORT-003
+  - REQ-REPORT-013
+  - REQ-SCHED-010
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-007
+  - REQ-VERIFY-003
+  - REQ-VERIFY-018
+  exclusion_refs: *id001
+  component_refs:
+  - syntax
+  provides_interface_refs:
+  - command-grammar
+  - prompt-input
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  expected_paths:
+  - todo_lib/syntax/**
+  - tests/syntax/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t03-focused
+  required_evidence:
+  - t03-focused
+- id: T04
+  title: Controlled API-v1 HTTP transport
+  origin_stage_ref: release-1
+  observable_outcome: Actual outgoing requests obey API-v1 authentication, encoding, timeout and safe
+    retry rules.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model and their actual exported APIs.
+  goal: Implement http-transport and small reusable controlled HTTP helpers for actual adapter request
+    assertions. Resolve credentials upstream once; transport receives the resolved secret and redacts
+    every display/error/traceback path. Use stdlib urllib and explicit form/query/JSON encodings; no SDK
+    or production endpoint override. Honor 30s and four total attempts, status whitelist, 1/2/4 fallback
+    delays and usable Retry-After <=60s. Ambiguous mutation requests return for reconciliation before
+    replay; never classify transport loss as rejection or repeat an unsafe call. Distinguish exhausted
+    reads, structured rejection and protocol failure. Test helpers must reject representative wrong method/path/form/UUID
+    arguments and cite pinned sources; do not generate fixtures from application serialization. Hooks
+    are normal constructor/function dependencies, not public test configuration.
+  failure_domain: Actual outgoing requests obey API-v1 authentication, encoding, timeout and safe retry
+    rules.
+  verification_rationale: Controlled opener/clock/sleep tests inspect actual requests and count attempts/delays
+    with no real sleep/network. Cover nonretry status, each policy category, Retry-After above cap, malformed
+    response, ambiguous mutation no blind replay and token/Authorization redaction. Use synthetic tokens
+    only, including captured exception paths; tests never read real HOME or environment secrets. Run the
+    named focused unittest command while implementing; it is a starting point for relevant dependency
+    checks. Required tests must not silently skip. The runner owns settled integrated/final broad checks;
+    do not repeatedly run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-NET-001
+  - REQ-VERIFY-003
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-OUT-019
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-021
+  - REQ-SYNC-026
+  - REQ-VERIFY-013
+  exclusion_refs: *id001
+  component_refs:
+  - adapter
+  provides_interface_refs:
+  - http-transport
+  consumes_interface_refs:
+  - managed-model
+  expected_paths:
+  - todo_lib/adapter/__init__.py
+  - todo_lib/adapter/transport.py
+  - tests/adapter/__init__.py
+  - tests/adapter/transport/**
+  - tests/support/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t04-focused
+  required_evidence:
+  - t04-focused
+- id: T05
+  title: Current Sync retrieval and strict managed mapping
+  origin_stage_ref: release-1
+  observable_outcome: Pinned full/delta current data maps into a complete scoped model without inventing
+    provider fields.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T04
+    kind: interface
+    interface_ref: http-transport
+    reason: Consume completed capabilities http-transport and their actual exported APIs.
+  goal: Implement current-retrieval using retained external/todoist API Sync tag Read resources/Incremental
+    sync/Projects/Items/Notes/Reminders/User plan limits and Due dates plus ItemSyncView. Request user,user_plan_limits,projects,items,labels,notes,reminders
+    only. Map checked boolean, optional description absence and nullable added_at; priorities invert 4->P1.
+    Capabilities come from current, ignore plan_name entirely, accept no activity/zero history. Use documented
+    shared/inbox_project/workspace_id project fields and ownership-first discard of unrelated comments/reminders
+    before feature validation. Resolve hierarchy after complete merge. Preserve floating/fixed/date-only
+    due representations, English write metadata contract, zero reminder offsets and own comment ownership.
+    Merge stable IDs/tombstones and account-timezone updates; full * then exactly one delta, bounded server
+    full replacement; no guessed invalid-token classifier. Surface disappeared known managed IDs for T08
+    evidence resolution rather than guessing completion/deletion. Retain only managed/minimal data in
+    returned persistent model.
+  failure_domain: Pinned full/delta current data maps into a complete scoped model without inventing provider
+    fields.
+  verification_rationale: Actual Sync form requests plus independent response fixtures establish valid
+    omitted activity, nullable creation, description omitted/null/empty and strict whitespace/control/wrong-type
+    rejection. Cover missing/null/nonboolean checked, wrong capability types, shared/Inbox/workspace eligibility,
+    ownership-first unrelated unsupported records, unknown fields and zero reminders. Full-plus-delta
+    updates timezone and tombstones; malformed full/token, contradictory duplicate objects, repeated full
+    freshness and generic/credential error fail without replacement loops. Floating fold/gap fractions
+    are checked through mapping, not just a time helper. Run the named focused unittest command while
+    implementing; it is a starting point for relevant dependency checks. Required tests must not silently
+    skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
+    each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-SYNC-021
+  - REQ-SYNC-027
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-024
+  - REQ-VERIFY-019
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-029
+  - REQ-DOM-009
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-LOCAL-005
+  - REQ-OUT-019
+  - REQ-SCHED-013
+  - REQ-SEC-007
+  - REQ-SYNC-025
+  - REQ-VERIFY-003
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-013
+  - REQ-VERIFY-018
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - adapter
+  provides_interface_refs:
+  - current-retrieval
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - http-transport
+  expected_paths:
+  - todo_lib/adapter/current.py
+  - tests/adapter/current/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t05-focused
+  required_evidence:
+  - t05-focused
+- id: T06
+  title: Complete bounded history and current own comments
+  origin_stage_ref: release-1
+  observable_outcome: Required completed/activity/comment pages cover the exact product interval or fail
+    explicitly.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T04
+    kind: interface
+    interface_ref: http-transport
+    reason: Consume completed capabilities http-transport and their actual exported APIs.
+  - task_ref: T05
+    kind: interface
+    interface_ref: current-retrieval
+    reason: Consume completed capabilities current-retrieval and their actual exported APIs.
+  goal: Implement history-retrieval against pinned endpoint schemas and the consumed-contract notes in
+    docs/implementation/provider-contracts.md. Completed next_cursor omission is terminal because TasksCompletedDateResponse
+    explicitly documents it; do not infer completion from short pages. Activities and comments require
+    their own results/next_cursor, null terminal; reject malformed/repeated cursors and fixed-parameter
+    drift. Cover <=3-month completed windows and widened UTC retrieval then exact (start,end] filtering
+    with full fractional precision. Current REST comments use scoped task_id for tasks and steps; no required
+    item_id. Interpret separate object/event type, optional integer/null event ID, plain-string extra_data.content
+    and content-free deletion. Preserve anonymous source order without elaborate dedupe. Establish supported
+    archived owner metadata or return unresolved; 404 active lookup cannot prove deletion. Keep current-authoritative
+    text separate from annotations/observations. Emit tenth-page progress and no local result limit. Do
+    not backfill all-history children or arbitrary archived owners.
+  failure_domain: Required completed/activity/comment pages cover the exact product interval or fail explicitly.
+  verification_rationale: Independent endpoint-shaped pages assert actual query keys/bounds, continuation
+    and owner association. Distinguish cursorless completed terminal from missing activities/comments
+    cursor; page ten then failure cannot claim completeness. Cases at cursor/fixed end and subsecond/split
+    boundary expose lossy truncation. Supply note updated with string annotation and no response item_id,
+    integer/null IDs, malformed required identity/time, unknown annotation fields, deleted content omission
+    and unresolved archived parent; no fixture pre-seeds impossible archived knowledge. Run the named
+    focused unittest command while implementing; it is a starting point for relevant dependency checks.
+    Required tests must not silently skip. The runner owns settled integrated/final broad checks; do not
+    repeatedly run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-SYNC-025
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-DOM-009
+  - REQ-DOM-014
+  - REQ-MUT-003
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-SEC-007
+  - REQ-SYNC-021
+  - REQ-VERIFY-003
+  - REQ-VERIFY-011
+  - REQ-VERIFY-013
+  exclusion_refs: *id001
+  component_refs:
+  - adapter
+  provides_interface_refs:
+  - history-retrieval
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - http-transport
+  - current-retrieval
+  expected_paths:
+  - todo_lib/adapter/history.py
+  - tests/adapter/history/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t06-focused
+  required_evidence:
+  - t06-focused
+- id: T07
+  title: Operation-attributed Todoist mutation gateway
+  origin_stage_ref: release-1
+  observable_outcome: Direct commands return proven accepted, rejected or unknown outcomes without duplicate
+    or compensating mutations.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T04
+    kind: interface
+    interface_ref: http-transport
+    reason: Consume completed capabilities http-transport and their actual exported APIs.
+  - task_ref: T05
+    kind: interface
+    interface_ref: current-retrieval
+    reason: Consume completed capabilities current-retrieval and their actual exported APIs.
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Consume completed capabilities history-retrieval and their actual exported APIs.
+  goal: Implement mutation-gateway for provision root/category/label, task/step/comment/reminder create/update/delete,
+    scalar due/priority/text updates, move and lifecycle calls. Use unique UUID plus temp ID for creates;
+    exact UUID sync_status and temp mapping establish result attribution. Ambiguous transport/missing/malformed
+    status triggers read-only current/history reconciliation; matching pre-existing title, unchanged recurrence
+    or mere valid state cannot prove attempted operation. Return unknown when proof is unavailable, stop
+    replay. Use item_move id plus exactly parent_id or project_id, including promotion; item_uncomplete
+    with plain ok, recurring item_update_date_complete is_forward=1/0 and reset_subtasks=0. Support completion
+    archive disappearance and own comments on supported known archived owners. Write relative reminder
+    type/item_id/minute_offset including literal 0, English due lang and recurrence-preserving raw metadata.
+    Reconcile exact attention with <=2s absolute slack and strict day/rule/timezone, returning actual
+    state. T08 and operation workflows own whole-tree validation and local publication, using these results
+    without weakening any clause.
+  failure_domain: Direct commands return proven accepted, rejected or unknown outcomes without duplicate
+    or compensating mutations.
+  verification_rationale: 'Request-rejecting fakes inspect each distinct command family with independent
+    after-states, no full Todoist emulator. Cases: lost response with attributable proof versus missing
+    status; accepted create but absent temp mapping versus matching existing text; unchanged recurring
+    item with no occurrence proof; accepted archived completion and post-completion note_add; ordinary
+    reopen plain ok with restored ancestors; one-destination move; zero reminder request and later rejection.
+    Source reset_subtasks=0 establishes no reset. Fakes prove application handling, not actual provider
+    subtree propagation; contradictory real evidence must stop affected work. Run the named focused unittest
+    command while implementing; it is a starting point for relevant dependency checks. Required tests
+    must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run
+    a full suite for each role.'
+  correction_instructions: null
+  requirement_refs:
+  - REQ-SYNC-026
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-008
+  - REQ-CLI-032
+  - REQ-COMP-005
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CREATE-008
+  - REQ-DOM-009
+  - REQ-DOM-013
+  - REQ-MUT-004
+  - REQ-OUT-019
+  - REQ-SCHED-010
+  - REQ-SCHED-012
+  - REQ-SEC-007
+  - REQ-SYNC-021
+  - REQ-VERIFY-003
+  - REQ-VERIFY-010
+  - REQ-VERIFY-013
+  - REQ-VERIFY-021
+  exclusion_refs: *id001
+  component_refs:
+  - adapter
+  provides_interface_refs:
+  - mutation-gateway
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - http-transport
+  - current-retrieval
+  - history-retrieval
+  expected_paths:
+  - todo_lib/adapter/commands.py
+  - tests/adapter/commands/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t07-focused
+  required_evidence:
+  - t07-focused
+- id: T08
+  title: Synchronize and preserve unreported observations
+  origin_stage_ref: release-1
+  observable_outcome: External lifecycle changes survive refresh/restart/cache rebuild until finalized
+    reporting releases them.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration, state-store, history-store, exclusive-lock and
+      their actual exported APIs.
+  - task_ref: T05
+    kind: interface
+    interface_ref: current-retrieval
+    reason: Consume completed capabilities current-retrieval and their actual exported APIs.
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Consume completed capabilities history-retrieval and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  goal: 'Implement synchronized-state, connecting adapter current/history evidence to protected storage.
+    Preserve known objects/comments/ancestry on externally established completion, reconcile reopen/moves/deletions/scope
+    departure and let current truth override observations including known-to-null added_at. Missing active
+    identity alone proves nothing: fetch supported lifecycle evidence or fail. Merge pending history independently
+    of cache and retain it through failed refresh/publication and explicit cache clear, with identity/publication
+    consistency. Newly invalid remote state prevents synchronized normal output/mutations but preserves
+    old cache; subsequent offline reads can use it with age warning (>24 elapsed hours). Clear only after
+    syntax/config/binding/path/lock validation, disclose deletion even if rebuild fails. No persisted
+    clean/outdated/blocked mode or automatic sync-token classifier. Expose post-accepted-operation reconciliation
+    and errors distinguishing remote outcome from local failure, without replay or false external-repair
+    advice.'
+  failure_domain: External lifecycle changes survive refresh/restart/cache rebuild until finalized reporting
+    releases them.
+  verification_rationale: Start by observing open A and nested B with own comment through real adapter
+    mapping, then fake a supported external completion while A remains open. Observe retention after refresh,
+    new process reload and clear/rebuild; do not seed completed history. Compare old cache/cursor bytes
+    after failed delta, invalid remote state or file replace and verify later offline access has zero
+    HTTP. Confirmed deletion/departure removes managed data from both stores; unresolved disappearance
+    fails. Corrupt/missing required history survives clear attempt unchanged; no silent reset. Account/timezone/publication
+    mismatch and unrelated-data disk/output checks cover inherited constraints. Run the named focused
+    unittest command while implementing; it is a starting point for relevant dependency checks. Required
+    tests must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly
+    run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-SYNC-005
+  - REQ-CACHE-008
+  - REQ-CACHE-006
+  - REQ-CACHE-005
+  - REQ-CLI-029
+  - REQ-SEC-007
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CLI-032
+  - REQ-DOM-009
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-OUT-019
+  - REQ-REPORT-003
+  - REQ-REPORT-013
+  - REQ-SYNC-013
+  - REQ-SYNC-021
+  - REQ-SYNC-026
+  - REQ-VERIFY-003
+  - REQ-VERIFY-013
+  - REQ-VERIFY-020
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - synchronized-state
+  consumes_interface_refs:
+  - managed-model
+  - configuration
+  - state-store
+  - history-store
+  - exclusive-lock
+  - current-retrieval
+  - history-retrieval
+  - mutation-gateway
+  expected_paths:
+  - todo_lib/workflows/__init__.py
+  - todo_lib/workflows/sync.py
+  - tests/workflows/__init__.py
+  - tests/workflows/sync/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t08-focused
+  required_evidence:
+  - t08-focused
+- id: T09
+  title: Exact rendering and optional pager delivery
+  origin_stage_ref: release-1
+  observable_outcome: Supplied view data renders exact complete documents and reaches stdout or the configured
+    pager with correct failures.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration and their actual exported APIs.
+  goal: Implement rendered-documents and document-delivery for every named TPL and consumer, using complete
+    output-contract.md. Own queue independent rows/counts/sections, detail recursive order/own comments/coverage
+    and nullable added time, compact waiting, search/someday hierarchy, mixed ambiguity timing, body/count/scalar/move
+    receipts and supplied report framing. Use one now/account timezone, multiline edge normalization,
+    ancestor paths, waiting Since display-only interpretation, complete reminders/recurrence and byte-equivalent
+    color-stripped text. Distinguish renderer ordering from T15 report eligibility. Pager gets original-stdout
+    color, exact argv and whole rendered document even short/empty; bypass on noninteractive/dumb, decisions/mutations/help
+    and final report. Prefer a protected complete temporary input file plus inherited terminal to make
+    normal early quit distinguishable without pipe-race guessing; clean state on failure/SIGINT, true
+    failure full direct fallback without refetch. Use controlled process tests now; T17 obtains bounded
+    real-less evidence in configured image.
+  failure_domain: Supplied view data renders exact complete documents and reaches stdout or the configured
+    pager with correct failures.
+  verification_rationale: Golden fixtures are authored from TPL text, not renderer snapshots. Representative
+    exact NOW/detail/comments/waiting/ambiguity/receipts/report tests retain internal newlines, own-value
+    urgency versus hierarchy, all offsets including at due, no-date omission and deep paths; separate
+    color strip equality and before/at/after/subminute/DST expectations. Controlled pager argv/input/process
+    tests decide eligibility, early exit 0, nonzero/launch failure full fallback and SIGINT cleanup; do
+    not require GNU less before execution setup supplies it. Run the named focused unittest command while
+    implementing; it is a starting point for relevant dependency checks. Required tests must not silently
+    skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
+    each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-OUT-019
+  - REQ-OUT-015
+  - REQ-OUT-020
+  - REQ-OUT-009
+  - REQ-OUT-021
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-PLAT-003
+  - REQ-VERIFY-017
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CLI-021
+  - REQ-CLI-027
+  - REQ-CLI-030
+  - REQ-CLI-032
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CONFIG-003
+  - REQ-DOM-010
+  - REQ-DOM-013
+  - REQ-LOCAL-006
+  - REQ-PLAT-001
+  - REQ-REPORT-003
+  - REQ-SEC-007
+  - REQ-VERIFY-003
+  - REQ-VERIFY-016
+  - REQ-VERIFY-020
+  exclusion_refs: *id001
+  component_refs:
+  - presentation
+  provides_interface_refs:
+  - rendered-documents
+  - document-delivery
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  expected_paths:
+  - todo_lib/presentation/**
+  - tests/presentation/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t09-focused
+  required_evidence:
+  - t09-focused
+- id: T10
+  title: Cache-first discovery and read workflows
+  origin_stage_ref: release-1
+  observable_outcome: All public read populations, matching, ambiguity and refresh behavior work through
+    one workflow API.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration and their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents, document-delivery and their actual exported
+      APIs.
+  goal: Implement read-commands for all listed read/implicit lookup surfaces. Shared title selector uses
+    NFC/casefold and phrase/term boundaries with no exact-title precedence; expose selection helpers for
+    mutation scopes, including step parent+direct-child aliases, recent occurrences and typed move destination
+    choices. Search matches one whole field, own comments, context ancestors once, no mutation; --all
+    combines retained history by stable ID with mandatory coverage including empty results. Inspection
+    shows known completed descendants with their own comments, current open descendants and incomplete
+    disclosure, never historical standalone selection. now --all changes inclusion only, retaining normal
+    flat TPL-NOW reason annotations; invalid state remains invalid. Handle missing category as error and
+    valid emptiness as success; time recomputes without HTTP. Preserve full implicit query/error cause
+    and do not translate local/sync failure to no match.
+  failure_domain: All public read populations, matching, ambiguity and refresh behavior work through one
+    workflow API.
+  verification_rationale: API-level workflow tests compose persisted snapshots, controlled HTTP and rendered
+    documents without final launcher. Distinguishing cases cover parent/step mixed ambiguity, noninteractive
+    identical candidate list no detail/prompt, same-title no precedence, matching comment only on deep
+    owner with no unmatched branches, known/unknown sibling order, hidden-category/ancestor union, --all
+    empty coverage and implicit corrupted-cache errors. No refresh means no transport calls; failed refresh
+    prints no normal view. Final launcher integration belongs to T16. Run the named focused unittest command
+    while implementing; it is a starting point for relevant dependency checks. Required tests must not
+    silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
+    suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-CLI-034
+  - REQ-CLI-027
+  - REQ-CLI-021
+  - REQ-CLI-016
+  - REQ-CLI-035
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-OUT-015
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-VERIFY-003
+  - REQ-VERIFY-011
+  - REQ-VERIFY-017
+  - REQ-VERIFY-020
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - read-commands
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  - command-grammar
+  - prompt-input
+  - synchronized-state
+  - rendered-documents
+  - document-delivery
+  expected_paths:
+  - todo_lib/workflows/reads.py
+  - tests/workflows/reads/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t10-focused
+  required_evidence:
+  - t10-focused
+- id: T11
+  title: Terminal setup and idempotent stable initialization
+  origin_stage_ref: release-1
+  observable_outcome: A new or populated configuration initializes the chosen managed scope safely without
+    resetting prior binding/history/cursor.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration, state-store, history-store, exclusive-lock and
+      their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T05
+    kind: interface
+    interface_ref: current-retrieval
+    reason: Consume completed capabilities current-retrieval and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents and their actual exported APIs.
+  goal: Implement initialization capability. With populated config validate all local state before HTTP;
+    missing/owned zero-byte config uses terminal-only wizard, explicit limited mode repairs before credentials,
+    hidden token or environment (never persist environment token), transient eligible root/category discovery
+    and exact fallback suggestions. Confirm full proposed config/structure before protected config save
+    and same-invocation continuation; cancellation/failed discovery cannot provision fallbacks. Existing
+    binding prohibits account/root switching even with config deleted. Read-only full-plus-delta live-task
+    preflight precedes every provision, needs no activity endpoint/history capability and accepts legitimate
+    checked false, nullable timestamps, optional descriptions and floating due. Provision only missing
+    authorized root/default categories/waiting label, then full-plus-delta validation, staged cache/history/cursor
+    and binding-last publication. Repeat init preserves cursor/pending history. Report saved configuration
+    separately from init failure and accepted remote creations for explicit idempotent rerun.
+  failure_domain: A new or populated configuration initializes the chosen managed scope safely without
+    resetting prior binding/history/cursor.
+  verification_rationale: Controlled terminal/HTTP/temporary-home tests cover absent directory, owned
+    empty 0644 config accepted/declined repair, populated never rewritten, no-TTY unchanged, hidden-input
+    failure, environment-token non-persistence and EOF/SIGINT. Existing-root categories are offered without
+    fallback creation; incomplete discovery does not imply empty. An invalid managed checked or tree with
+    missing category/label must block all provisioning; valid unavailable history permits init. Repeat
+    and partial provision rerun preserve stable IDs/cursor/history. File failure before final binding
+    rejects mixed publication without guessing recovery. Run the named focused unittest command while
+    implementing; it is a starting point for relevant dependency checks. Required tests must not silently
+    skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full suite for
+    each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-VERIFY-007
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-032
+  - REQ-DOM-001
+  - REQ-LOCAL-003
+  - REQ-OUT-019
+  - REQ-REPORT-013
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-027
+  - REQ-VERIFY-003
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - initialization
+  consumes_interface_refs:
+  - managed-model
+  - configuration
+  - state-store
+  - history-store
+  - exclusive-lock
+  - command-grammar
+  - prompt-input
+  - current-retrieval
+  - mutation-gateway
+  - synchronized-state
+  - rendered-documents
+  expected_paths:
+  - todo_lib/workflows/init.py
+  - tests/workflows/init/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t11-focused
+  required_evidence:
+  - t11-focused
+- id: T12
+  title: Capture, scalar changes and scheduling/hiding
+  origin_stage_ref: release-1
+  observable_outcome: Validated creation and scheduling requests produce actual reconciled task/step state
+    with ordered partial outcomes.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration and their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Consume completed capabilities read-commands and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents and their actual exported APIs.
+  goal: Implement capture-scheduling from canonical requests. Validate complete batch and proposed observable
+    result, all active sibling sets/tree hiding/capability/depth before first mutation. New tasks P2,
+    steps copy synchronized parent effective priority; repeated steps are siblings, inline steps on one
+    parent unscheduled, several parents plus inline steps invalid. Parent/inline completion order uses
+    gateway ordinary completion semantics; general recursive existing-tree done belongs to T13. Execute
+    one object and options before next, stop first failure/unknown with no rollback. Scheduling locally
+    understood values preserves recurring due metadata; unknown parser expressions only submit when required
+    comparisons are possible. Preserve reminders absent marker, replace/clear explicitly, accept minute-zero
+    only and reject duplicate equivalent offsets. hide requires future own attention day, optional reason
+    independent label, whole-ancestor/descendant validation and missing label init advice only when adding.
+    unhide preserves date/rule/reminders and reports inherited suppression; full clear removes all scheduling/hiding.
+    Reconcile actual attention <=2s only under strict day/rule/zone; print actual creation Due and truthful
+    accepted/unknown recovery.
+  failure_domain: Validated creation and scheduling requests produce actual reconciled task/step state
+    with ordered partial outcomes.
+  verification_rationale: Workflow tests use real grammar, gateway request assertions and independent
+    normalized after-state. Cases include split batch collision before HTTP mutation, step under depth-4
+    refusal, effective parent default, late reminder failure preserving accepted creation, 0m preservation/clear/no-op,
+    recurrence-preserving date-only/timed/floating/fixed updates, unknown hiding expression diagnostic
+    and explicit today rejection. Test +/-2s inclusively versus >2s/day crossing with actual returned
+    state, own reasonless policy and category-hidden descendants. Do not duplicate a complete CLI suite;
+    T16 supplies public composition. Run the named focused unittest command while implementing; it is
+    a starting point for relevant dependency checks. Required tests must not silently skip. The runner
+    owns settled integrated/final broad checks; do not repeatedly run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-MUT-001
+  - REQ-MUT-005
+  - REQ-SCHED-012
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-014
+  - REQ-SCHED-005
+  - REQ-VERIFY-010
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-013
+  - REQ-LOCAL-006
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-SCHED-013
+  - REQ-SEC-007
+  - REQ-SYNC-021
+  - REQ-SYNC-026
+  - REQ-VERIFY-003
+  - REQ-VERIFY-011
+  - REQ-VERIFY-018
+  - REQ-VERIFY-021
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - capture-scheduling
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  - command-grammar
+  - prompt-input
+  - synchronized-state
+  - mutation-gateway
+  - read-commands
+  - rendered-documents
+  expected_paths:
+  - todo_lib/workflows/capture.py
+  - todo_lib/workflows/scheduling.py
+  - tests/workflows/capture/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t12-focused
+  required_evidence:
+  - t12-focused
+- id: T13
+  title: Identity-preserving recursive subtree moves
+  origin_stage_ref: release-1
+  observable_outcome: A known subtree changes category or parent with preserved identities and a valid
+    resulting hierarchy.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration and their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Consume completed capabilities history-retrieval and their actual exported APIs.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Consume completed capabilities read-commands and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents and their actual exported APIs.
+  goal: Implement hierarchy-moves. Resolve source then destination with typed mixed ambiguity and exact
+    positional/marker boundaries; promote exactly empty/bare --task to depth0, refuse category-only step
+    moves and give no candidate kind preference. Validate full known relative subtree depth/cycles/sibling
+    uniqueness/hiding/hidden-category restrictions before direct identity-preserving move; reconcile available
+    known completed descendants, not an all-history childlessness proof. Preserve every known surviving
+    item/comment ID, own fields, timestamps and relative relationships through category change, attachment/reparenting
+    and promotion to depth0. Report resulting role with changed parent before category, using full parent
+    context. Missing/whitespace/mixed-empty operands reject before synchronization; unchanged result is
+    a domain no-op. Stop on rejection/unknown, distinguish accepted remote movement from failed local
+    publication and preserve pending observations. Lifecycle operations belong to T18, not this task.
+  failure_domain: A known subtree changes category or parent with preserved identities and a valid resulting
+    hierarchy.
+  verification_rationale: Controlled independent after-states test cross-category subtree move, nested
+    attachment/promotion, preserved comments/IDs/raw due and known archived descendant depth fit. Reject
+    cycle/depth/sibling/hiding/category-parent conflicts before mutation; missing archive proof alone
+    passes. Shared grammar and selector tests establish operand details; workflow tests distinguish typed
+    ambiguity without preference, step-to-category refusal including own category, exactly empty promotion
+    versus no-op and accepted move followed by local failure. Reconcile all available surviving descendants
+    through the actual gateway rather than assuming a fake says any request succeeds. Run the named focused
+    unittest command while implementing; it is a starting point for relevant dependency checks. Required
+    tests must not silently skip. The runner owns settled integrated/final broad checks; do not repeatedly
+    run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-MUT-004
+  - REQ-VERIFY-012
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-021
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-SCHED-005
+  - REQ-SCHED-011
+  - REQ-SEC-007
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-VERIFY-003
+  - REQ-VERIFY-011
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - hierarchy-moves
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  - command-grammar
+  - prompt-input
+  - synchronized-state
+  - mutation-gateway
+  - history-retrieval
+  - read-commands
+  - rendered-documents
+  expected_paths:
+  - todo_lib/workflows/moves.py
+  - tests/workflows/moves/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t13-focused
+  required_evidence:
+  - t13-focused
+- id: T18
+  title: Recursive completion, recent reopen and bounded deletion
+  origin_stage_ref: release-1
+  observable_outcome: Selected work changes lifecycle with correct occurrence bounds, postorder and truthful
+    partial results.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration and their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Consume completed capabilities history-retrieval and their actual exported APIs.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Consume completed capabilities read-commands and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents and their actual exported APIs.
+  goal: Implement lifecycle-transitions. done previews the full current open subtree in inspection display
+    order, rejects recurring descendants before prompting, requires explicit interactive yes/y with no
+    --yes for nonleaf and executes deterministic ordinary postorder selected root last. Done comments
+    are all validated before first mutation and created sequentially on only the selected stable owner
+    after accepted completion, including archived owners. Recurring selected root uses forward operation/reset_subtasks=0;
+    predict locally known invariant violations and reconcile every accepted normalized occurrence. Reopen
+    admits only current eligible occurrences (cursor,now], ordinary currently completed or recurring latest
+    undo; validate uniqueness for the complete restored ancestor chain and report actual ancestors after
+    plain ok, leaving completed descendants completed. Delete combines open and bounded currently-completed
+    nonrecurring candidates, prints bounded known/open/retrievable completed descendant preview plus older-cascade
+    warning even --yes and performs direct deletion without reopen/undelete. Stop first failed/unknown
+    operation with accepted/unattempted classification and read-only recurring recovery. Cache-only failure
+    cannot imply the accepted occurrence failed or should be repeated.
+  failure_domain: Selected work changes lifecycle with correct occurrence bounds, postorder and truthful
+    partial results.
+  verification_rationale: Nested completion preview/postorder agrees with known-newest and unknown-last
+    siblings, each completes once, recurring descendant blocks all mutations, and mid-tree rejection/unknown
+    stops later work. Own/sibling waiting in a visible category allows recurrence; actual configured hidden
+    violations reject preflight. Test archived disappearance with supported completion evidence and later
+    Done comment partial failure, ordinary plain-ok reopen with restored ancestors and preflight sibling
+    collision, recurring latest-only backward undo and accepted recurrence followed by failed publication.
+    Deletion tests cover cursor/end boundaries, recurring once as open candidate, required preview/warning
+    with --yes and no temporary reopen. Current/history fake after-states are independent of emitted commands.
+    Run the named focused unittest command while implementing; it is a starting point for relevant dependency
+    checks. Required tests must not silently skip. The runner owns settled integrated/final broad checks;
+    do not repeatedly run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-MUT-003
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-VERIFY-021
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-021
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SEC-007
+  - REQ-SYNC-021
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-VERIFY-003
+  - REQ-VERIFY-011
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - lifecycle-transitions
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  - command-grammar
+  - prompt-input
+  - synchronized-state
+  - mutation-gateway
+  - history-retrieval
+  - read-commands
+  - rendered-documents
+  expected_paths:
+  - todo_lib/workflows/lifecycle.py
+  - tests/workflows/lifecycle/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t18-focused
+  required_evidence:
+  - t18-focused
+- id: T14
+  title: Owned comments and observable editor reconciliation
+  origin_stage_ref: release-1
+  observable_outcome: Comment creation and editing preserve stable owner identity and apply only validated
+    ordered changes.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration, state-store, exclusive-lock and their actual
+      exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Consume completed capabilities read-commands and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents and their actual exported APIs.
+  goal: Implement comment-editing and ordered normal comment creation; no-text read delegates to T10.
+    All aliases normalize through T03. Validate every creation body before mutation and emit actual accepted
+    arrow bodies once per owner. For editor use VISUAL/EDITOR/vi shlex argv direct, lock from before sync/selection
+    through cleanup and 0600 buffer. Codec generates oldest existing blocks plus one trailing empty new
+    starter; selectively escapes header-looking/backslash lines and preserves internal whitespace. Validate
+    entire saved structure/IDs before edits then additions then deletions. Empty/unused-starter-only all-shown
+    deletion needs extra confirmation; no original comments plus unused starter is successful no-op. Removed
+    interior header joins text to preceding body and requests original missing-ID deletion, not heuristic
+    failure. Preserve externally added comments, overwrite a concurrently edited known ID intentionally,
+    fail ordered concurrently deleted target. All-success counts versus detailed partial stream/outcome
+    receipts stay distinct; cleanup covers launch/nonzero/SIGINT.
+  failure_domain: Comment creation and editing preserve stable owner identity and apply only validated
+    ordered changes.
+  verification_rationale: Focused codec roundtrips establish unchanged/removed starter, fill/add blocks,
+    escaped header text/backslashes, whitespace edge versus internal lines and malformed/foreign/duplicate/orphan
+    negatives. Representative workflow tests use a controlled editor executable and gateway to establish
+    delete-all confirmation, concurrent added/deleted/edited comments, ordered mid-add failure, own deep-step
+    identity and actual body/count receipts. Public launcher/editor composition is sampled by T16; no
+    accidental-header-loss test or extra confirmation is invented. Run the named focused unittest command
+    while implementing; it is a starting point for relevant dependency checks. Required tests must not
+    silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
+    suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-COMMENT-008
+  - REQ-COMMENT-007
+  - REQ-COMMENT-006
+  - REQ-VERIFY-016
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-DOM-009
+  - REQ-LOCAL-002
+  - REQ-LOCAL-006
+  - REQ-OUT-009
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-026
+  - REQ-VERIFY-003
+  - REQ-VERIFY-011
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - comment-editing
+  consumes_interface_refs:
+  - managed-model
+  - configuration
+  - state-store
+  - exclusive-lock
+  - command-grammar
+  - prompt-input
+  - synchronized-state
+  - mutation-gateway
+  - read-commands
+  - rendered-documents
+  expected_paths:
+  - todo_lib/workflows/comments.py
+  - tests/workflows/comments/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t14-focused
+  required_evidence:
+  - t14-focused
+- id: T15
+  title: Complete current-truth reports and finalization ordering
+  origin_stage_ref: release-1
+  observable_outcome: A report covers exactly its fixed interval and advances/releases history only after
+    complete final output and saved cursor.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration, state-store, history-store, exclusive-lock and
+      their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Consume completed capabilities history-retrieval and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents, document-delivery and their actual exported
+      APIs.
+  goal: Implement report-finalization using full behavior/report and provider-contract notes. Local show/set
+    cursor requires no HTTP/cache; setter accepts explicitly valid supplied boundary with missing/readable-corrupt
+    prior value, one accurate warning and documented confirmation/--yes, never cleanup. Report validates
+    syntax before lock then reloads state and captures one fixed end immediately before HTTP; current
+    resources/comments remain current truth, events/completions filter (start,end]. Required history capabilities/current
+    retention boundary checked without plan_name lookup. Retrieve every required page/window/owner/own-comment
+    before normal report output, fail unavailable archived metadata rather than omit/fabricate/delete.
+    Build Finished root-task occurrences, Progress deep-step occurrences/latest qualifying surviving comment
+    edits, recurring undo pairing and current Hidden snapshot with context once. Honor current role/category/scope/survival,
+    precise sorting/ties and all exact framing. Preview including explicit intervals/pager early quit
+    never changes cursor/history. Final always bypasses pager, complete in-memory render/write/flush then
+    atomic fixed-end cursor then safe covered-history cleanup retaining newer context. A cleanup error
+    leaves successful cursor/output and reports safe extra data; every earlier failure preserves cursor/pending
+    data.
+  failure_domain: A report covers exactly its fixed interval and advances/releases history only after
+    complete final output and saved cursor.
+  verification_rationale: 'Compose actual retrieval/persistence/rendering with independent endpoint fixtures
+    and failure injection: exact cursor/end/subsecond windows, repeated/missing pages, string annotations,
+    current post-boundary text but next-interval event, paired recurring undo, step-owner comment without
+    interval completion and unresolved archived parent. Test capability false/0/-1/positive and start
+    at/before retained boundary, warning suppression never hard-failure suppression. Output/flush/broken
+    pipe/render/cursor failures and SIGINT preserve bytes; successful empty final advances. Separate processes
+    acquire lock before reading cursor. History newer-context cleanup and cleanup-failure ordering are
+    observed, not preseeded eligibility; use T08-produced pending records and no guessed archive endpoint.
+    Run the named focused unittest command while implementing; it is a starting point for relevant dependency
+    checks. Required tests must not silently skip. The runner owns settled integrated/final broad checks;
+    do not repeatedly run a full suite for each role.'
+  correction_instructions: null
+  requirement_refs:
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-003
+  - REQ-REPORT-009
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-011
+  - REQ-REPORT-015
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-032
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-OUT-015
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-SEC-007
+  - REQ-SYNC-021
+  - REQ-SYNC-025
+  - REQ-VERIFY-003
+  - REQ-VERIFY-013
+  - REQ-VERIFY-018
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - workflows
+  provides_interface_refs:
+  - report-finalization
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  - state-store
+  - history-store
+  - exclusive-lock
+  - command-grammar
+  - prompt-input
+  - synchronized-state
+  - history-retrieval
+  - rendered-documents
+  - document-delivery
+  expected_paths:
+  - todo_lib/workflows/report.py
+  - tests/workflows/report/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t15-focused
+  required_evidence:
+  - t15-focused
+- id: T16
+  title: Compose the executable CLI and offline routine check
+  origin_stage_ref: release-1
+  observable_outcome: The copied-layout public CLI reaches every canonical workflow and scripts/check
+    exercises the complete offline implementation.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration, state-store, history-store, exclusive-lock and
+      their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T04
+    kind: interface
+    interface_ref: http-transport
+    reason: Consume completed capabilities http-transport and their actual exported APIs.
+  - task_ref: T05
+    kind: interface
+    interface_ref: current-retrieval
+    reason: Consume completed capabilities current-retrieval and their actual exported APIs.
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Consume completed capabilities history-retrieval and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents, document-delivery and their actual exported
+      APIs.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Consume completed capabilities read-commands and their actual exported APIs.
+  - task_ref: T11
+    kind: interface
+    interface_ref: initialization
+    reason: Consume completed capabilities initialization and their actual exported APIs.
+  - task_ref: T12
+    kind: interface
+    interface_ref: capture-scheduling
+    reason: Consume completed capabilities capture-scheduling and their actual exported APIs.
+  - task_ref: T13
+    kind: interface
+    interface_ref: hierarchy-moves
+    reason: Consume completed capabilities hierarchy-moves and their actual exported APIs.
+  - task_ref: T18
+    kind: interface
+    interface_ref: lifecycle-transitions
+    reason: Consume completed capabilities lifecycle-transitions and their actual exported APIs.
+  - task_ref: T14
+    kind: interface
+    interface_ref: comment-editing
+    reason: Consume completed capabilities comment-editing and their actual exported APIs.
+  - task_ref: T15
+    kind: interface
+    interface_ref: report-finalization
+    reason: Consume completed capabilities report-finalization and their actual exported APIs.
+  goal: 'Implement public-cli and routine-check by composing accepted dependency APIs, without parallel
+    implementations. Root todo is regular executable exact python3 shebang with sibling todo_lib layout.
+    Wire complete canonical help/aliases, default now, full implicit query and syntax/domain/operational/output/partial/SIGINT
+    statuses and streams. All prompts including hidden wizard go through T03. Top-level boundary redacts
+    secrets/unexpected exceptions and cleans locks/temp/terminal on interruption without rollback, cache
+    deletion or premature cursor/history update. Own explicit cross-cutting integration: sample setup-to-now/capture/refine,
+    step alias scheduling and move, editor comments, archived completion/reopen, search and report/final
+    cursor using actual workflows/adapter with controlled transport. Use representative public calls,
+    not one full end-to-end matrix per alias. REQ-VERIFY-* ownership here establishes composed coverage;
+    dependency focused tests provide detailed clauses. scripts/check validates required launcher/imports/syntax
+    without bytecode and runs the complete offline suite once; fail no tests/missing required packages/required
+    skips, use synthetic mini-suites to test discovery/failure propagation without recursive full runs.
+    Adapt actual dependency APIs and repair demonstrated source/test integration defects within the declared
+    components; all producers are dependencies, so this overlap is sequential. Report protected-input
+    or product contradictions rather than bypassing boundaries.'
+  failure_domain: The copied-layout public CLI reaches every canonical workflow and scripts/check exercises
+    the complete offline implementation.
+  verification_rationale: Named task check is focused tests/cli with actual main/launcher routing, help
+    without state, no-arg equivalence, typed ambiguity, status/stream/signal/secret protections and representative
+    composed workflows. Include tiny tests/delivery/check via that suite or explicit loader, documenting
+    count. Do not make CLI self-tests invoke scripts/check or verify-clean against the full repo. Runner
+    integrated-complete invokes scripts/check when T16 is available; same subject roles reuse this ID.
+    Full suite also covers earlier focused packages; that regression on newly composed source is purposeful,
+    not repeated per role. Run the named focused unittest command while implementing; it is a starting
+    point for relevant dependency checks. Required tests must not silently skip. The runner owns settled
+    integrated/final broad checks; do not repeatedly run a full suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-CLI-030
+  - REQ-CLI-024
+  - REQ-CLI-032
+  - REQ-LOCAL-006
+  - REQ-PLAT-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-004
+  - REQ-VERIFY-013
+  - REQ-VERIFY-011
+  - REQ-VERIFY-018
+  - REQ-VERIFY-020
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-031
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-012
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-019
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  exclusion_refs: *id001
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - public-cli
+  - routine-check
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  - state-store
+  - history-store
+  - exclusive-lock
+  - command-grammar
+  - prompt-input
+  - http-transport
+  - current-retrieval
+  - history-retrieval
+  - mutation-gateway
+  - synchronized-state
+  - rendered-documents
+  - document-delivery
+  - read-commands
+  - initialization
+  - capture-scheduling
+  - hierarchy-moves
+  - lifecycle-transitions
+  - comment-editing
+  - report-finalization
+  expected_paths:
+  - todo
+  - todo_lib/**
+  - tests/**
+  - scripts/check
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t16-focused
+  required_evidence:
+  - t16-focused
+- id: T17
+  title: Audit complete delivery and document operations
+  origin_stage_ref: release-1
+  observable_outcome: The complete release is evidenced in the pinned Linux/amd64 Python 3.11 environment
+    and works as an unchanged copied runtime.
+  dependencies:
+  - task_ref: T01
+    kind: interface
+    interface_ref: managed-model
+    reason: Consume completed capabilities managed-model, time-policy and their actual exported APIs.
+  - task_ref: T02
+    kind: interface
+    interface_ref: configuration
+    reason: Consume completed capabilities configuration, state-store, history-store, exclusive-lock and
+      their actual exported APIs.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Consume completed capabilities command-grammar, prompt-input and their actual exported APIs.
+  - task_ref: T04
+    kind: interface
+    interface_ref: http-transport
+    reason: Consume completed capabilities http-transport and their actual exported APIs.
+  - task_ref: T05
+    kind: interface
+    interface_ref: current-retrieval
+    reason: Consume completed capabilities current-retrieval and their actual exported APIs.
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Consume completed capabilities history-retrieval and their actual exported APIs.
+  - task_ref: T07
+    kind: interface
+    interface_ref: mutation-gateway
+    reason: Consume completed capabilities mutation-gateway and their actual exported APIs.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Consume completed capabilities synchronized-state and their actual exported APIs.
+  - task_ref: T09
+    kind: interface
+    interface_ref: rendered-documents
+    reason: Consume completed capabilities rendered-documents, document-delivery and their actual exported
+      APIs.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Consume completed capabilities read-commands and their actual exported APIs.
+  - task_ref: T11
+    kind: interface
+    interface_ref: initialization
+    reason: Consume completed capabilities initialization and their actual exported APIs.
+  - task_ref: T12
+    kind: interface
+    interface_ref: capture-scheduling
+    reason: Consume completed capabilities capture-scheduling and their actual exported APIs.
+  - task_ref: T13
+    kind: interface
+    interface_ref: hierarchy-moves
+    reason: Consume completed capabilities hierarchy-moves and their actual exported APIs.
+  - task_ref: T18
+    kind: interface
+    interface_ref: lifecycle-transitions
+    reason: Consume completed capabilities lifecycle-transitions and their actual exported APIs.
+  - task_ref: T14
+    kind: interface
+    interface_ref: comment-editing
+    reason: Consume completed capabilities comment-editing and their actual exported APIs.
+  - task_ref: T15
+    kind: interface
+    interface_ref: report-finalization
+    reason: Consume completed capabilities report-finalization and their actual exported APIs.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Consume completed capabilities public-cli, routine-check and their actual exported APIs.
+  goal: Integrate and audit all Accepted requirements using dependency source, focused tests and exact
+    contract map without changing protected inputs. Supply scripts/verify-clean, copied-installation probes
+    and final acceptance evidence; make only demonstrated integration/coverage repairs within declared
+    components, preserving earlier product behavior. Run in the execution-setup-pinned Linux/amd64 CPython
+    3.11 Docker image with direct Codex and available GNU less/tzdata; if environment is absent report
+    setup blocker, do not install Python runtime dependencies. Record Git status entry/end, isolated temporary
+    HOME/environment with synthetic tokens only, copy unchanged todo plus entire todo_lib tree to a temporary
+    PATH directory, run from outside repository with no source/tests import dependence. Exercise copied
+    help plus representative persisted read/lookup and controlled initialization/mutation/report behavior
+    using test-only transport injection; do not add runtime test flags or contact Todoist. verify-clean
+    composes exactly one scripts/check complete suite plus distinct copied probes and bounded real less
+    -FR PTY evidence for short fit, long G/q/color, with controlled failures/SIGINT already tested. Harness
+    self-tests use tiny synthetic suites and never relaunch full suites. Document install/copy commands,
+    config, backup/consistent restore/history.json path, cache versus full-directory reset/cursor consequences
+    and explicit user-run disposable-account smoke with outcomes/cleanup; runner never performs smoke.
+    acceptance-evidence.md records observed source subject, commands/results, exact limits, provider-contract
+    versus live unverified behavior and any concrete gaps, not a new test ledger or invented independent
+    review. Verify open A/nested B/comment -> external completion evidence -> refresh/restart/cache rebuild
+    -> preview/failure preservation -> successful final cleanup path through the public composition, including
+    newer pending ancestry retention and separate-process ordering. Reuse matching evidence already adequate;
+    add focused cases only for real gaps.
+  failure_domain: The complete release is evidenced in the pinned Linux/amd64 Python 3.11 environment
+    and works as an unchanged copied runtime.
+  verification_rationale: Focused tests/delivery/final prove verification-harness/copy isolation and failure
+    propagation using small disposable fixtures, not broad nested application reruns. Runner final-delivery
+    executes verify-clean once as the same ID for task/integrated/stage/project roles on its settled subject.
+    scripts/check is the sole full-suite call inside verify-clean; copied probes/real-less are distinct
+    evidence. Search logs/code for inherited credentials, generated artifacts, unauthorized network and
+    source import coupling. Earlier integrated-complete is a different pre-audit subject; on final subject
+    final-delivery subsumes it, using shared prerequisite policy described in TASK.md. No live Todoist,
+    performance/stress/extra platforms or full-history guarantee. Run the named focused unittest command
+    while implementing; it is a starting point for relevant dependency checks. Required tests must not
+    silently skip. The runner owns settled integrated/final broad checks; do not repeatedly run a full
+    suite for each role.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-PLAT-002
+  - REQ-BUILD-002
+  - REQ-VERIFY-002
+  - REQ-VERIFY-005
+  - REQ-OPS-001
+  - REQ-VERIFY-022
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  exclusion_refs: *id001
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - managed-model
+  - time-policy
+  - configuration
+  - state-store
+  - history-store
+  - exclusive-lock
+  - command-grammar
+  - prompt-input
+  - http-transport
+  - current-retrieval
+  - history-retrieval
+  - mutation-gateway
+  - synchronized-state
+  - rendered-documents
+  - document-delivery
+  - read-commands
+  - initialization
+  - capture-scheduling
+  - hierarchy-moves
+  - lifecycle-transitions
+  - comment-editing
+  - report-finalization
+  - public-cli
+  - routine-check
+  expected_paths:
+  - todo
+  - todo_lib/**
+  - scripts/**
+  - tests/**
+  - README.md
+  - docs/user/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t17-focused
+  - final-delivery
+  required_evidence:
+  - t17-focused
+  - final-delivery
+  - docs/implementation/acceptance-evidence.md
+stages:
+- id: release-1
+  final_project: true
+  active_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  satisfied_requirement_refs: []
+  deferred_requirement_refs: []
+  check_refs:
+  - final-delivery
+verification:
+  after_each_merge:
+  - merge-hygiene
+  after_integration:
+  - integrated-complete
+  - final-delivery
+  stage_final:
+  - final-delivery
+  project_final:
+  - final-delivery
