@@ -1,12 +1,40 @@
 # todo-3 product specification
 
-Design revision: **5 — accepted partial-first-init failure boundary, 2026-10-26**.
+Design revision: **6 — provider is_shared-only correction, 2026-10-26**.
 State: **confirmed current specification; design commit recorded in the durable handoff**.
 
 ## Current revision and accepted-assignment boundary
 
-Read [partial-initialization-failure.md](partial-initialization-failure.md) first
-for the current first-init local-publication failure boundary and precedence.
+Read [project-sharing-field.md](project-sharing-field.md) first. It supersedes
+only the erroneous `shared`/`is_shared` provider-field rule in REQ-SYNC-021 and
+makes the remote-discovery failure phase explicit for initialization inside the
+wizard. Require the provider boolean `is_shared`, with no legacy `shared`
+fallback or missing-value privacy default. Internal `Project.shared` and local
+storage names may remain. Personal/unshared eligibility, Inbox/workspace rejection
+and all unrelated safety behavior remain unchanged.
+
+The actual operator instruction was “do that”, after disclosure of this exact
+is_shared-only correction, matching Plan alignment, adapter/fixture correction and
+accurate discovery error labeling. Source:
+`/home/neuron/Documents/cml/todo-3/runtime/operator/is-shared-only-authorization-20261026.md`.
+This settled instruction authorizes this correction and its matching Plan and
+runner work; no repeated interview or confirmation is pending. Stop before any
+additional Design/Plan scope change after this approved alignment. The older
+dual-spelling proposal in the diagnosis is superseded.
+
+Run-001 completed all 19 accepted assignments at
+`ec9bd8da175ddc3fcfe715de3ff7a6721dc5eaad`. Preserve every accepted effective
+assignment and its original binding bytes. Planning must use supported successor
+obligations and follow-up work for this correction, without reopening accepted
+tasks. The new definitions are REQ-SYNC-028, REQ-INIT-010 and REQ-VERIFY-026.
+No application, test, plan or runner-configuration change belongs to this Design
+revision. No new provider snapshot or live-account access is required.
+
+## Preserved revision 5 agreement
+
+Then read [partial-initialization-failure.md](partial-initialization-failure.md)
+for the unchanged first-init local-publication
+failure boundary and precedence.
 The operator accepted error and rejection of inconsistent files with the existing
 explicit manual fresh start, including its disclosed pending-history/report-cursor
 loss. Rerunning init need not recover every partial state, including a timezone
@@ -116,7 +144,8 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped successor
-precedence in partial-initialization-failure.md, command-time-precision.md and
+precedence in project-sharing-field.md, partial-initialization-failure.md,
+command-time-precision.md and
 publication-failure.md governing
 current unfinished/successor work;
 named TPL templates remain exact. Each ID has one definition. Provider files are evidence rather than
@@ -233,5 +262,6 @@ proof, report-owner resolution and pending-history cleanup ordering.
 There are no unresolved product decisions. The operator confirmed this written
 revision; technical feasibility is not certified by that confirmation.
 The earlier fresh-implementation handoff is historical. Current Planning consumes
-revision 5 and its retained handoff, assesses the initialized run, protects accepted
-assignments, and aligns affected unfinished work using supported revision adoption.
+revision 6 and its retained handoff, assesses the completed run, protects accepted
+assignments, and prepares only the approved follow-up correction using supported
+revision adoption.
