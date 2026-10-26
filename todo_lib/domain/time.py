@@ -5,18 +5,119 @@ Attention retains raw due data and original scalar input. `instant` is UTC;
 Python datetime presentation has microsecond precision; raw text is never rounded
 or rewritten. Local parsing errors raise DomainError; unknown English expressions
 return kind='unresolved'. Only remote floating values use the fold/gap policy.
+
+ExactInstant is the shared immutable timestamp value. instant_from_wire accepts
+aware RFC 3339 text; instant_key/text/datetime accept it or aware datetime, never
+None, naive datetime or other types. Invalid values raise DomainError. Exact keys
+are fractions.Fraction seconds with unbounded arithmetic, independent of Decimal
+context. instant_text preserves fractional digits in UTC. instant_datetime alone
+projects to microseconds for display/calendar use, never comparison/persistence.
 """
 from calendar import monthrange
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from fractions import Fraction
+from functools import total_ordering
 import re
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .errors import DomainError
 
 UTC = timezone.utc
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+WIRE = re.compile(r'(\d{4}-\d\d-\d\d)[Tt](\d\d:\d\d:\d\d)(?:\.([0-9]+))?([Zz]|[+-]\d\d:\d\d)\Z')
+
+
+@total_ordering
+class ExactInstant:
+    """Immutable UTC second plus fraction; construct with instant_from_wire.
+
+    Equality and ordering use exact instants, including against aware datetime.
+    Unhashable: use instant_key for dictionary/set keys. Datetime fold hashing
+    cannot represent this exact mixed-type equality consistently.
+    Fraction spelling (including trailing zeros) is retained for serialization.
+    This deliberately offers no implicit datetime projection or calendar API.
+    """
+    __slots__ = ('_second', '_fraction')
+
+    def __init__(self, second, fraction=''):
+        if (not isinstance(second, datetime) or second.tzinfo is None
+                or second.utcoffset() != timedelta(0) or second.microsecond
+                or not isinstance(fraction, str)
+                or (fraction and not re.fullmatch('[0-9]+', fraction))):
+            raise DomainError('ExactInstant requires a whole UTC second and fractional digits')
+        object.__setattr__(self, '_second', second.astimezone(UTC))
+        object.__setattr__(self, '_fraction', fraction)
+
+    def __setattr__(self, name, value):
+        raise AttributeError('ExactInstant is immutable')
+
+    def __delattr__(self, name):
+        raise AttributeError('ExactInstant is immutable')
+
+    def __deepcopy__(self, memo):
+        return self
+
+    def __eq__(self, other):
+        if not isinstance(other, (ExactInstant, datetime)):
+            return NotImplemented
+        return instant_key(self) == instant_key(other)
+
+    def __lt__(self, other):
+        if not isinstance(other, (ExactInstant, datetime)):
+            return NotImplemented
+        return instant_key(self) < instant_key(other)
+
+    __hash__ = None
+
+    def __repr__(self):
+        return f'ExactInstant({instant_text(self)!r})'
+
+
+def instant_from_wire(text: str) -> ExactInstant:
+    """Parse aware RFC 3339 text, preserving every supplied fraction digit."""
+    match = WIRE.fullmatch(text) if isinstance(text, str) else None
+    if not match:
+        raise DomainError('timestamp must be aware RFC 3339 text')
+    day, clock, fraction, offset = match.groups()
+    try:
+        if offset.lower() != 'z' and (int(offset[1:3]) > 23 or int(offset[4:]) > 59):
+            raise ValueError()
+        second = datetime.fromisoformat(day + 'T' + clock + ('+00:00' if offset.lower() == 'z' else offset))
+        return ExactInstant(second.astimezone(UTC), fraction or '')
+    except (ValueError, OverflowError):
+        raise DomainError('invalid RFC 3339 timestamp') from None
+
+
+def instant_key(value: 'ExactInstant | datetime') -> Fraction:
+    """Return an exact, mutually comparable UTC rational number of seconds."""
+    if isinstance(value, ExactInstant):
+        delta = value._second - EPOCH
+        return Fraction(delta.days * 86400 + delta.seconds) + Fraction(Decimal('0.' + (value._fraction or '0')))
+    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+        raise DomainError('timestamp must be an ExactInstant or aware datetime')
+    delta = value.astimezone(UTC) - EPOCH
+    return Fraction(delta.days * 86400 + delta.seconds) + Fraction(delta.microseconds, 1000000)
+
+
+def instant_text(value: 'ExactInstant | datetime') -> str:
+    """Emit UTC RFC 3339, retaining all supplied fractional digits."""
+    instant_key(value)
+    if isinstance(value, ExactInstant):
+        return value._second.isoformat()[:-6] + ('.' + value._fraction if value._fraction else '') + 'Z'
+    return value.astimezone(UTC).isoformat().replace('+00:00', 'Z')
+
+
+def instant_datetime(value: 'ExactInstant | datetime') -> datetime:
+    """Return UTC aware datetime, truncating beyond microseconds for display."""
+    instant_key(value)
+    if isinstance(value, ExactInstant):
+        return value._second.replace(microsecond=int((value._fraction + '000000')[:6]))
+    return value.astimezone(UTC)
+
+
 DATE = re.compile(r'\d{4}-\d{2}-\d{2}\Z')
 ISO = re.compile(r'\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[Zz]|[+-]\d{2}:\d{2})?\Z')
 UNITS = {
@@ -197,9 +298,12 @@ def parse_attention(expression: str, now: datetime, account_zone: str | ZoneInfo
     return Attention('unresolved', expression=expression)
 
 
-def parse_boundary(value: str, now: datetime, account_zone: str | ZoneInfo) -> datetime:
+def parse_boundary(value: str, now: datetime, account_zone: str | ZoneInfo) -> ExactInstant | datetime:
     """ISO date/midnight, ISO date-time or positive Nd/N days ago -> UTC.
 
+    Returns ExactInstant for fractional ISO input and aware datetime otherwise.
+    Preserves every supplied digit, including offset-free wall-time fractions,
+    without traversing Attention or context-dependent Decimal arithmetic.
     Does not enforce workflow range/future checks or accept attention weekdays.
     """
     require_aware(now, 'now')
@@ -211,10 +315,19 @@ def parse_boundary(value: str, now: datetime, account_zone: str | ZoneInfo) -> d
         if match:
             wall = now.astimezone(zone).replace(tzinfo=None) - timedelta(days=int(match[1]))
             return resolve_wall(wall, zone)
-        parsed = _absolute(value.strip(), zone, offset_required=False)
-        if parsed.kind == 'date':
-            return resolve_wall(datetime.combine(parsed.date_value, time()), zone)
-        return parsed.instant
+        text = value.strip()
+        if DATE.fullmatch(text):
+            return resolve_wall(datetime.combine(date.fromisoformat(text), time()), zone)
+        if not ISO.fullmatch(text):
+            raise ValueError('invalid ISO boundary')
+        parsed = datetime.fromisoformat(text.replace('z', '+00:00').replace('Z', '+00:00'))
+        fraction = re.search(r':\d{2}\.([0-9]+)', text)
+        # Calendar/DST resolution needs only the whole second. Fractional digits
+        # are independent of minute-based offsets and never enter arithmetic.
+        if fraction:
+            parsed = parsed.replace(microsecond=0)
+        resolved = resolve_wall(parsed, zone) if parsed.tzinfo is None else parsed.astimezone(UTC)
+        return ExactInstant(resolved, fraction[1]) if fraction else resolved
     except DomainError as exc:
         raise DomainError(str(exc) + '; boundary examples: 2026-10-19, 2026-10-19T09:00:00+02:00, \"2d ago\", \"2 days ago\"; offset-free values use account timezone and days retain local wall time') from exc
     except (ValueError, OverflowError) as exc:

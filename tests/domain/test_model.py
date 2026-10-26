@@ -19,6 +19,35 @@ def snap(*items, **kwargs):
 
 
 class ModelTests(unittest.TestCase):
+    def test_exact_instants_order_lifecycle_and_validation(self):
+        early = instant_from_wire('2026-10-23T08:00:00.123456001Z')
+        late = instant_from_wire('2026-10-23T08:00:00.123456999Z')
+        s = snap(Item('a', 'c', 'Early', added_at=early),
+                 Item('z', 'c', 'Late', added_at=late), Item('null', 'c', 'Unknown'))
+        validate(s)
+        self.assertEqual([i.id for i in ordered_siblings(s, 'c')], ['z', 'a', 'null'])
+        tree = snap(Item('root', 'c', 'Root'),
+                    replace(s.items['a'], parent_id='root'), replace(s.items['z'], parent_id='root'))
+        self.assertEqual([i.id for i in subtree(tree, 'root')], ['root', 'z', 'a'])
+        self.assertEqual([i.id for i in completion_order(tree, 'root')], ['z', 'a', 'root'])
+        done = replace(s, items={k: replace(v, completed=True, completed_at=v.added_at)
+                               for k, v in s.items.items() if k != 'null'})
+        cursor = instant_from_wire('2026-10-23T08:00:00.123456500Z')
+        for helper in (recent_reopen_candidates, completed_deletion_candidates):
+            self.assertEqual([c.item_id for c in helper(done, cursor, late)], ['z'])
+            self.assertEqual([c.item_id for c in helper(done, NOW, late)], ['a', 'z'])
+        recurring = snap(Item('r', 'c', 'Recurring', attention=due('every day')),
+                         occurrences={'z': Occurrence('z', 'r', early, True),
+                                      'a': Occurrence('a', 'r', late, True, True)})
+        self.assertEqual(recent_reopen_candidates(recurring, NOW, late), ())
+        for bad in ('2026-10-23T08:00:00Z', datetime(2026, 1, 1), 42):
+            with self.subTest(bad=bad), self.assertRaisesRegex(DomainError, 'item.added_at'):
+                validate(snap(Item('x', 'c', 'X', added_at=bad)))
+            with self.assertRaises(DomainError):
+                validate(snap(Item('x', 'c', 'X'), occurrences={'o': Occurrence('o', 'x', bad)}))
+        with self.assertRaises(DomainError):
+            validate(snap(Item('x', 'c', 'X'), occurrences={'o': Occurrence('o', 'x', None)}))
+
     def test_out_of_order_depth_four_roles_and_traversal(self):
         items = [Item(str(n), 'c', str(n), str(n - 1) if n else None) for n in range(5)]
         s = snap(*reversed(items))

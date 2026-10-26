@@ -4,6 +4,11 @@ Successful prepare_candidates validates all complete prospective content before
 any replacement. Publication order is cache, history, optional initial cursor,
 binding. A later replacement failure may leave a mixed set: readers reject it.
 There is deliberately no journal, rollback, or multi-file transaction guarantee.
+Timestamp arguments accept domain.ExactInstant or aware datetime. Loaded cursor,
+synced_at, model and history timestamps are ExactInstant; nullable fields retain
+None. Schema-1 UTC strings preserve all fraction digits. Invalid required stored
+times raise LocalError without repairing files. write_cursor additionally requires
+UTC for datetime inputs; ExactInstant is intrinsically UTC.
 """
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone, timedelta
@@ -30,11 +35,11 @@ class Binding:
 @dataclass(frozen=True)
 class LocalState:
     binding: Binding
-    cursor: datetime
+    cursor: d.ExactInstant | datetime
     snapshot: d.Snapshot | None
     history: History
     sync_token: str | None
-    synced_at: datetime | None
+    synced_at: d.ExactInstant | datetime | None
 
 
 @dataclass(frozen=True)
@@ -146,7 +151,10 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
     the caller's lock before replacing any file.
     Tokens here are opaque incremental Sync tokens, never API credentials.
     """
-    d.validate(snapshot, hidden_names)
+    try:
+        d.validate(snapshot, hidden_names)
+    except d.DomainError as error:
+        raise LocalError(str(error)) from None
     validate_history(history)
     binding = Binding(snapshot.account.id, account_display, snapshot.root.id,
         snapshot.root.name, {k: v.name for k, v in snapshot.categories.items()},
@@ -264,8 +272,8 @@ class StateStore:
         No history cleanup or network activity. Workflow holds the process lock.
         """
         check_paths(self.root)
-        d.require_aware(aware_utc)
-        if aware_utc.utcoffset() != timedelta(0):
+        instant(aware_utc)
+        if isinstance(aware_utc, datetime) and aware_utc.utcoffset() != timedelta(0):
             raise LocalError('write_cursor requires an aware UTC instant')
         path = self.root / 'report-cursor'
         if regular(path, missing=True) is not None:

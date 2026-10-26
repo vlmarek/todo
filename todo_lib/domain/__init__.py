@@ -40,3 +40,7 @@ __all__ = (
     'completion_order', 'recent_reopen_candidates', 'completed_deletion_candidates',
     'reopen_chain', 'require_editable',
 )
+
+from .time import ExactInstant, instant_from_wire, instant_key, instant_text, instant_datetime
+
+__all__ += ("ExactInstant", "instant_from_wire", "instant_key", "instant_text", "instant_datetime")

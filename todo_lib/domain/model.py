@@ -4,6 +4,9 @@ All IDs are nonempty strings. Collections are keyed by those IDs. A Snapshot is 
 complete candidate merge, never a provider page. Roles and depths derive from
 parent links. Call validate before publishing a candidate; validation returns the
 same snapshot without rewriting text, replacing null times, or doing I/O.
+Item/Comment creation and Item/Occurrence/LifecycleCandidate completion timestamps
+accept ExactInstant or aware datetime. Nullable fields alone accept None. Semantic
+ordering uses instant_key; datetime conversion belongs to display/calendar code.
 
 A project/category record describes *current* scope. Binding records authoritative
 stable identity. Discovery/enrollment is explicit through enroll_categories;
@@ -16,6 +19,7 @@ from enum import IntEnum
 from decimal import Decimal
 from typing import Mapping, Iterable
 from .errors import DomainError
+from .time import ExactInstant, instant_key
 from .text import validate_title, validate_body, title_key, split_waiting
 from .time import (Attention, account_timezone, require_aware, attention_order,
                    validate_reminder_offsets, resolve_remote_due, same_attention)
@@ -78,9 +82,9 @@ class Item:
     priority: int = 2
     attention: Attention | None = None
     labels: frozenset[str] = frozenset()
-    added_at: datetime | None = None
+    added_at: ExactInstant | datetime | None = None
     completed: bool = False
-    completed_at: datetime | None = None
+    completed_at: ExactInstant | datetime | None = None
 
     @property
     def role(self) -> str:
@@ -100,7 +104,7 @@ class Comment:
     id: str
     item_id: str
     body: str
-    added_at: datetime | None = None
+    added_at: ExactInstant | datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -115,7 +119,7 @@ class Occurrence:
     """One authoritative completion occurrence; undone occurrences are ineligible."""
     id: str
     item_id: str
-    completed_at: datetime
+    completed_at: ExactInstant | datetime
     recurring: bool = False
     undone: bool = False
 
@@ -130,6 +134,13 @@ class Snapshot:
     comments: Mapping[str, Comment] = field(default_factory=dict)
     reminders: Mapping[str, Reminder] = field(default_factory=dict)
     occurrences: Mapping[str, Occurrence] = field(default_factory=dict)
+
+
+def _timestamp(value, field):
+    try:
+        instant_key(value)
+    except DomainError:
+        raise DomainError(f'{field} must be an ExactInstant or aware datetime') from None
 
 
 def _id(value, name):
@@ -216,10 +227,7 @@ def root_task(snapshot: Snapshot, item_id: str) -> Item:
 def _sibling_key(item: Item):
     if item.added_at is None:
         return (1, 0, item.id)
-    require_aware(item.added_at, 'item.added_at')
-    # datetime subtraction rather than float timestamp avoids precision loss.
-    from datetime import timezone
-    return (0, -(item.added_at.astimezone(timezone.utc) - datetime(1970, 1, 1, tzinfo=timezone.utc)), item.id)
+    return (0, -instant_key(item.added_at), item.id)
 
 
 def ordered_siblings(snapshot: Snapshot, category_id: str, parent_id: str | None = None) -> tuple[Item, ...]:
@@ -431,9 +439,9 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
         if any(not isinstance(label, str) or not label for label in item.labels):
             raise DomainError('item.labels must contain nonempty strings')
         if item.added_at is not None:
-            require_aware(item.added_at, 'item.added_at')
+            _timestamp(item.added_at, 'item.added_at')
         if item.completed_at is not None:
-            require_aware(item.completed_at, 'item.completed_at')
+            _timestamp(item.completed_at, 'item.completed_at')
         if item.completed and item.completed_at is None:
             raise DomainError('completed item requires completed_at')
         if item.recurring and item.completed:
@@ -446,7 +454,7 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
             raise DomainError('comment.item_id outside managed items')
         validate_body(comment.body)
         if comment.added_at is not None:
-            require_aware(comment.added_at, 'comment.added_at')
+            _timestamp(comment.added_at, 'comment.added_at')
     offsets: dict[str, list[int]] = {}
     for reminder in snapshot.reminders.values():
         if reminder.item_id not in snapshot.items:
@@ -460,7 +468,7 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
     for occurrence in snapshot.occurrences.values():
         if occurrence.item_id not in snapshot.items:
             raise DomainError('occurrence.item_id outside surviving managed items')
-        require_aware(occurrence.completed_at, 'occurrence.completed_at')
+        _timestamp(occurrence.completed_at, 'occurrence.completed_at')
         if type(occurrence.recurring) is not bool or type(occurrence.undone) is not bool:
             raise DomainError('occurrence lifecycle flags must be booleans')
     validate_hiding(snapshot, hidden_names)
@@ -567,39 +575,39 @@ def completion_order(snapshot: Snapshot, item_id: str) -> tuple[Item, ...]:
 class LifecycleCandidate:
     """Reopen/delete selection fact; occurrence is present for recurring undo."""
     item_id: str
-    completed_at: datetime
+    completed_at: ExactInstant | datetime
     occurrence_id: str | None = None
 
 
-def _interval(cursor: datetime, now: datetime):
-    cursor = require_aware(cursor, 'report cursor').astimezone(timezone.utc)
-    now = require_aware(now, 'now').astimezone(timezone.utc)
+def _interval(cursor: ExactInstant | datetime, now: ExactInstant | datetime):
+    cursor = instant_key(cursor)
+    now = instant_key(now)
     if cursor > now:
         raise DomainError('report cursor must not be after now')
     return cursor, now
 
 
-def recent_reopen_candidates(snapshot: Snapshot, cursor: datetime, now: datetime) -> tuple[LifecycleCandidate, ...]:
+def recent_reopen_candidates(snapshot: Snapshot, cursor: ExactInstant | datetime, now: ExactInstant | datetime) -> tuple[LifecycleCandidate, ...]:
     """Eligible completions in absolute (cursor, now], retaining supplied times."""
     cursor, now = _interval(cursor, now)
     result = [LifecycleCandidate(i.id, i.completed_at) for i in snapshot.items.values()
-              if i.completed and not i.recurring and cursor < i.completed_at.astimezone(timezone.utc) <= now]
+              if i.completed and not i.recurring and cursor < instant_key(i.completed_at) <= now]
     for item in snapshot.items.values():
         if not item.recurring or item.completed:
             continue
         events = [o for o in snapshot.occurrences.values() if o.item_id == item.id and o.recurring]
-        latest = max(events, key=lambda o: (o.completed_at.astimezone(timezone.utc), o.id), default=None)
-        if latest and not latest.undone and cursor < latest.completed_at.astimezone(timezone.utc) <= now:
+        latest = max(events, key=lambda o: (instant_key(o.completed_at), o.id), default=None)
+        if latest and not latest.undone and cursor < instant_key(latest.completed_at) <= now:
             result.append(LifecycleCandidate(item.id, latest.completed_at, latest.id))
-    return tuple(sorted(result, key=lambda c: (c.completed_at.astimezone(timezone.utc), c.item_id)))
+    return tuple(sorted(result, key=lambda c: (instant_key(c.completed_at), c.item_id)))
 
 
-def completed_deletion_candidates(snapshot: Snapshot, cursor: datetime, now: datetime) -> tuple[LifecycleCandidate, ...]:
+def completed_deletion_candidates(snapshot: Snapshot, cursor: ExactInstant | datetime, now: ExactInstant | datetime) -> tuple[LifecycleCandidate, ...]:
     """Currently completed nonrecurring objects only, never historical recurrence."""
     cursor, now = _interval(cursor, now)
     return tuple(sorted((LifecycleCandidate(i.id, i.completed_at) for i in snapshot.items.values()
-                         if i.completed and not i.recurring and cursor < i.completed_at.astimezone(timezone.utc) <= now),
-                        key=lambda c: (c.completed_at.astimezone(timezone.utc), c.item_id)))
+                         if i.completed and not i.recurring and cursor < instant_key(i.completed_at) <= now),
+                        key=lambda c: (instant_key(c.completed_at), c.item_id)))
 
 
 def reopen_chain(snapshot: Snapshot, item_id: str) -> tuple[Item, ...]:
