@@ -97,7 +97,9 @@ def deliver(document, settings, original_streams=None, view_kind='now', *, envir
         # TemporaryFile is created mode 0600 and immediately unlinked on Unix.
         # Complete the file before launch; no short/empty-output fit heuristics.
         with tempfile.TemporaryFile(mode='w+b') as source:
-            content = document.stdout
+            # A child writes through stdout's file descriptor, bypassing write().
+            # Apply any public output filter before bytes reach its input file.
+            content = getattr(streams.stdout, 'sanitize', lambda text: text)(document.stdout)
             if content and not content.endswith('\n'):
                 content += '\n'
             encoded = content.encode('utf-8')

@@ -101,7 +101,9 @@ class CaptureWorkflow:
             snapshot = synchronized.snapshot
             now = d.instant_datetime(synchronized.now)
             d.validate(snapshot, settings.hidden_from_now)
-            actions, adding_hiding = self._plan(request, snapshot, now, settings.hidden_from_now)
+            actions, adding_hiding = self._plan(request, snapshot, now, settings.hidden_from_now,
+                p.Color.for_stdout((self.streams or p.OriginalStreams.current()).stdout,
+                    request.option('color', 'auto'), slots=settings.colors))
             if adding_hiding:
                 _require_waiting_label(self.synchronizer.transport)
             result = self._run(actions, synchronized, settings.hidden_from_now, now)
@@ -110,7 +112,7 @@ class CaptureWorkflow:
             p.deliver(result.document, settings, streams, view_kind='mutation')
         return result
 
-    def _plan(self, request, snapshot, now, hidden):
+    def _plan(self, request, snapshot, now, hidden, color=p.Color()):
         actions, proposals = [], []
         adding_hiding = False
         options = dict(request.options)
@@ -128,7 +130,7 @@ class CaptureWorkflow:
                 raise d.DomainError('inline steps require exactly one new task')
             parent = None
             if request.target == 'step':
-                parent = select_title(snapshot, request.parent, now, streams=self.streams)
+                parent = select_title(snapshot, request.parent, now, streams=self.streams, color=color)
                 if d.hierarchy_depths(snapshot)[parent.id] >= 4:
                     raise d.DomainError('parent at depth 4 cannot receive another step')
                 category_id = parent.category_id
@@ -168,9 +170,9 @@ class CaptureWorkflow:
                     actions.append(_Action('complete', key, title))
             validate_proposals(replace(snapshot, items=items), proposals, hidden)
         else:
-            item = (select_child(snapshot, request.parent, request.selector, now, streams=self.streams)
+            item = (select_child(snapshot, request.parent, request.selector, now, streams=self.streams, color=color)
                     if request.parent else select_title(snapshot, request.selector, now,
-                        target=request.target, streams=self.streams))
+                        target=request.target, streams=self.streams, color=color))
             d.require_editable(item)
             if request.command in ('priority', 'rename'):
                 kwargs = ({'priority': int(str(options['priority']).lower().removeprefix('p'))}
