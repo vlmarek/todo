@@ -1,7 +1,35 @@
 # todo-3 product specification
 
-Design revision: **2 — scalar alias grammar and scoped assessment corrections, 2026-10-26**.
-State: **confirmed current specification; uncommitted**.
+Design revision: **3 — accepted per-file publication failure limitation, 2026-10-26**.
+State: **confirmed current specification; design commit recorded in the durable handoff**.
+
+## Current revision and accepted-assignment boundary
+
+Read [publication-failure.md](publication-failure.md) first for the current scoped
+publication contract and its explicit precedence table. Its successor definitions
+supersede only the stated intact-snapshot and diagnostic promises for unfinished
+and successor work. All earlier requirement/exclusion definitions remain byte-for-
+byte intact as protected history for accepted T01/T02/T03/T04/T05/T06/T07/T09/T19.
+Planning must bind the current successors to affected unfinished work without
+rewriting those accepted effective assignments or their original definitions.
+
+The operator accepted: “A failed multi-file publication would report an error and
+require explicit recovery; preserving the previous usable snapshot would no longer
+be guaranteed.” The actual instruction was “implement that and continue the work”.
+This confirms the same scoped understanding; no additional interview is pending.
+Source: `/home/neuron/Documents/cml/todo-3/runtime/operator/publication-limitation-authorization.md`.
+Per-file atomicity, pre-publication preservation, mixed-set refusal, existing
+explicit recovery, remote outcomes and required pending-history protections remain.
+No rollback, journal, transactional redesign or new recovery command is authorized.
+
+The current workspace contains an initialized application and run-001. Historical
+statements below about a fresh design-only project, uncommitted revision 2, lack of
+implementation/assignments, or lack of authorization describe those earlier passes;
+they are not current execution or preservation instructions. Current execution still
+requires Planning alignment, a finished supported publication and runner adoption.
+The Design amendment itself does not adopt or execute work.
+
+## Historical revision 2 context
 
 On 2026-10-26 the operator answered “yes” to the final shared-understanding check
 of written revision 1. In the subsequent collaborative assessment, the operator
@@ -36,7 +64,9 @@ Success examples: nested steps appear in their own urgency rows with ancestor
 context; a completed step and its own comment survive cache rebuilding until
 reported; final output/cursor failure leaves pending history intact; a successful
 final report advances the cursor and permits covered-history cleanup. A failed
-sync retains the last saved cache, which later offline reads may still display.
+sync before any publication replacement retains the last saved cache. After a
+partial multi-file publication, the old usable snapshot is not guaranteed; a mixed
+set fails and requires explicit recovery under publication-failure.md.
 Missing required report data fails the report and preserves its cursor. Possible
 duplicate anonymous activity entries are accepted; omitted work is not.
 
@@ -60,8 +90,9 @@ duplicate anonymous activity entries are accepted; omitted work is not.
     [open-questions.md](open-questions.md): source navigation and remaining technical evidence.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
-The `REQ-*` and `OUT-*` definitions specify current behavior; named TPL templates
-remain exact. Each ID has one definition. Provider files are evidence rather than
+The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped successor
+precedence in publication-failure.md governing current unfinished/successor work;
+named TPL templates remain exact. Each ID has one definition. Provider files are evidence rather than
 product authority. Binding documents carry `Status: **Accepted**` for the confirmed
 specification. This is not execution readiness, a prepared plan or independent
 review. No commit or execution is authorized by product confirmation.
@@ -174,6 +205,6 @@ proof, report-owner resolution and pending-history cleanup ordering.
 
 There are no unresolved product decisions. The operator confirmed this written
 revision; technical feasibility is not certified by that confirmation.
-No old-plan task IDs, packets, preservation instructions or incident recovery are
-inputs for a fresh implementation. Source chronology remains in todo-2 history;
-the current behavior is defined inline here without an amendment overlay.
+The earlier fresh-implementation handoff is historical. Current Planning consumes
+revision 3 and its retained handoff, assesses the initialized run, protects accepted
+assignments, and aligns affected unfinished work using supported revision adoption.
