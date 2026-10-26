@@ -187,6 +187,20 @@ class InitTests(unittest.TestCase):
         self.assertNotIn('secret', out)
         self.assertEqual(result.state.binding.root_id, 'root')
 
+    def test_wizard_excludes_shared_inbox_and_workspace_choices(self):
+        payload = full(projects=[project('shared', None, is_shared=True, shared=False),
+            project('inbox', None, inbox_project=True),
+            project('workspace', None, workspace_id='ws'),
+            project('root', None), project()], labels=[LABEL])
+        boundary = Boundary(remote=payload)
+        result, out, _ = self.run_init(boundary, answers='1\n\n-\nyes\n',
+                                      env={'TODOIST_TOKEN': 'secret'})
+        self.assertEqual(result.state.binding.root_id, 'root')
+        self.assertIn('1. root (personal top-level project, choice 1)', out)
+        for name in ('shared', 'inbox', 'workspace'):
+            self.assertNotIn('. ' + name + ' (personal', out)
+        self.assertFalse(boundary.mutations)
+
     def test_empty_existing_root_offers_fallback_categories(self):
         payload = full(projects=[project('root', None)], items=[], labels=[LABEL])
         expected = [('project_add', {'name': name, 'parent_id': 'root'})
@@ -343,6 +357,10 @@ class InitTests(unittest.TestCase):
                 with self.assertRaises(InitError) as caught:
                     self.run_init(b, answers=answers, hidden=hidden)
                 self.assertEqual(caught.exception.status, 130 if stage == 'interrupt' else 1)
+                if stage == 'hidden-failure':
+                    self.assertEqual(caught.exception.phase, 'terminal setup')
+                    self.assertIn('cannot hide input', str(caught.exception))
+                    self.assertFalse(b.requests)
                 self.assertNotIn('secret', str(caught.exception))
                 self.assertFalse((self.root / 'config').exists())
                 self.assertFalse(b.mutations)
@@ -424,7 +442,7 @@ class InitTests(unittest.TestCase):
         self.put('config', CONFIG)
         structures = [
             [project('root', None), project('duplicate', None, name='root')],
-            [project('root', None, shared=True)],
+            [project('root', None, is_shared=True)],
             [project('root', None, inbox_project=True)],
             [project('root', None, workspace_id=123)],
             [project('root', None), project(), project('collision', name='CAT')],

@@ -3,6 +3,8 @@
 Synthetic fixtures: retained api-v1.openapi.json Sync read/command tables,
 ItemSyncView, NoteSyncView; completed/by_completion_date terminal omission;
 activities and scoped comments results/next_cursor. Inspected 2026-10-26.
+PersonalProjectSyncView/WorkspaceProjectSyncView require is_shared; retained Sync
+prose says shared instead. This literal follows the typed schemas.
 Not a live provider emulator. Each phase starts a new interpreter.
 """
 from contextlib import ExitStack
@@ -57,7 +59,7 @@ def full(rows, comments=()):
     return dict(full_sync=True, sync_token='full-token',
         user={'id': 'u', 'tz_info': {'timezone': 'Europe/Prague'}},
         user_plan_limits={'current': {'activity_log': True, 'activity_log_limit': -1, 'reminders': False}},
-        projects=[dict(id=i, name=i, parent_id=p, shared=False, is_archived=False, is_deleted=False)
+        projects=[dict(id=i, name=i, parent_id=p, is_shared=False, is_archived=False, is_deleted=False)
                   for i, p in [('root', None), ('cat', 'root')]],
         labels=[dict(id='waiting', name='waiting', is_deleted=False)],
         items=rows, notes=list(comments), reminders=[])

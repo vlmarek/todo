@@ -1,6 +1,7 @@
 """Representative public setup, moves, editor and archived lifecycle workflows."""
 from copy import deepcopy
 from io import StringIO
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -16,7 +17,8 @@ from tests.workflows.moves import test_moves as move_fixture
 from tests.workflows.comments import test_workflow as comment_fixture
 from tests.workflows.lifecycle import test_lifecycle as lifecycle_fixture
 from tests.workflows.sync import test_sync as sync_fixture
-from tests.adapter.current.test_current import full, delta, item, note
+from tests.adapter.current.test_current import full, delta, item, note, RESOURCES
+from tests.support.http import ControlledHTTP, ExpectedRequest, Response
 
 
 class PublicInit(unittest.TestCase):
@@ -53,6 +55,53 @@ class PublicInit(unittest.TestCase):
                 status, _, err, factory = invoke(self, ['now'])
                 self.assertEqual(status, 0, err)
                 factory.assert_not_called()
+
+    def test_wizard_discovery_failures_are_remote_and_publish_nothing(self):
+        missing = full()
+        missing['projects'][0].pop('is_shared')
+        missing['projects'][0]['shared'] = False
+        null = full()
+        null['projects'][0].update(is_shared=None, shared=False)
+        for payload, fact in ((missing, 'missing'), (null, 'null'),
+                              (Response(b'private secret', status=401), '401'),
+                              (OSError('private secret'), 'unavailable')):
+            with self.subTest(fact=fact), tempfile.TemporaryDirectory() as temp:
+                self.root = Path(temp) / '.todo'
+                self.store = StateStore(self.root)
+                request = lambda token: ExpectedRequest('POST', '/sync', 'secret',
+                    form={'sync_token': token, 'resource_types': RESOURCES})
+                steps = [(request('*'), payload if isinstance(payload, (Response, Exception))
+                          else Response(json.dumps(payload).encode()))]
+                if isinstance(payload, dict):
+                    steps.append((request('full-token'), Response(json.dumps(delta()).encode())))
+                wire = ControlledHTTP(steps)
+                status, out, err, _ = invoke(self, ['init'],
+                    Transport('secret', opener=wire), input=init_fixture.Terminal(),
+                    output=init_fixture.Terminal())
+                self.assertEqual(status, 1, err)
+                self.assertIn('remote discovery failed', err)
+                if isinstance(payload, dict):
+                    for expected in (fact, 'is_shared', 'boolean'):
+                        self.assertIn(expected, err)
+                self.assertNotIn('terminal', err)
+                self.assertNotIn('secret', out + err)
+                self.assertNotIn('private', out + err)
+                # Only the protected setup directory and lock may be created.
+                self.assertTrue(self.root.is_dir())
+                self.assertEqual({p.name for p in self.root.iterdir()}, {'lock'})
+                wire.assert_done()  # no fallback reads or provisioning
+
+    def test_wizard_terminal_failure_stays_distinct_from_discovery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            self.root = Path(temp) / '.todo'
+            self.store = StateStore(self.root)
+            wire = ControlledHTTP([])
+            status, _, err, _ = invoke(self, ['init'], Transport('secret', opener=wire))
+            self.assertEqual(status, 1)
+            self.assertIn('rerun in a terminal', err)
+            self.assertNotIn('remote discovery', err)
+            self.assertFalse(self.root.exists())
+            wire.assert_done()
 
     def test_populated_setup_to_now_and_failed_first_publication_diagnostics(self):
         with tempfile.TemporaryDirectory() as temp:

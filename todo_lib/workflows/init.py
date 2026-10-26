@@ -358,9 +358,8 @@ class Initializer:
             raise LocalError('unbound partial initialization; preserve available bytes and restore a consistent set')
         return None
 
-    def _wizard(self, credentials, transport, state):
-        catalogue = _discover(transport, state.binding if state else None)
-        roots = [p for p in catalogue.projects.values() if p.parent_id is None and
+    def _wizard(self, credentials, catalogue, projects, state):
+        roots = [p for p in projects.values() if p.parent_id is None and
                  not (p.shared or p.workspace_id or p.archived or not p.personally_owned)]
         for number, p in enumerate(roots, 1):
             self._say(f'{number}. {p.name} (personal top-level project, choice {number})')
@@ -482,7 +481,11 @@ class Initializer:
                         secret = self._ask('Personal API token: ', hidden=True, validate=token, cancel=())
                         credentials = resolve_credentials(environ=self.environ, wizard_token=secret)
                     transport = self.transport or self.transport_factory(credentials.token())
-                    config, catalogue, selected = self._wizard(credentials, transport, state)
+                    phase = 'remote discovery'
+                    catalogue = _discover(transport, state.binding if state else None)
+                    projects = catalogue.projects
+                    phase = 'terminal setup'
+                    config, catalogue, selected = self._wizard(credentials, catalogue, projects, state)
                     saved = True
                 else:
                     config = load_config(root)

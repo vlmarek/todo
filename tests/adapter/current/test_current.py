@@ -3,6 +3,9 @@
 Offline authority inspected 2026-10-26: retained api-v1.openapi.json Sync tag,
 Read resources/Incremental sync/Projects/Tasks/Task comments/Reminders/User plan
 limits; Due dates tag; ItemSyncView and nullable NoteSyncView.posted_at.
+PersonalProjectSyncView/WorkspaceProjectSyncView require boolean is_shared;
+the retained Sync Projects prose contradicts them with shared. These synthetic
+fixtures follow the typed schemas and deliberately omit shared.
 Documented examples use many irrelevant fields. These fixtures deliberately omit
 those and all invented aliases/activity. A numeric workspace_id is documented in
 the Projects example even though its property table describes a string.
@@ -27,7 +30,7 @@ RESOURCES = '["user","user_plan_limits","projects","items","labels","notes","rem
 
 
 def project(identity='cat', parent='root', **changes):
-    obj = dict(id=identity, name=identity, parent_id=parent, shared=False,
+    obj = dict(id=identity, name=identity, parent_id=parent, is_shared=False,
                is_archived=False, is_deleted=False)
     obj.update(changes)
     return obj
@@ -246,9 +249,9 @@ class CurrentTests(unittest.TestCase):
                 retrieve(transport, BINDING)
 
     def test_documented_project_scope_fields_are_authority(self):
-        for changes in ({'shared': True}, {'inbox_project': True}, {'workspace_id': 'workspace'},
+        for changes in ({'is_shared': True, 'shared': False}, {'inbox_project': True}, {'workspace_id': 'workspace'},
                         {'workspace_id': 12345}, {'is_archived': True}, {'parent_id': 'other'},
-                        {'shared': None}, {'is_archived': 0}, {'inbox_project': None}, {'workspace_id': False}):
+                        {'is_shared': None}, {'is_archived': 0}, {'inbox_project': None}, {'workspace_id': False}):
             for target in ('root', 'cat'):
                 with self.subTest(target=target, changes=changes):
                     response = full()
@@ -257,15 +260,47 @@ class CurrentTests(unittest.TestCase):
                     transport, _ = self.boundary([('*', response), ('full-token', delta())])
                     with self.assertRaises(DomainError):
                         retrieve(transport, BINDING)
-        for field in ('shared', 'is_archived', 'parent_id', 'is_deleted'):
+        for field in ('is_shared', 'is_archived', 'parent_id', 'is_deleted'):
             response = full()
             response['projects'][1].pop(field)
             transport, _ = self.boundary([('*', response), ('full-token', delta())])
             with self.assertRaises(DomainError):
                 retrieve(transport, BINDING)
-        result = self.initial(full(projects=[project('root', None, is_shared=True),
+        result = self.initial(full(projects=[project('root', None, shared={'ignored': True}),
             project(is_inbox_project=True, is_organization=True, workspace_id=None)]))
         self.assertEqual(result.binding, BINDING)
+
+    def test_is_shared_required_boolean_even_with_unknown_shared(self):
+        for value, diagnostic in ((MISSING, 'missing'), (None, 'null'),
+                                  (0, 'must be'), (1, 'must be'),
+                                  ('false', 'must be'), ([], 'must be')):
+            with self.subTest(value=value):
+                raw = project(shared=False)
+                raw.pop('is_shared')
+                if value is not MISSING:
+                    raw['is_shared'] = value
+                with self.assertRaises(CurrentError) as caught:
+                    self.initial(full(projects=[project('root', None), raw]))
+                message = str(caught.exception)
+                for fact in ('is_shared', 'boolean', diagnostic):
+                    self.assertIn(fact, message)
+        for unknown in (True, None, {'ignored': 'value'}):
+            result = self.initial(full(projects=[project('root', None),
+                                                project(shared=unknown)]))
+            self.assertFalse(result.snapshot.categories['cat'].shared)
+        with self.assertRaises(DomainError):
+            self.initial(full(projects=[project('root', None),
+                                       project(is_shared=True, shared=False)]))
+
+    def test_project_duplicate_signatures_consume_is_shared_only(self):
+        result = self.initial(full(projects=[project('root', None),
+            project(shared=False), project(shared={'ignored': True})]))
+        self.assertFalse(result.snapshot.categories['cat'].shared)
+        for other in (True, 0):
+            transport, _ = self.boundary([('*', full(projects=[project('root', None),
+                project(), project(is_shared=other)]))])
+            with self.assertRaisesRegex(CurrentError, 'contradictory live projects'):
+                retrieve(transport, BINDING)
 
     def test_ownership_before_feature_validation_and_minimal_result(self):
         response = full(items=[item(), dict(id='private', project_id='elsewhere', checked='bad')],
@@ -382,7 +417,7 @@ class CurrentTests(unittest.TestCase):
 
     def test_new_invalid_category_fails_without_dropping_its_items(self):
         transport, _ = self.boundary([('*', full(projects=[project('root', None), project(),
-            project('new', shared=True)], items=[item('entrant', project_id='new')])),
+            project('new', is_shared=True)], items=[item('entrant', project_id='new')])),
             ('full-token', delta())])
         with self.assertRaisesRegex(DomainError, 'scope'):
             retrieve(transport, BINDING)
@@ -612,7 +647,7 @@ class CurrentTests(unittest.TestCase):
 
     def test_current_bound_project_departure_and_deletion_fail_closed(self):
         first = self.initial()
-        for changed in (project(parent='outside'), project(shared=True),
+        for changed in (project(parent='outside'), project(is_shared=True),
                         {'id': 'root', 'is_deleted': True}):
             transport, _ = self.boundary([('delta-token', delta(projects=[changed]))])
             with self.assertRaises(DomainError):
@@ -627,7 +662,7 @@ class CurrentTests(unittest.TestCase):
 
     def test_invalid_arrivals_fail_without_hydration_replacement(self):
         first = self.initial()
-        for response in (delta(projects=[project('new', shared=True)]),
+        for response in (delta(projects=[project('new', is_shared=True)]),
                          delta(items=[item('entrant', checked=None)]),
                          delta(items=[item('entrant', description=' ')]),
                          delta(items=[item('entrant', added_at='invalid')])):
