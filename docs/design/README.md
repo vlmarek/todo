@@ -1,15 +1,27 @@
 # todo-3 product specification
 
-Design revision: **3 — accepted per-file publication failure limitation, 2026-10-26**.
+Design revision: **4 — accepted command-time subsecond tolerance, 2026-10-26**.
 State: **confirmed current specification; design commit recorded in the durable handoff**.
 
 ## Current revision and accepted-assignment boundary
 
-Read [publication-failure.md](publication-failure.md) first for the current scoped
-publication contract and its explicit precedence table. Its successor definitions
+Read [command-time-precision.md](command-time-precision.md) first for the current
+scoped time-calculation agreement and precedence, then
+[publication-failure.md](publication-failure.md) for the unchanged revision-3
+publication contract. The time amendment permits ordinary aware Python datetime
+precision for urgency, countdowns, relative scheduling and relative report-boundary
+parsing; subsecond imperfections there are outside acceptance. Exact stored
+timestamps and ordering, calendar/timezone correctness and unrelated report and
+lifecycle obligations remain. The operator confirmed this exact scope with
+“do that and continue the work. Stop before any future update to plan or design.”
+Source: `/home/neuron/Documents/cml/todo-3/runtime/operator/subsecond-tolerance-authorization.md`.
+This authorizes this amendment and matching Plan alignment; subsequent Design or
+Plan changes require stopping for the operator before editing.
+
+The publication successor definitions
 supersede only the stated intact-snapshot and diagnostic promises for unfinished
 and successor work. All earlier requirement/exclusion definitions remain byte-for-
-byte intact as protected history for accepted T01/T02/T03/T04/T05/T06/T07/T09/T19.
+byte intact as protected history for accepted T01/T02/T03/T04/T05/T06/T07/T08/T09/T19.
 Planning must bind the current successors to affected unfinished work without
 rewriting those accepted effective assignments or their original definitions.
 
@@ -91,7 +103,8 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped successor
-precedence in publication-failure.md governing current unfinished/successor work;
+precedence in command-time-precision.md and publication-failure.md governing
+current unfinished/successor work;
 named TPL templates remain exact. Each ID has one definition. Provider files are evidence rather than
 product authority. Binding documents carry `Status: **Accepted**` for the confirmed
 specification. This is not execution readiness, a prepared plan or independent
@@ -206,5 +219,5 @@ proof, report-owner resolution and pending-history cleanup ordering.
 There are no unresolved product decisions. The operator confirmed this written
 revision; technical feasibility is not certified by that confirmation.
 The earlier fresh-implementation handoff is historical. Current Planning consumes
-revision 3 and its retained handoff, assesses the initialized run, protects accepted
+revision 4 and its retained handoff, assesses the initialized run, protects accepted
 assignments, and aligns affected unfinished work using supported revision adoption.
