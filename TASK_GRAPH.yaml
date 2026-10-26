@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-005
-predecessor_revision_id: TODO3-PLAN-004
+revision_id: TODO3-PLAN-006
+predecessor_revision_id: TODO3-PLAN-005
 contract_sources:
+- docs/design/project-sharing-field.md
 - COMPONENTS.yaml
 - docs/implementation/provider-contracts.md
 - docs/design/architecture.md
@@ -523,6 +524,13 @@ checks:
   command: ./scripts/verify-clean
   prerequisite_task_refs:
   - T17
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t20-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.workflows.init.test_init tests.workflows.sync.test_sync tests.cli.test_composition.PublicInit -v
+  prerequisite_task_refs:
+  - T20
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -3395,9 +3403,179 @@ tasks:
   required_evidence:
   - t01-focused
   - t02-focused
+- id: T20
+  title: Correct provider project sharing and initialization discovery diagnostics
+  origin_stage_ref: project-sharing-correction
+  observable_outcome: is_shared-only personal projects complete discovery, initialization, repeat init
+    and refresh; unsafe or unknown sharing is rejected before mutation and wizard discovery failures identify
+    their actual phase.
+  dependencies:
+  - task_ref: T17
+    kind: repository_state
+    reason: Repair the completed integrated application, fixtures and copied-runtime probes; preserve
+      T01-T19 accepted assignments and historical evidence. All consumed capabilities are supplied by
+      T17 and its accepted dependency ancestors.
+    interface_ref: null
+  goal: 'Apply only Design revision 6''s provider is_shared correction and wizard discovery failure labeling
+    to the completed application. Reuse the actual current.retrieve(transport, binding, prior=None, sync_token=None,
+    replace=False) -> Current(snapshot, sync_token, disappeared/deleted/departed IDs), Initializer.run()/initialize()
+    -> InitResult or InitError(phase/status/config_saved/provisions), Synchronizer refresh and cli.main(argv)
+    APIs. In todo_lib/adapter/current.py coordinate _FIELDS[''projects''], _project, _seed and consumed-value
+    duplicate signatures: require provider JSON boolean is_shared, map it to internal Project.shared,
+    and reconstruct is_shared from the existing internal property for omitted-project incremental seeds.
+    shared is an ignored unknown provider field, never alternate/fallback/reconciliation authority. Reject
+    missing, explicit null and wrong types (including numeric 0/1) with field/expected-boolean facts that
+    distinguish those conditions; never infer privacy. Preserve deletion tombstone exemption, optional
+    Inbox/workspace handling, unrelated-data discard, hierarchy, identity, full-plus-one-delta freshness
+    and all other mappings. No internal Project.shared rename, local saved-format migration or compatibility
+    branch.
+
+    In todo_lib/workflows/init.py the current _wizard calls _discover and evaluates catalogue.projects
+    while run still labels the phase terminal setup. Place the discovery/mapping work under an accurate
+    remote-discovery phase while keeping actual TTY/hidden-input failures distinct and preserving configuration
+    publication, cancellation, saved-config, preflight, provisioning and post-provision diagnostics. Keep
+    discovery failure nonzero, with no empty-account fallback or provisioning. Avoid a general phase/recovery
+    architecture.
+
+    Adapt the shared provider project factory tests.adapter.current.test_current.project, its old shared-key
+    callers and scope assertions, and the independent literal fixture in tests/delivery/final/copy_probe.py.
+    The existing test_documented_project_scope_fields_are_authority currently treats is_shared as ignored;
+    replace only that superseded expectation with the approved contract. Keep internal domain/shared assertions
+    unchanged. Repair affected test consumers across adapter/workflow/CLI/delivery paths as necessary
+    without weakening unrelated assertions or adding a parallel fixture framework. Add the small distinguishing
+    evidence described below; reuse adequate normal-init, repeat-init, safety and publication cases. Append
+    current repair observations to docs/implementation/acceptance-evidence.md, retaining historical bytes
+    and explicitly distinguishing offline evidence from live-provider observations.'
+  failure_domain: Provider project safety metadata must survive raw parsing, prior-state seeding and real
+    initialization/synchronization composition, with truthful discovery diagnostics.
+  verification_rationale: 'One coordinated task keeps mapper, seed, shared fixtures and public consumers
+    consistent; splitting would create an unusable intermediate provider contract. t20-focused runs the
+    existing current adapter, initialization and synchronization modules plus tests.cli.test_composition.PublicInit
+    together. Start with the coherent provider response -> actual Transport -> retrieve -> saved Snapshot
+    -> omitted-project incremental refresh slice, then adapt remaining affected callers. Inspect and reuse
+    CurrentTests.initial/changed with ControlledHTTP, InitTests Boundary/run_init, tests/cli/test_composition.py
+    PublicInit (using tests/cli/test_cli.py invoke), and the independent copied-runtime probe; these reject
+    wrong resources/endpoints/operations. Keep source notes citing retained PersonalProjectSyncView/WorkspaceProjectSyncView
+    typed schemas (inspected 2026-10-26) and the recorded Sync-prose contradiction.
+
+    Establish eligible is_shared:false projects without shared through full-plus-delta retrieval, wizard
+    choices/confirmation and populated init/post-provision validation, repeat init preserving stable binding/cursor/pending
+    history, and subsequent Synchronizer.refresh with omitted unchanged projects after storage reload
+    (extend tests/workflows/sync/test_sync.py if its existing case is inadequate). A subsequent is_shared:true
+    change must reject managed scope before mutation/publication; preserve old consistent state. At the
+    adapter boundary use independent explicit fixtures or deliberate field removal so the common factory
+    cannot silently add a required is_shared to a legacy-only negative. Cover absence, explicit null and
+    representative wrong types including numeric 0/1 and a string, even with shared:false; also valid
+    is_shared:true plus shared:false, and valid is_shared:false with a conflicting or malformed unknown
+    shared. Exercise shared/Inbox/workspace exclusion from wizard choices and configured/bound root/category
+    eligibility using existing scope cases where adequate; retain tombstone and duplicate-live behavior
+    with the corrected consumed sharing field. No exhaustive cross-product at every layer.
+
+    Through public cli.main([''init'']) with actual Initializer, current adapter, actual Transport and
+    a controlled HTTP boundary, establish a missing/invalid is_shared discovery response reports discovery
+    on stderr, status 1, no terminal-rerun remedy, no provisioning and no config/snapshot publication;
+    keep existing allowed protected directory/lock changes truthful. Exercise representative network/auth
+    discovery failure with the same boundary and reuse actual terminal/hidden-input failure evidence to
+    prove the diagnostics remain distinct and secrets absent. Reuse PublicInit.test_init_config_and_hidden_wizard_token_redact_before_discovery_output
+    and test_populated_setup_to_now_and_failed_first_publication_diagnostics for successful public init;
+    do not replace production parsing with a prebuilt catalogue or mocked mapper. Preserve saved-config
+    versus later preflight failure and normal publication/manual-recovery tests; no new publication failure
+    matrix.
+
+    The runner uses unchanged merge-hygiene/integrated-complete and final-delivery. final-delivery executes
+    verify-clean with one complete offline suite plus distinct unchanged copied-runtime/PATH and bounded
+    real-less probes; update its copied provider literal to is_shared. Reuse the same final check execution
+    across integration/stage/project roles where supported. Workers run t20-focused and may select affected
+    dependency tests for concrete concerns; no requirement to repeat the full publication/audit matrix
+    or full suite separately. Append observed subject, commands, outcomes and limitations to the existing
+    acceptance evidence.'
+  correction_instructions: The exact baseline is the completed run-001 application at ec9bd8da175ddc3fcfe715de3ff7a6721dc5eaad
+    plus committed Design revision 6 and this planning revision. All T01-T19 remain accepted history.
+    REQ-SYNC-028 alone supersedes the shared-field instruction/prohibition in REQ-SYNC-021, old T05 prose
+    and frozen provider-contracts.md; do not edit those historical definitions to implement the correction.
+    Its other mappings remain binding. REQ-INIT-010 and REQ-VERIFY-026 clarify only this correction. Preserve
+    REQ-TIME-001/OUT-TIME-002 subsecond tolerance and REQ-INIT-009/OUT-INIT-001 plus publication/manual-recovery
+    boundaries; no new recovery, feature, provider snapshot, account access or broad audit. Keep configuration/resources
+    and frozen planning inputs unchanged. Report any genuinely new scope or protected-input blocker instead
+    of changing the plan/design.
+  requirement_refs:
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
+  constraint_refs:
+  - REQ-SYNC-021
+  - REQ-SYNC-013
+  - REQ-SYNC-005
+  - REQ-DOM-001
+  - REQ-PROD-005
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-007
+  - REQ-VERIFY-013
+  - REQ-TIME-001
+  exclusion_refs:
+  - OUT-COLLAB-001
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-OPS-003
+  - OUT-INIT-001
+  - OUT-LOCAL-001
+  - OUT-TIME-002
+  - OUT-DIAG-001
+  - OUT-PROVISION-002
+  component_refs:
+  - adapter
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - http-transport
+  - current-retrieval
+  - synchronized-state
+  - initialization
+  - public-cli
+  - routine-check
+  expected_paths:
+  - todo_lib/adapter/current.py
+  - todo_lib/workflows/init.py
+  - todo_lib/cli.py
+  - tests/adapter/**
+  - tests/support/**
+  - tests/workflows/**
+  - tests/cli/**
+  - tests/delivery/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t20-focused
+  required_evidence:
+  - t20-focused
+  - final-delivery
+  - docs/implementation/acceptance-evidence.md
 stages:
 - id: release-1
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-TIME-001
   - REQ-VERIFY-024
@@ -3513,6 +3691,132 @@ stages:
   - REQ-INIT-009
   - REQ-VERIFY-025
   satisfied_requirement_refs: []
+  deferred_requirement_refs:
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
+  check_refs:
+  - final-delivery
+- id: project-sharing-correction
+  final_project: true
+  active_requirement_refs:
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
+  satisfied_requirement_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  - REQ-INIT-009
+  - REQ-VERIFY-025
   deferred_requirement_refs: []
   check_refs:
   - final-delivery

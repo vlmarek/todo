@@ -1,5 +1,17 @@
 # todo-3 implementation assignment
 
+Current follow-up: TODO3-PLAN-006 appends the project-sharing correction after
+completed release-1. Reuse the integrated application at
+`ec9bd8da175ddc3fcfe715de3ff7a6721dc5eaad`; T01–T19 and their original definitions,
+checks and acceptance history remain unchanged. T20 owns only REQ-SYNC-028,
+REQ-INIT-010 and REQ-VERIFY-026. Design revision 6 controls the provider wire field:
+require boolean `is_shared`, keep internal `Project.shared`, and add no legacy
+`shared` fallback or storage migration. The older first-release description below
+is historical context; it does not require rebuilding existing code. T20 appends
+observed repair evidence, reuses the final-delivery gate and retains all earlier
+publication/manual-recovery and subsecond limits. Stop before any additional
+Design/Plan scope change.
+
 The complete Accepted design in `docs/design/` is the product authority. The
 operator controls intended behavior. `TASK_GRAPH.yaml` revision TODO3-PLAN-001
 assigns the complete first release in one final stage; nothing is deferred.
