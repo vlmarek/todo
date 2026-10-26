@@ -1,25 +1,37 @@
 # todo-3 product specification
 
-Design revision: **4 — accepted command-time subsecond tolerance, 2026-10-26**.
+Design revision: **5 — accepted partial-first-init failure boundary, 2026-10-26**.
 State: **confirmed current specification; design commit recorded in the durable handoff**.
 
 ## Current revision and accepted-assignment boundary
 
-Read [command-time-precision.md](command-time-precision.md) first for the current
-scoped time-calculation agreement and precedence, then
-[publication-failure.md](publication-failure.md) for the unchanged revision-3
-publication contract. The time amendment permits ordinary aware Python datetime
+Read [partial-initialization-failure.md](partial-initialization-failure.md) first
+for the current first-init local-publication failure boundary and precedence.
+The operator accepted error and rejection of inconsistent files with the existing
+explicit manual fresh start, including its disclosed pending-history/report-cursor
+loss. Rerunning init need not recover every partial state, including a timezone
+change between attempts. Normal successful/repeat initialization, synchronization,
+timezone semantics and local safety remain. The actual confirmation was “I agree
+with that”; source:
+`/home/neuron/Documents/cml/todo-3/runtime/operator/partial-init-write-failure-authorization.md`.
+This authorizes this amendment and matching Plan alignment. Stop before every
+subsequent Design or Plan change. No storage repair or new recovery mechanism is
+part of this amendment.
+
+Then read [command-time-precision.md](command-time-precision.md) for the unchanged
+revision-4 time-calculation agreement and
+[publication-failure.md](publication-failure.md) for the revision-3 publication
+contract, subject only to the new scoped first-init recovery exception.
+The time amendment permits ordinary aware Python datetime
 precision for urgency, countdowns, relative scheduling and relative report-boundary
 parsing; subsecond imperfections there are outside acceptance. Exact stored
 timestamps and ordering, calendar/timezone correctness and unrelated report and
 lifecycle obligations remain. The operator confirmed this exact scope with
 “do that and continue the work. Stop before any future update to plan or design.”
 Source: `/home/neuron/Documents/cml/todo-3/runtime/operator/subsecond-tolerance-authorization.md`.
-This authorizes this amendment and matching Plan alignment; subsequent Design or
-Plan changes require stopping for the operator before editing.
+That earlier amendment and its matching Plan alignment are settled.
 
-The publication successor definitions
-supersede only the stated intact-snapshot and diagnostic promises for unfinished
+The scoped successor definitions supersede only their stated promises for unfinished
 and successor work. All earlier requirement/exclusion definitions remain byte-for-
 byte intact as protected history for accepted T01/T02/T03/T04/T05/T06/T07/T08/T09/T19.
 Planning must bind the current successors to affected unfinished work without
@@ -78,7 +90,8 @@ reported; final output/cursor failure leaves pending history intact; a successfu
 final report advances the cursor and permits covered-history cleanup. A failed
 sync before any publication replacement retains the last saved cache. After a
 partial multi-file publication, the old usable snapshot is not guaranteed; a mixed
-set fails and requires explicit recovery under publication-failure.md.
+set fails and requires explicit recovery under publication-failure.md and the
+first-init exception in partial-initialization-failure.md.
 Missing required report data fails the report and preserves its cursor. Possible
 duplicate anonymous activity entries are accepted; omitted work is not.
 
@@ -103,7 +116,8 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped successor
-precedence in command-time-precision.md and publication-failure.md governing
+precedence in partial-initialization-failure.md, command-time-precision.md and
+publication-failure.md governing
 current unfinished/successor work;
 named TPL templates remain exact. Each ID has one definition. Provider files are evidence rather than
 product authority. Binding documents carry `Status: **Accepted**` for the confirmed
@@ -219,5 +233,5 @@ proof, report-owner resolution and pending-history cleanup ordering.
 There are no unresolved product decisions. The operator confirmed this written
 revision; technical feasibility is not certified by that confirmation.
 The earlier fresh-implementation handoff is historical. Current Planning consumes
-revision 4 and its retained handoff, assesses the initialized run, protects accepted
+revision 5 and its retained handoff, assesses the initialized run, protects accepted
 assignments, and aligns affected unfinished work using supported revision adoption.
