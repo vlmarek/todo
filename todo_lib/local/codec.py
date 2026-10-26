@@ -1,0 +1,99 @@
+"""Version-one JSON codec for the accepted domain model, without a zone copy."""
+from dataclasses import asdict
+from datetime import date, datetime, timezone
+from decimal import Decimal
+import json
+from todo_lib import domain as d
+from .safety import LocalError
+
+
+def instant(value):
+    d.require_aware(value)
+    return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
+def parse_instant(value):
+    if not isinstance(value, str):
+        raise LocalError('timestamp must be an aware RFC 3339 instant')
+    import re
+    if not re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)', value):
+        raise LocalError('timestamp must be an aware RFC 3339 instant')
+    try:
+        return d.require_aware(datetime.fromisoformat(value.replace('Z', '+00:00'))).astimezone(timezone.utc)
+    except (ValueError, TypeError):
+        raise LocalError('invalid timestamp') from None
+
+
+def _default(value):
+    if isinstance(value, datetime):
+        return instant(value)
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (set, frozenset)):
+        return sorted(value)
+    raise TypeError('unsupported local value')
+
+
+def dumps(value):
+    return (json.dumps(value, default=_default, ensure_ascii=False, allow_nan=False,
+                       sort_keys=True, separators=(',', ':')) + '\n').encode('utf-8')
+
+
+def loads(content):
+    def pairs(entries):
+        result = {}
+        for key, value in entries:
+            if key in result:
+                raise ValueError('duplicate field')
+            result[key] = value
+        return result
+    try:
+        return json.loads(content, object_pairs_hook=pairs,
+                          parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+    except (ValueError, UnicodeError, TypeError):
+        raise LocalError('corrupt local JSON') from None
+
+
+def snapshot_data(snapshot):
+    d.validate(snapshot)
+    data = asdict(snapshot)
+    del data['account']['timezone']
+    return data
+
+
+def snapshot_from(data, zone):
+    """Zone comes exclusively from the checked binding, never from JSON cache."""
+    try:
+        if 'timezone' in data['account'] or 'last_synced_account_timezone' in data:
+            raise ValueError('second timezone authority')
+        binding = d.Binding(**{**data['binding'], 'category_ids': frozenset(data['binding']['category_ids'])})
+        account = d.Account(data['account']['id'], zone, d.Capabilities(**data['account']['capabilities']))
+        items = {}
+        for key, raw in data['items'].items():
+            value = dict(raw)
+            for name in ('added_at', 'completed_at'):
+                if value.get(name) is not None:
+                    value[name] = parse_instant(value[name])
+            value['labels'] = frozenset(value['labels'])
+            if value.get('attention') is not None:
+                a = dict(value['attention'])
+                if a.get('date_value') is not None:
+                    a['date_value'] = date.fromisoformat(a['date_value'])
+                if a.get('instant') is not None:
+                    a['instant'] = parse_instant(a['instant'])
+                if a.get('epoch_seconds') is not None:
+                    a['epoch_seconds'] = Decimal(a['epoch_seconds'])
+                value['attention'] = d.Attention(**a)
+            items[key] = d.Item(**value)
+        def timed(records, cls, field):
+            return {key: cls(**{**value, field: parse_instant(value[field]) if value[field] is not None else None})
+                    for key, value in records.items()}
+        return d.validate(d.Snapshot(binding, account, d.Project(**data['root']),
+            {k: d.Project(**v) for k, v in data['categories'].items()}, items,
+            timed(data['comments'], d.Comment, 'added_at'),
+            {k: d.Reminder(**v) for k, v in data['reminders'].items()},
+            timed(data['occurrences'], d.Occurrence, 'completed_at')))
+    except (ValueError, TypeError, KeyError, AttributeError, ArithmeticError):
+        raise LocalError('invalid stored managed snapshot') from None
