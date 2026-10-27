@@ -1,7 +1,6 @@
 """Representative public setup, moves, editor and archived lifecycle workflows."""
 from copy import deepcopy
 from io import StringIO
-import json
 import os
 from pathlib import Path
 import tempfile
@@ -10,7 +9,7 @@ from unittest.mock import patch
 
 from todo_lib import cli, domain as d
 from todo_lib.adapter.transport import Transport
-from todo_lib.local import StateStore
+from todo_lib.local import StateStore, exclusive_lock
 from tests.cli.test_cli import invoke
 from tests.workflows.init import test_init as init_fixture
 from tests.workflows.moves import test_moves as move_fixture
@@ -57,32 +56,22 @@ class PublicInit(unittest.TestCase):
                 factory.assert_not_called()
 
     def test_wizard_discovery_failures_are_remote_and_publish_nothing(self):
-        missing = full()
-        missing['projects'][0].pop('is_shared')
-        missing['projects'][0]['shared'] = False
-        null = full()
-        null['projects'][0].update(is_shared=None, shared=False)
-        for payload, fact in ((missing, 'missing'), (null, 'null'),
-                              (Response(b'private secret', status=401), '401'),
-                              (OSError('private secret'), 'unavailable')):
+        for payload, fact in ((Response(b'{"error": "private secret"}', status=401), 'HTTP 401 rejection'),
+                              (Response(b'private secret', status=401), 'invalid HTTP/JSON response'),
+                              (OSError('private secret'), 'transport failure')):
             with self.subTest(fact=fact), tempfile.TemporaryDirectory() as temp:
                 self.root = Path(temp) / '.todo'
                 self.store = StateStore(self.root)
                 request = lambda token: ExpectedRequest('POST', '/sync', 'secret',
                     form={'sync_token': token, 'resource_types': RESOURCES})
-                steps = [(request('*'), payload if isinstance(payload, (Response, Exception))
-                          else Response(json.dumps(payload).encode()))]
-                if isinstance(payload, dict):
-                    steps.append((request('full-token'), Response(json.dumps(delta()).encode())))
+                steps = [(request('*'), payload)]
                 wire = ControlledHTTP(steps)
                 status, out, err, _ = invoke(self, ['init'],
                     Transport('secret', opener=wire), input=init_fixture.Terminal(),
                     output=init_fixture.Terminal())
                 self.assertEqual(status, 1, err)
                 self.assertIn('remote discovery failed', err)
-                if isinstance(payload, dict):
-                    for expected in (fact, 'is_shared', 'boolean'):
-                        self.assertIn(expected, err)
+                self.assertIn(fact, err)
                 self.assertNotIn('terminal', err)
                 self.assertNotIn('secret', out + err)
                 self.assertNotIn('private', out + err)
@@ -90,6 +79,88 @@ class PublicInit(unittest.TestCase):
                 self.assertTrue(self.root.is_dir())
                 self.assertEqual({p.name for p in self.root.iterdir()}, {'lock'})
                 wire.assert_done()  # no fallback reads or provisioning
+
+    @staticmethod
+    def unsafe_project(fact, identity='unsafe'):
+        # Synthetic malformed variants of pinned api-v1.openapi.json
+        # components.schemas.PersonalProjectSyncView.properties.is_shared.
+        # The legacy shared field cannot substitute for is_shared.
+        row = init_fixture.project(identity, None, shared=False)
+        if fact == 'missing':
+            row.pop('is_shared')
+        else:
+            row['is_shared'] = None
+        return row
+
+    def test_wizard_excludes_unsafe_candidate_and_publishes_valid_selection(self):
+        for fact in ('missing', 'null'):
+            with self.subTest(fact=fact), tempfile.TemporaryDirectory() as temp:
+                self.root = Path(temp) / '.todo'
+                self.store = StateStore(self.root)
+                payload = full(projects=[self.unsafe_project(fact),
+                    init_fixture.project('root', None), init_fixture.project()],
+                    labels=[init_fixture.LABEL])
+                wire = init_fixture.Boundary(remote=payload)
+                status, out, err, _ = invoke(self, ['init'], Transport('secret', opener=wire),
+                    input=init_fixture.Terminal('1\n\n-\nyes\n'), output=init_fixture.Terminal())
+                self.assertEqual(status, 0, err)
+                self.assertIn('1. root (personal top-level project, choice 1)', out)
+                self.assertNotIn('. unsafe (personal', out)
+                for expected in ('excluded project unsafe', fact, 'is_shared', 'boolean'):
+                    self.assertIn(expected, err)
+                self.assertNotIn('failed', err)
+                self.assertNotIn('secret', out + err)
+                state = self.store.load_consistent_state()
+                self.assertEqual(state.binding.root_id, 'root')
+                self.assertEqual(set(state.snapshot.categories), {'cat'})
+                self.assertFalse(wire.mutations)
+                wire.assert_done()
+                # A subsequent offline consumer uses the published selection.
+                status, _, err, factory = invoke(self, ['now'])
+                self.assertEqual(status, 0, err)
+                factory.assert_not_called()
+                with exclusive_lock('released', self.root):
+                    pass
+
+    def test_selected_and_bound_unsafe_projects_fail_without_writes(self):
+        for mode in ('wizard', 'configured', 'bound'):
+            for fact in ('missing', 'null'):
+                with self.subTest(mode=mode, fact=fact), tempfile.TemporaryDirectory() as temp:
+                    self.root = Path(temp) / '.todo'
+                    self.store = StateStore(self.root)
+                    if mode != 'wizard':
+                        self.root.mkdir(mode=0o700)
+                        config = self.root / 'config'
+                        config.write_bytes(init_fixture.CONFIG)
+                        config.chmod(0o600)
+                    if mode == 'bound':
+                        wire = init_fixture.Boundary()
+                        status, _, err, _ = invoke(self, ['init'], Transport('secret', opener=wire))
+                        self.assertEqual(status, 0, err)
+                        wire.assert_done()
+                    before = {p.name: p.read_bytes() for p in self.root.iterdir()
+                              if p.name != 'lock'} if self.root.exists() else {}
+                    root = self.unsafe_project(fact, 'root')
+                    if mode == 'bound':
+                        root['name'] = 'renamed'  # binding, not configured name, establishes relevance
+                    wire = init_fixture.Boundary(remote=full(projects=[root, init_fixture.project()],
+                        labels=[init_fixture.LABEL]))
+                    status, out, err, _ = invoke(self, ['init'], Transport('secret', opener=wire),
+                        input=init_fixture.Terminal('root\n'), output=init_fixture.Terminal())
+                    self.assertEqual(status, 1, err)
+                    phase = 'terminal setup' if mode == 'wizard' else 'preflight'
+                    self.assertIn(phase + ' failed', err)
+                    for expected in (fact, 'is_shared', 'boolean', 'No snapshot destination was replaced'):
+                        self.assertIn(expected, err)
+                    self.assertNotIn('remote discovery failed', err)
+                    self.assertNotIn('Initialized', out)
+                    self.assertNotIn('secret', out + err)
+                    self.assertEqual(before, {p.name: p.read_bytes() for p in self.root.iterdir()
+                        if p.name != 'lock'})
+                    self.assertFalse(wire.mutations)
+                    wire.assert_done()
+                    with exclusive_lock('released', self.root):
+                        pass
 
     def test_wizard_terminal_failure_stays_distinct_from_discovery(self):
         with tempfile.TemporaryDirectory() as temp:

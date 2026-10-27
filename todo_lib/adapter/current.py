@@ -34,7 +34,7 @@ _FIELDS = {
                  'workspace_id', 'is_archived', 'is_deleted'),
     'items': ('id', 'project_id', 'parent_id', 'content', 'description', 'priority',
               'checked', 'labels', 'due', 'added_at', 'completed_at', 'is_deleted'),
-    'notes': ('id', 'item_id', 'content', 'posted_at', 'file_attachment', 'is_deleted'),
+    'notes': ('id', 'item_id', 'content', 'posted_at', 'is_deleted'),
     'reminders': ('id', 'item_id', 'type', 'minute_offset', 'is_deleted'),
     'labels': ('id', 'name', 'is_deleted'),
 }
@@ -150,18 +150,24 @@ def _item(raw, zone):
     title = incoming_text(_required(raw, 'content'), title=True)
     description = incoming_text(description, description=True)
     due = _required(raw, 'due')
-    if due is not None:
-        _object(due, 'due')
-        for field in _DUE_FIELDS:
-            _required(due, field)
-        _bool(due['is_recurring'], 'due.is_recurring')
-        if not isinstance(due['string'], str) or not isinstance(due['lang'], str):
-            raise CurrentError('due.string and due.lang must be strings')
+    _due(due)
     return Item(raw['id'], raw['project_id'], title,
                 _parent(_required(raw, 'parent_id'), 'item.parent_id'),
                 description, 5 - priority, resolve_remote_due(due, zone),
                 frozenset(labels), _timestamp(raw, 'added_at'), completed,
                 _timestamp(raw, 'completed_at'))
+
+
+def _due(due):
+    """Validate consumed task recurrence metadata; timezone omission is null."""
+    if due is not None:
+        _object(due, 'due')
+        for field in _DUE_FIELDS:
+            if field != 'timezone':
+                _required(due, field)
+        _bool(due['is_recurring'], 'due.is_recurring')
+        if not isinstance(due['string'], str) or not isinstance(due['lang'], str):
+            raise CurrentError('due.string and due.lang must be strings')
 
 
 def _seed(snapshot):
@@ -183,7 +189,7 @@ def _seed(snapshot):
             added_at=stamp(i.added_at), completed_at=stamp(i.completed_at), is_deleted=False)
     for c in snapshot.comments.values():
         state['notes'][c.id] = dict(id=c.id, item_id=c.item_id, content=c.body,
-            posted_at=stamp(c.added_at), file_attachment=None, is_deleted=False)
+            posted_at=stamp(c.added_at), is_deleted=False)
     for r in snapshot.reminders.values():
         state['reminders'][r.id] = dict(id=r.id, item_id=r.item_id, type='relative',
                                       minute_offset=r.minutes, is_deleted=False)
@@ -192,7 +198,11 @@ def _seed(snapshot):
 
 def _signature(raw, name):
     """Compare consumed wire values without bool/int coercion or time rounding."""
-    normalized = dict(raw)
+    normalized = {k: v for k, v in raw.items() if k in _FIELDS[name]}
+    if name == 'notes':
+        normalized['content'] = incoming_text(raw.get('content', ''))
+    if name == 'items' and isinstance(raw.get('due'), dict):
+        normalized['due'] = {k: raw['due'].get(k) for k in _DUE_FIELDS}
     if name == 'items':
         normalized['description'] = raw.get('description') if raw.get('description') is not None else ''
         timestamps = ('added_at', 'completed_at')
@@ -224,11 +234,36 @@ def _merge(state, response, full):
             if name == 'items' and isinstance(raw.get('due'), dict):
                 raw['due'] = {k: raw['due'][k] for k in _DUE_FIELDS if k in raw['due']}
             if raw.get('is_deleted') is not True:
-                if identity in live and _signature(live[identity], name) != _signature(raw, name):
-                    raise CurrentError('contradictory live ' + name + ' representations')
+                if identity in live:
+                    state.setdefault('_duplicates', []).append((name, live[identity], raw))
                 live[identity] = raw
             # Retain tombstones transiently for ordering and lifecycle evidence.
             state[name][identity] = raw
+
+
+def _check_duplicates(state, projects, items):
+    """Defer unused body comparisons until scope is established; context is strict."""
+    contexts = {'projects': ('parent_id', 'is_deleted'),
+                'items': ('project_id', 'is_deleted'),
+                'notes': ('item_id', 'is_deleted'),
+                'reminders': ('item_id', 'is_deleted'),
+                'labels': ('is_deleted',)}
+    for name, left, right in state.get('_duplicates', ()):
+        if state[name][right['id']].get('is_deleted') is True:
+            continue
+        context = contexts[name]
+        if any(left.get(k) != right.get(k) for k in context):
+            raise CurrentError('contradictory ' + name + ' ownership/lifecycle ' + right['id'])
+        if name == 'projects':
+            relevant = right['id'] in projects
+        elif name == 'items':
+            relevant = _id(_required(right, 'project_id'), 'item.project_id') in projects
+        elif name in ('notes', 'reminders'):
+            relevant = _id(_required(right, 'item_id'), name + '.item_id') in items
+        else:
+            relevant = False
+        if relevant and _signature(left, name) != _signature(right, name):
+            raise CurrentError('contradictory live ' + name + ' representations ' + right['id'])
 
 
 def _projects(state, binding, known_items):
@@ -266,7 +301,10 @@ def _map(state, binding, account, prior, hidden_names):
             if identity in known_items:
                 departed.add(identity)
             continue
-        items[identity] = _item(raw, account.timezone)
+        try:
+            items[identity] = _item(raw, account.timezone)
+        except DomainError as error:
+            raise CurrentError(f'item {identity}: {error}') from error
     comments, reminders = {}, {}
     for name in ('notes', 'reminders'):
         for raw in state[name].values():
@@ -277,10 +315,11 @@ def _map(state, binding, account, prior, hidden_names):
                 continue
             _bool(_required(raw, 'is_deleted'), name + '.is_deleted')
             if name == 'notes':
-                if _required(raw, 'file_attachment') is not None:
-                    raise CurrentError('managed comment attachments are unsupported')
-                comments[raw['id']] = Comment(raw['id'], owner,
-                    _required(raw, 'content'), _timestamp(raw, 'posted_at'))
+                try:
+                    comments[raw['id']] = Comment(raw['id'], owner,
+                        incoming_text(raw.get('content', '')), _timestamp(raw, 'posted_at'))
+                except DomainError as error:
+                    raise CurrentError(f'comment {raw["id"]} owner {owner}: {error}') from error
             else:
                 kind = _required(raw, 'type')
                 if kind != 'relative':
@@ -289,6 +328,7 @@ def _map(state, binding, account, prior, hidden_names):
                 if type(minutes) is not int or minutes < 0:
                     raise CurrentError('minute_offset must be a nonnegative integer')
                 reminders[raw['id']] = Reminder(raw['id'], owner, minutes)
+    _check_duplicates(state, {root.id, *categories}, set(items))
     occurrences = {k: o for k, o in (prior.occurrences.items() if prior else ())
                    if o.item_id in items}
     snapshot = validate(Snapshot(binding, account, root, categories, items,
@@ -352,6 +392,12 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
         return _account(user, limits, binding)
 
     account = metadata(response, full, account)
+    scoped_projects = binding.category_ids | {binding.root_id} | {
+        k for k, v in state['projects'].items() if v.get('parent_id') == binding.root_id}
+    scoped_items = {k for k, v in state['items'].items()
+                    if v.get('is_deleted') is not True and isinstance(v.get('project_id'), str)
+                    and v['project_id'] in scoped_projects}
+    _check_duplicates(state, scoped_projects, scoped_items)
     earlier_departures = set()
     if not full:
         _, current_categories, _ = _projects(state, binding, prior.items)

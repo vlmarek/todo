@@ -110,14 +110,25 @@ class _Catalogue:
     raw: dict
     account: d.Account
     display: str
+    stderr: object = None
 
     @property
     def projects(self):
-        return {k: current._project(v) for k, v in self.raw['projects'].items()
-                if v.get('is_deleted') is not True}
+        projects = {}
+        for k, v in self.raw['projects'].items():
+            if v.get('is_deleted') is True:
+                continue
+            try:
+                project = current._project(v)
+                d.validate_title(project.name)
+                projects[k] = project
+            except d.DomainError as error:
+                # Identify the unsafe candidate without exposing provider content.
+                print(f'todo: excluded project {k}: {error}', file=self.stderr if self.stderr is not None else sys.stderr)
+        return projects
 
 
-def _discover(transport, binding=None):
+def _discover(transport, binding=None, *, stderr=None):
     """Full plus exactly one freshness read, including metadata validation."""
     first, token, full = current._read(transport, '*')
     if not full:
@@ -136,17 +147,25 @@ def _discover(transport, binding=None):
     user, limits = fresh.get('user', user), fresh.get('user_plan_limits', limits)
     account = current._account(user, limits, b)
     for value in raw['labels'].values():
-        deleted = current._bool(current._required(value, 'is_deleted'), 'label.is_deleted')
-        if not deleted:
-            d.validate_title(current._required(value, 'name'))
+        if value.get('name') == 'waiting':
+            current._bool(current._required(value, 'is_deleted'), 'label.is_deleted')
+    for name, left, right in raw.get('_duplicates', ()):
+        if name == 'labels' and 'waiting' in (left.get('name'), right.get('name')):
+            if current._signature(left, name) != current._signature(right, name):
+                raise d.DomainError('contradictory waiting label ' + right['id'])
     display = user.get('full_name') or user.get('email') or account.id
     if not isinstance(display, str):
         raise d.DomainError('user display must be text')
-    return _Catalogue((first, fresh), raw, account, display)
+    return _Catalogue((first, fresh), raw, account, display, stderr)
 
 
 def _root(catalogue, config, binding=None, selected=None):
     projects = catalogue.projects
+    for identity, raw in catalogue.raw['projects'].items():
+        if (identity == (binding.root_id if binding else selected) or
+            (binding is None and raw.get('name') == config.project)):
+            if raw.get('is_deleted') is not True:
+                projects[identity] = current._project(raw)
     if binding is not None:
         root = projects.get(binding.root_id)
         if root is None:
@@ -208,6 +227,9 @@ def _observe(catalogue, root, history, hidden, now):
     categories = _scope(catalogue, root, old)
     raw = catalogue.raw
     removed = set()
+    for value in raw['items'].values():
+        if value.get('is_deleted') is not True:
+            current._id(current._required(value, 'project_id'), 'item.project_id')
     if old:
         for identity, item in old.items.items():
             value = raw['items'].get(identity)
@@ -273,10 +295,9 @@ def _observe(catalogue, root, history, hidden, now):
             comments.pop(identity, None)
             continue  # discard unrelated unsupported data before own-field validation
         current._bool(current._required(value, 'is_deleted'), 'notes.is_deleted')
-        if current._required(value, 'file_attachment') is not None:
-            raise d.DomainError('managed comment attachments are unsupported')
-        comments[identity] = d.Comment(identity, owner, current._required(value, 'content'),
+        comments[identity] = d.Comment(identity, owner, d.incoming_text(value.get('content', '')),
                                        _timestamp(value, 'posted_at', 'note'))
+    current._check_duplicates(raw, {root.id, *categories}, set(retained))
     occurrences = {k: o for k, o in history.snapshot.occurrences.items()
                    if o.item_id in retained and (retained[o.item_id].completed or retained[o.item_id].recurring)}
     occurrences.update(snapshot.occurrences)
@@ -482,7 +503,7 @@ class Initializer:
                         credentials = resolve_credentials(environ=self.environ, wizard_token=secret)
                     transport = self.transport or self.transport_factory(credentials.token())
                     phase = 'remote discovery'
-                    catalogue = _discover(transport, state.binding if state else None)
+                    catalogue = _discover(transport, state.binding if state else None, stderr=self.stderr)
                     projects = catalogue.projects
                     phase = 'terminal setup'
                     config, catalogue, selected = self._wizard(credentials, catalogue, projects, state)
@@ -495,7 +516,7 @@ class Initializer:
                     catalogue = selected = None
                 phase = 'preflight'
                 if catalogue is None:
-                    catalogue = _discover(transport, state.binding if state else None)
+                    catalogue = _discover(transport, state.binding if state else None, stderr=self.stderr)
                 target = _root(catalogue, config, state.binding if state else None, selected)
                 observation_time = self.clock()
                 d.instant_key(observation_time)
@@ -536,7 +557,7 @@ class Initializer:
                     if kind == 'root':
                         target = result.actual
                 phase = 'post-provision validation'
-                after = _discover(transport, d.Binding(catalogue.account.id, target.id))
+                after = _discover(transport, d.Binding(catalogue.account.id, target.id), stderr=self.stderr)
                 # Once chosen/created, stable identity cannot change during init.
                 actual = after.projects.get(target.id)
                 if actual is None:

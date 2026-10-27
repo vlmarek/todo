@@ -59,7 +59,7 @@ def render_report(snapshot, start, until, *, finished=(), progress=(), hidden=()
                     context = owner_title(snapshot, item, deep_only=True)
                     if event.kind == 'comment':
                         label = 'Comment: ' if item.parent_id is None else 'Comment on step: ' + context + ' — '
-                        text = multiline(event.body or '', '      ' + absolute(event.instant, zone) + ' — ' + label, '        ')
+                        text = multiline(event.body if event.body and event.body.strip() else '[no text]', '      ' + absolute(event.instant, zone) + ' — ' + label, '        ')
                     elif event.kind == 'completed':
                         text = '      ' + absolute(event.instant, zone) + ' — Completed step: ' + context
                     else:

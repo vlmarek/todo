@@ -52,7 +52,7 @@ class Reports(unittest.TestCase):
         hi = '2026-10-22T12:00:01Z'
         cq = [('project_id', 'cat'), ('since', lo), ('until', hi), ('limit', '200')]
         aq = [('date_from', lo), ('date_to', hi),
-              ('annotate_notes', 'true'), ('limit', '200')]
+              ('limit', '200')]
         aq += [('object_event_types', x) for x in ('item:completed', 'item:uncompleted', 'note:added', 'note:updated', 'note:deleted')]
         active = current_items if current_items is not None else [item('A'), item('B', parent_id='A')]
         steps = [self.sync('*', full(items=active, notes=current_notes or [], user_plan_limits=limits(access, days))),
@@ -604,17 +604,17 @@ else:
         _, streams = self.run_report(self.requests(current_items=active, events=events))
         self.assertEqual(streams.stdout.getvalue().split('Progress')[0].count(' — A'), 2)
 
-    def test_unrelated_optional_activity_owner_is_filtered_before_mapping(self):
+    def test_unknown_activity_owner_cannot_be_assumed_unrelated(self):
         unrelated = event(None, LAST, owner=None)
         unrelated.pop('parent_item_id')
         unrelated['parent_project_id'] = 'unmanaged'
-        managed = event(1, FIRST)
-        managed['parent_project_id'] = 'before-scope-entry'
-        steps = self.requests(events=[unrelated, managed])
-        result, streams = self.run_report(steps, ['--final'])
-        self.assertTrue(result.finalized)
-        self.assertIn('Current post-boundary text', streams.stdout.getvalue())
-        self.assertEqual(d.instant_key(self.store.load_cursor()), d.instant_key(NOW))
+        steps = self.requests(events=[unrelated])[:4]
+        before = (self.root / 'report-cursor').read_bytes()
+        streams = self.streams()
+        with self.assertRaisesRegex(SyncError, 'parent_item_id'):
+            self.run_report(steps, ['--final'], streams)
+        self.assertEqual(streams.stdout.getvalue(), '')
+        self.assertEqual((self.root / 'report-cursor').read_bytes(), before)
 
     def test_potentially_managed_activity_still_requires_owner(self):
         row = event(None, LAST)

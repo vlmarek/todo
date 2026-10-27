@@ -542,8 +542,8 @@ class InitTests(unittest.TestCase):
         self.initialize_existing()
         self.put('config', CONFIG.replace(b'default_sections=cat', b'default_sections=cat,missing'))
         values = [note(**{field: value}) for field, value in
-                  (('content', 123), ('posted_at', 'bad'), ('posted_at', 12), ('file_attachment', {}))]
-        for field in ('content', 'posted_at', 'file_attachment', 'is_deleted'):
+                  (('content', 123), ('posted_at', 'bad'), ('posted_at', 12))]
+        for field in ('posted_at', 'is_deleted'):
             value = note(); del value[field]; values.append(value)
         for bad in values:
             with self.subTest(bad=bad):
