@@ -1,9 +1,39 @@
 # todo-3 product specification
 
-Design revision: **8 — delegate reminder expression resolution to Todoist, 2026-10-27**.
-State: **confirmed scoped product agreement; uncommitted revision**.
+Design revision: **9 — accept superseded historical reminder-contradiction limitation, 2026-10-27**.
+State: **confirmed scoped product agreement; committed Design handoff records its Git revision**.
 
-## Current revision 8
+## Current revision 9
+
+Read [historical-reminder-contradiction.md](historical-reminder-contradiction.md)
+first. REQ-SYNC-031 supersedes only REQ-SYNC-013's duty to remember earlier
+same-response contradictory reminder representations after a later authoritative
+hydration/full response replaces that reminder before its owner's relevance is
+resolved. A consistent later authoritative record may be published after normal
+ownership/scope and final-record validation. No extra historical contradiction
+tracker is required for this case. All other validation and product promises remain.
+
+The actual agreement is native operator decision
+`TX-1ad3c948fe854798b23c9131a686a71b:1`, with exact scope and consequences in
+`historical-reminder-contradiction.md`. The latest instruction, “run this throught
+cml-design and cml-plan and continue the work”, authorizes this amendment,
+necessary scoped commits, matching fresh Planning and supported continuation under
+unchanged limits. Source:
+`/home/neuron/Documents/cml/todo-3/runtime/operator/design-plan-continuation-20261027/authorization.md`.
+The same product understanding is already confirmed; no new interview or
+confirmation is pending. This Design pass changes documentation only and does
+not adopt or execute work.
+
+Preserve every earlier requirement definition and accepted effective assignment
+as history. Planning must apply this narrow successor to affected unfinished work,
+retain useful T23 implementation, and preserve all unrelated requirements. Historic
+rejection ATT-a388aac9816a4c7f / INC-3a1b52cb4a5f4704 remains valid against its
+historic assignment; this accepted limitation is not a verified implementation fix.
+No new provider observation, unresolved product choice or live-account gate is
+introduced. Existing evidence limits remain below. The complete Design directory
+at the handoff commit is the Planning baseline.
+
+## Preserved revision 8
 
 Revision 8 clarifies only revision 7's reminder replacement behavior. Todoist
 parses and normalizes unresolved expressions. Before any writes, the replacement
@@ -204,7 +234,7 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped successor
-precedence in todoist-tolerance.md,
+precedence in historical-reminder-contradiction.md, todoist-tolerance.md,
 project-sharing-field.md, partial-initialization-failure.md,
 command-time-precision.md and
 publication-failure.md governing
@@ -323,7 +353,9 @@ proof, report-owner resolution and pending-history cleanup ordering.
 Revision 6 has no unresolved product decisions and its written confirmation is
 retained; technical feasibility was not certified by that confirmation.
 Revision 7's individual choices and written agreement are confirmed. Its provider
-evidence needs remain explicit. A separately requested fresh Planning pass consumes
-revision 8 and its retained handoff, assesses the completed run, preserves accepted
-assignments and prepares supported follow-up work. No Planning or execution pass
-is requested by this Design discussion.
+evidence needs remain explicit. The currently authorized fresh Planning pass
+consumes revision 9 and its retained handoff, assesses affected unfinished work,
+preserves accepted assignments and
+useful implementation, and prepares the matching supported revision. Historical
+revision-7/8 Design-only restrictions describe those earlier passes; the current
+scoped authorization is recorded above.
