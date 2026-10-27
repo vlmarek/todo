@@ -4,6 +4,8 @@ Synthetic endpoint fixtures use the retained API-v1 evidence cited by the shared
 adapter fixtures. Expected checks reject query drift and invented endpoints.
 """
 from io import StringIO
+from dataclasses import replace
+from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 import subprocess
 import sys
@@ -16,7 +18,7 @@ from todo_lib.presentation import OriginalStreams, OutputError
 from todo_lib.workflows.report import Reporter
 from todo_lib.workflows.sync import Synchronizer, SyncError
 from tests.workflows.sync.test_sync import SyncTests, NOW, CURSOR, CREATED, completed_b
-from tests.adapter.current.test_current import full, delta, item, due
+from tests.adapter.current.test_current import full, delta, item, due, note
 from tests.adapter.history.test_history import Expected
 
 START = '2026-10-22T12:00:00.123456789012341Z'
@@ -55,22 +57,250 @@ class Reports(unittest.TestCase):
               ('limit', '200')]
         aq += [('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
         active = current_items if current_items is not None else [item('A'), item('B', parent_id='A')]
-        steps = [self.sync('*', full(items=active, notes=current_notes or [], user_plan_limits=limits(access, days))),
+        own = comments if comments is not None else [dict(id='own', content='Current post-boundary text', posted_at=CREATED, is_deleted=False)]
+        notes = current_notes if current_notes is not None else [dict(c, item_id='B') for c in own if any(i['id'] == 'B' for i in active)]
+        token = self.store.load_consistent_state().sync_token
+        steps = [self.sync(token, full(items=active, notes=notes, user_plan_limits=limits(access, days))),
                  self.sync('full-token', delta())]
         if access and days != 0:
             steps += [(Expected('/tasks/completed/by_completion_date', cq), {'items': list(rows)}),
                       (Expected('/activities', aq), {'results': list(events), 'next_cursor': None})]
-            for owner in ('A', 'B'):
-                records = [] if owner == 'A' else (comments if comments is not None else [dict(id='own', content='Current post-boundary text', posted_at=CREATED, is_deleted=False, file_attachment=None)])
+            # Reconciliation needs all missing known owners. Only uncovered owners
+            # have REST expectations; active notes above are complete Sync evidence.
+            missing = (set(self.store.load_consistent_state().snapshot.items) | set(self.store.load_history().snapshot.items)) - {i['id'] for i in active}
+            archived = {r['id'] for r in rows if r.get('checked')} - {i['id'] for i in active}
+            for owner in sorted(missing | archived):
                 steps.append((Expected('/comments', [('task_id', owner), ('limit', '200')]),
-                              {'results': records, 'next_cursor': None}))
+                    {'results': own if owner == 'B' else [], 'next_cursor': None}))
         return steps
 
     def run_report(self, steps, args=(), streams=None, now=NOW):
-        transport, _ = self.boundary(steps)
+        transport, self.last_http = self.boundary(steps)
         streams = streams or self.streams()
         result = Reporter(transport, self.store, clock=lambda: now, streams=streams).run(args)
         return result, streams
+
+    def test_saved_baseline_reload_delta_and_shared_archived_comments(self):
+        # Synthetic responses at the real Transport boundary, per retained Sync,
+        # scoped comments, completed and ActivityEvents contracts. No live bytes.
+        from tests.adapter.current.test_current import note
+        from todo_lib.local import StateStore
+        transport, _ = self.boundary([
+            self.sync('delta-token', full(items=[item('A'), item('C'), item('D')],
+                notes=[note('active', 'A', content='Before edit', posted_at=CREATED)],
+                user_plan_limits=limits())),
+            self.sync('full-token', delta(sync_token='external-token')),
+            (Expected('/tasks/completed/by_completion_date',
+                [('project_id', 'cat'), ('since', '2026-10-20T00:00:00Z'),
+                 ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]),
+                {'items': [completed_b()]}),
+            (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
+                {'results': [dict(id='own', content='Archived observed', posted_at=CREATED,
+                                  is_deleted=False)], 'next_cursor': None})])
+        Synchronizer(transport, self.store, clock=lambda: NOW).refresh()
+        self.store = StateStore(self.root)
+        loaded = self.store.load_consistent_state()
+        self.assertIn('B', loaded.snapshot.items)
+        self.assertNotIn('B', loaded.current_snapshot.items)
+        cursor = (self.root / 'report-cursor').read_bytes()
+        steps = [self.sync('external-token', delta(items=[item('A', content='Current parent'),
+                    dict(id='C', is_deleted=True)],
+                notes=[note('active', 'A', content='Fresh active text', posted_at=CREATED)],
+                sync_token='report-token')),
+            (Expected('/tasks/completed/by_completion_date',
+                [('project_id', 'cat'), ('since', '2026-10-20T00:00:00Z'),
+                 ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]),
+                {'items': [completed_b(content='Current archived step')]}),
+            (Expected('/activities', [('date_from', '2026-10-20T00:00:00Z'),
+                ('date_to', '2026-10-22T12:00:01Z'), ('limit', '200'),
+                ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+                {'results': [event(1, LAST), event(2, LAST, owner='A', obj='active')], 'next_cursor': None}),
+            (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
+                {'results': [dict(id='own', content='Fresh archived text', posted_at=CREATED,
+                                  is_deleted=False)], 'next_cursor': None})]
+        transport, http = self.boundary(steps)
+        streams = self.streams()
+        Reporter(transport, self.store, clock=lambda: NOW, streams=streams).run()
+        http.assert_done()
+        self.assertEqual(len(http.requests), 4)
+        self.assertEqual(parse_qs(http.requests[0][0].data.decode())['sync_token'], ['external-token'])
+        comment_owners = [parse_qs(urlsplit(request.full_url).query)['task_id'][0]
+            for request, _ in http.requests if urlsplit(request.full_url).path.endswith('/comments')]
+        self.assertEqual(comment_owners, ['B'])
+        text = streams.stdout.getvalue()
+        for value in ('Current parent', 'Current archived step', 'Fresh active text', 'Fresh archived text'):
+            self.assertIn(value, text)
+        loaded = self.store.load_consistent_state()
+        self.assertEqual(loaded.sync_token, 'report-token')
+        self.assertEqual(set(loaded.current_snapshot.items), {'A', 'D'})
+        self.assertEqual(loaded.snapshot.items['B'].parent_id, 'A')
+        self.assertIn('B', loaded.history.snapshot.items)
+        self.assertNotIn('C', loaded.snapshot.items)
+        self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
+
+    def test_comment_progress_counts_actual_pages_across_shared_and_filtered_owners(self):
+        self.comment_progress(7)
+
+    def test_comment_progress_does_not_count_reused_or_sync_covered_owners(self):
+        self.comment_progress(9)
+
+    def comment_progress(self, extra_archives):
+        # Synthetic scoped comments/Sync/completed/ActivityEvents responses use
+        # the retained contracts cited above. B is read during reconciliation;
+        # the other archives and the filtered unknown owner are read afterwards.
+        archived = ['B', *['arch' + str(k) for k in range(extra_archives)]]
+        rows = [completed_b(), *[completed_b(id=owner, content=owner)
+                                 for owner in archived[1:]]]
+        steps = self.requests(rows=rows, current_items=[item('A')],
+            events=[event(1, LAST),
+                    event(2, LAST, owner='unknown', obj='gone')])[:4]
+        for owner in archived:
+            query = [('task_id', owner), ('limit', '200')]
+            steps.append((Expected('/comments', query), {'results': [dict(
+                id='own' if owner == 'B' else 'note-' + owner,
+                content='Fresh ' + owner, posted_at=CREATED, is_deleted=False)],
+                'next_cursor': 'b.next' if owner == 'B' else None}))
+            if owner == 'B':
+                steps.append((Expected('/comments', query + [('cursor', 'b.next')]),
+                              {'results': [], 'next_cursor': None}))
+        # Relevance-only lookup: the deleted note needs no owner metadata and
+        # must still contribute its actual REST page to endpoint-wide progress.
+        steps.append((Expected('/comments', [('task_id', 'unknown'), ('limit', '200')]),
+                      {'results': [dict(id='gone', is_deleted=True)], 'next_cursor': None}))
+        cursor = (self.root / 'report-cursor').read_bytes()
+        _, streams = self.run_report(steps)
+        self.last_http.assert_done()
+        owners = [parse_qs(urlsplit(request.full_url).query)['task_id'][0]
+                  for request, _ in self.last_http.requests
+                  if urlsplit(request.full_url).path.endswith('/comments')]
+        self.assertEqual(owners, ['B', *archived, 'unknown'])
+        self.assertEqual(len(self.last_http.requests), 7 + extra_archives)
+        self.assertEqual(streams.stderr.getvalue(), 'todo: loading comments: 10 pages\n')
+        self.assertIn('Fresh B', streams.stdout.getvalue())
+        self.assertIn('Comment on step: B', streams.stdout.getvalue())
+        self.assertNotIn('annotation is not current text', streams.stdout.getvalue())
+        state = self.store.load_consistent_state()
+        self.assertEqual(set(state.current_snapshot.items), {'A'})
+        self.assertTrue(set(archived) <= set(state.history.snapshot.items))
+        self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
+
+    def test_consecutive_delta_reports_cover_empty_blank_deleted_and_unchanged_owners(self):
+        # Complete active Sync evidence is sufficient even for old posted_at,
+        # current blank text, an empty owner, and a deleted eligible comment.
+        first = self.requests(current_items=[item('A'), item('B', parent_id='A'),
+            *[item('extra' + str(k)) for k in range(12)]])
+        transport, http = self.boundary(first)
+        Reporter(transport, self.store, clock=lambda: NOW, streams=self.streams()).run()
+        self.assertEqual(len(http.requests), 4)  # full + freshness + completed + activity
+        for body in ('', 'Next command text'):
+            with self.subTest(body=body):
+                planned = self.requests(events=[event(1, LAST),
+                    event(2, LAST, owner='A', obj='absent'),
+                    event(3, LAST, owner='B', obj='deleted')])
+                steps = [self.sync('delta-token', delta(notes=[
+                    note('own', 'B', content=body, posted_at=CREATED),
+                    dict(id='deleted', is_deleted=True)])), *planned[2:4]]
+                streams = self.streams()
+                transport, http = self.boundary(steps)
+                Reporter(transport, self.store, clock=lambda: NOW, streams=streams).run()
+                self.assertEqual(len(http.requests), 3)
+                self.assertEqual(streams.stdout.getvalue().count(body or '[no text]'), 1)
+                self.assertEqual(len(self.store.load_consistent_state().current_snapshot.items), 14)
+
+    def test_both_archived_reminder_types_survive_pending_only_report_publication(self):
+        from tests.support.reminders import absolute
+        rows = [completed_b(due=due())]
+        steps = self.requests(rows=rows, current_items=[item('A')])
+        steps[0][1]['user_plan_limits']['current']['reminders'] = True
+        steps[0][1]['reminders'] = [absolute('absolute', item_id='B'),
+            dict(id='relative', item_id='B', type='relative', minute_offset=0, is_deleted=False)]
+        self.run_report(steps)
+        for _ in range(2):
+            planned = self.requests(current_items=[item('A')])
+            steps = [self.sync('delta-token', delta()), *planned[2:]]
+            self.run_report(steps)
+            state = self.store.load_consistent_state()
+            self.assertEqual(state.current_reminder_ids, {'absolute', 'relative'})
+            self.assertNotIn('B', state.current_snapshot.items)
+            self.assertEqual(set(state.history.snapshot.reminders), {'absolute', 'relative'})
+            self.assertEqual(set(state.snapshot.reminders), {'absolute', 'relative'})
+        # Final cleanup can discard old pending owner evidence. Necessary cache
+        # context still pairs the archived reminder bodies with the actual token.
+        self.store.write_cursor(NOW)
+        planned = self.requests(current_items=[item('A')], cursor=NOW)
+        self.run_report([self.sync('delta-token', delta()), *planned[2:]], ['--final'])
+        state = self.store.load_consistent_state()
+        self.assertNotIn('B', state.history.snapshot.items)
+        self.assertEqual(state.current_reminder_ids, {'absolute', 'relative'})
+        planned = self.requests(current_items=[item('A')], cursor=NOW)
+        self.run_report([self.sync('delta-token', delta()), *planned[2:]])
+        self.assertEqual(self.store.load_consistent_state().current_reminder_ids,
+                         {'absolute', 'relative'})
+
+    def test_legacy_and_invalid_disposable_provenance_hydrate_without_reset(self):
+        from todo_lib.local.codec import loads, dumps
+        for provenance in (None, {'items': ['B'], 'reminders': []}):
+            with self.subTest(provenance=provenance):
+                raw = loads((self.root / 'cache.json').read_bytes())
+                if provenance is None:
+                    raw.pop('current_resources')
+                else:
+                    raw['current_resources'] = provenance  # missing active ancestor
+                self.put('cache.json', dumps(raw))
+                cursor = (self.root / 'report-cursor').read_bytes()
+                if provenance is None:
+                    self.assertIsNone(self.store.load_consistent_state().current_snapshot)
+                    steps = self.requests()
+                    steps[0] = (self.sync('*', steps[0][1])[0], steps[0][1])
+                else:
+                    # Build the expected replacement explicitly; invalid cache is
+                    # disposable but protected history remains required.
+                    steps = [self.sync('*', full(items=[item('A'), item('B', parent_id='A')],
+                        user_plan_limits=limits())), self.sync('full-token', delta()),
+                        (Expected('/tasks/completed/by_completion_date',
+                            [('project_id', 'cat'), ('since', '2026-10-20T00:00:00Z'),
+                             ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]), {'items': []}),
+                        (Expected('/activities', [('date_from', '2026-10-20T00:00:00Z'),
+                            ('date_to', '2026-10-22T12:00:01Z'), ('limit', '200'),
+                            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+                            {'results': [], 'next_cursor': None})]
+                self.run_report(steps)
+                self.assertIsNotNone(self.store.load_consistent_state().current_snapshot)
+                self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
+                self.assertIn('B', self.store.load_history().snapshot.items)
+                # Invalid required history must still refuse without any HTTP.
+                refreshed_history = (self.root / 'history.json').read_bytes()
+                self.put('history.json', b'{broken')
+                with self.assertRaises(LocalError):
+                    self.run_report([])
+                self.assertEqual((self.root / 'history.json').read_bytes(), b'{broken')
+                self.put('history.json', refreshed_history)
+
+    def test_active_malformed_sync_notes_fail_before_output(self):
+        for changes in ({'content': None}, {'posted_at': 'malformed'}):
+            with self.subTest(changes=changes):
+                steps = self.requests(current_notes=[note('own', 'B', **changes)])[:2]
+                streams = self.streams()
+                before = {name: (self.root / name).read_bytes() for name in ('report-cursor', 'history.json')}
+                with self.assertRaises(SyncError):
+                    self.run_report(steps, ['--final'], streams)
+                self.assertEqual(streams.stdout.getvalue(), '')
+                for name, value in before.items():
+                    self.assertEqual((self.root / name).read_bytes(), value)
+
+    def test_archived_extra_comment_page_failure_preserves_pending_and_cursor(self):
+        steps = self.requests(rows=[completed_b()], current_items=[item('A')], events=[event(1, LAST)])
+        request, payload = steps[-1]
+        steps[-1] = (request, dict(payload, next_cursor='second.page'))
+        steps.append((Expected('/comments', request.query + [('cursor', 'second.page')]),
+            {'results': []}))
+        before = {name: (self.root / name).read_bytes() for name in ('report-cursor', 'history.json')}
+        streams = self.streams()
+        with self.assertRaisesRegex(SyncError, 'page 2.*next_cursor'):
+            self.run_report(steps, ['--final'], streams)
+        self.assertEqual(streams.stdout.getvalue(), '')
+        for name, value in before.items():
+            self.assertEqual((self.root / name).read_bytes(), value)
 
     def test_preview_latest_edit_current_text_and_exact_window(self):
         self.store.write_cursor(d.instant_from_wire(START))
@@ -103,7 +333,6 @@ class Reports(unittest.TestCase):
         self.assertIn('own', preview_history.snapshot.comments)
         # New synchronization does not reduce the newer pending observation.
         steps = self.requests(events=[event(900, FIRST), event(1, LAST), event(3, NEWER)], cursor=d.instant_from_wire(START))
-        steps[0] = (self.sync('*', full())[0], steps[0][1])
         order = []
         original_cursor = self.store.write_cursor
         original_history = self.store.save_history
@@ -217,12 +446,7 @@ class Reports(unittest.TestCase):
                   event(2, END, 'uncompleted', obj='B', typ='item'),
                   event(3, LAST, owner='E', obj='deep')]
         steps = self.requests(events=events, rows=rows, current_items=active, comments=[])
-        steps[4], steps[5] = steps[5], steps[4]
-        for owner in ('C', 'D', 'E'):
-            comments = [] if owner != 'E' else [dict(id='deep', content='Deep current comment',
-                posted_at=CREATED, is_deleted=False, file_attachment=None)]
-            steps.append((Expected('/comments', [('task_id', owner), ('limit', '200')]),
-                          {'results': comments, 'next_cursor': None}))
+        steps[0][1]['notes'] = [note('deep', 'E', content='Deep current comment', posted_at=CREATED)]
         _, streams = self.run_report(steps)
         text = streams.stdout.getvalue()
         self.assertEqual(text.count('Completed step:'), 1)
@@ -237,11 +461,6 @@ class Reports(unittest.TestCase):
                   item('D', parent_id='C', checked=True, completed_at=FIRST)]
         steps = self.requests(current_items=active, rows=[item('B', parent_id='A', checked=True, completed_at=FIRST),
             item('C', parent_id='B', checked=True, completed_at=LAST)], comments=[])
-        steps[4], steps[5] = steps[5], steps[4]
-        steps.insert(5, (Expected('/comments', [('task_id', 'C'), ('limit', '200')]), {'results': [], 'next_cursor': None}))
-        for owner in ('D',):
-            steps.append((Expected('/comments', [('task_id', owner), ('limit', '200')]),
-                          {'results': [], 'next_cursor': None}))
         _, streams = self.run_report(steps)
         text = streams.stdout.getvalue()
         self.assertEqual(text.count('Completed step:'), 1)
@@ -252,9 +471,6 @@ class Reports(unittest.TestCase):
                   item('C', parent_id='B', labels=['waiting'], due=due()),
                   item('D', parent_id='C', labels=['waiting'], due=due())]
         steps = self.requests(current_items=active, comments=[])
-        for owner in ('C', 'D'):
-            steps.append((Expected('/comments', [('task_id', owner), ('limit', '200')]),
-                          {'results': [], 'next_cursor': None}))
         before = (self.root / 'report-cursor').read_bytes()
         with patch('todo_lib.workflows.report.prune_history', side_effect=AssertionError('preview cleanup')):
             _, streams = self.run_report(steps, ['--since', '2026-10-21', '--until', '2026-10-21'])
@@ -273,7 +489,10 @@ class Reports(unittest.TestCase):
                 x = (Expected('/comments', [('task_id', 'X'), ('limit', '200')]),
                     {'results': [dict(id='xnote', content='surviving', posted_at=CREATED,
                                      is_deleted=False, file_attachment=None)], 'next_cursor': None})
-                steps.insert(4, x) if parent else steps.append(x)
+                if parent:
+                    steps[-1] = x
+                else:
+                    steps.append(x)
                 streams = self.streams()
                 before = (self.root / 'report-cursor').read_bytes()
                 history = (self.root / 'history.json').read_bytes()
@@ -287,10 +506,7 @@ class Reports(unittest.TestCase):
         # T08 reconciliation discovers B's completion, including its own comments.
         steps = self.requests(rows=[completed_b()], events=[event(1, LAST)],
                               current_items=[item('A')])
-        # Reconciliation requests B first; required_comments then requests A/B.
-        b_comments = steps.pop()
-        a_comments = steps.pop()
-        steps.extend([b_comments, b_comments, a_comments])
+        # Reconciliation exhausts B once; preparation reuses it and Sync covers A.
         _, streams = self.run_report(steps, ['--since', START])
         self.assertIn('Current post-boundary text', streams.stdout.getvalue())
         self.assertIn('Comment on step: B', streams.stdout.getvalue())
@@ -385,7 +601,7 @@ else:
     def test_successful_pagination_and_exact_latest_edit_evidence(self):
         from todo_lib.presentation import render_report
         events = [event(900, FIRST), event(1, LAST)]
-        steps = self.requests(events=events)
+        steps = self.requests(events=events, rows=[completed_b()], current_items=[item('A')])
         request = steps[3][0]
         steps[3] = (request, {'results': [events[0]], 'next_cursor': 'a.b'})
         steps.insert(4, (Expected('/activities', request.query + [('cursor', 'a.b')]),
@@ -396,13 +612,17 @@ else:
         steps.append((Expected('/comments', comment_request.query + [('cursor', 'c.d')]), payload))
         captured = []
         def render(*args, **kwargs):
-            captured.extend(kwargs['progress'])
+            captured.extend(e for e in kwargs['progress'] if e.kind == 'comment')
             return render_report(*args, **kwargs)
         with patch('todo_lib.workflows.report.render_report', side_effect=render):
             self.run_report(steps)
         self.assertEqual(len(captured), 1)
         self.assertEqual(d.instant_text(captured[0].instant), LAST)
         self.assertEqual(captured[0].body, 'Current post-boundary text')
+        paths = [urlsplit(request.full_url).path for request, _ in self.last_http.requests]
+        self.assertEqual(paths.count('/api/v1/comments'), 2)
+        self.assertEqual(paths.count('/api/v1/activities'), 2)
+        self.assertEqual(len(paths), 7)
 
     def test_finished_root_and_post_boundary_recurring_undo(self):
         # Current active text wins over bounded occurrence text. A later undo
@@ -437,7 +657,6 @@ else:
         # them or their comments back into the managed report population.
         active = [item('A'), item('B', project_id='unmanaged')]
         steps = self.requests(events=[event(1, LAST)], current_items=active)
-        steps.pop()  # Only A still needs comments.
         _, streams = self.run_report(steps)
         self.assertNotIn('Current post-boundary text', streams.stdout.getvalue())
 
@@ -501,14 +720,15 @@ else:
         # never authority for the surviving comment's current role or parent.
         first = self.requests(rows=[completed_b()], events=[event(1, LAST)],
                               current_items=[item('A')])
-        b, a = first.pop(), first.pop()
-        first.extend([b, b, a])
         self.run_report(first)
         self.assertIn('B', self.store.load_history().snapshot.items)
+        from todo_lib.local import Coverage
+        with exclusive_lock('retained coverage fixture', self.root):
+            history = self.store.load_history()
+            self.store.save_history(replace(history, coverage=(Coverage(CURSOR, NOW),)))
         cursor = (self.root / 'report-cursor').read_bytes()
         pending = (self.root / 'history.json').read_bytes()
         steps = self.requests(events=[event(1, LAST)], current_items=[item('A')])
-        steps.insert(4, steps[-1])  # reconciliation still retrieves B's own comments
         streams = self.streams()
         with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
             self.run_report(steps, ['--final'], streams)
@@ -519,7 +739,6 @@ else:
         # retained owner must not make the occurrence silently disappear.
         steps = self.requests(events=[event(2, LAST, 'completed', obj='B', typ='item')],
                               current_items=[item('A')])
-        steps = steps[:4] + [steps[-1]]
         with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
             self.run_report(steps, ['--final'], streams)
         self.assertEqual(streams.stdout.getvalue(), '')
@@ -528,10 +747,9 @@ else:
         # Recovery preview with no eligible B event can proceed, but must retain
         # the pending archived context rather than erase it during publication.
         steps = self.requests(current_items=[item('A')])
-        steps.pop()  # no report-level B comment request without eligible activity
-        steps.insert(4, (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
+        steps[-1] = (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
             {'results': [dict(id='own', content='still surviving', posted_at=CREATED,
-                             is_deleted=False, file_attachment=None)], 'next_cursor': None}))
+                             is_deleted=False, file_attachment=None)], 'next_cursor': None})
         self.run_report(steps)
         pending = self.store.load_history()
         self.assertIn('B', pending.snapshot.items)
@@ -540,19 +758,16 @@ else:
 
     def test_retained_archived_parent_cannot_resolve_current_comment_role(self):
         first = self.requests(rows=[completed_b()], current_items=[item('A')])
-        b, a = first.pop(), first.pop()
-        first.extend([b, b, a])
         self.run_report(first)
         before = {name: (self.root / name).read_bytes()
                   for name in ('report-cursor', 'history.json')}
         steps = self.requests(rows=[item('X', parent_id='B', checked=True, completed_at=LAST)],
                               events=[event(1, LAST, owner='X', obj='xnote')],
                               current_items=[item('A')])
-        b, a = steps.pop(), steps.pop()
         x = (Expected('/comments', [('task_id', 'X'), ('limit', '200')]),
              {'results': [dict(id='xnote', content='Needs current ancestry', posted_at=CREATED,
                               is_deleted=False, file_attachment=None)], 'next_cursor': None})
-        steps.extend([b, x, x, a])
+        steps[-1] = x
         streams = self.streams()
         with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
             self.run_report(steps, ['--final'], streams)

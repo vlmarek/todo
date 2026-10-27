@@ -16,7 +16,7 @@ WorkspaceProjectSyncView (inspected 2026-10-26); the retained Sync prose says
 shared instead. Only the typed-schema spelling is supported.
 """
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclass_replace
 import json
 
 from todo_lib.domain import (
@@ -54,6 +54,9 @@ class Current:
     reminder_ids distinguishes authoritative omission/deletion from a legacy
     caller's unspecified reminder resource. Full hydration replaces all these
     facts; no superseded historical contradiction tracker is maintained.
+    current_snapshot explicitly identifies the proven Sync baseline for composed
+    callers whose snapshot also carries archived context. Legacy constructors
+    omit it and Gateway hydrates once instead of treating context as active.
     """
     snapshot: Snapshot
     sync_token: str
@@ -63,6 +66,7 @@ class Current:
     unresolved_reminders: tuple = ()
     reminder_duplicates: tuple = ()
     reminder_ids: frozenset[str] | None = None
+    current_snapshot: Snapshot | None = None
 
     @property
     def account(self):
@@ -335,8 +339,8 @@ def _reminder(raw, zone):
     raise CurrentError('managed reminder type unsupported: ' + str(kind))
 
 
-def _map(state, binding, account, prior, hidden_names):
-    known_items = prior.items if prior else {}
+def _map(state, binding, account, prior, hidden_names, known=None):
+    known_items = (known or prior).items if (known or prior) else {}
     root, categories, binding = _projects(state, binding, known_items)
     items, deleted, departed = {}, set(), set()
     for identity, raw in state['items'].items():
@@ -402,10 +406,13 @@ def _read(transport, token):
 
 
 def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
-             sync_token: str | None = None, replace=False, hidden_names=()) -> Current:
+             sync_token: str | None = None, replace=False, hidden_names=(),
+             known=None, reminder_ids=None) -> Current:
     """Read a complete candidate. No mutation, files, retries beyond transport,
     or account history access. A full response receives exactly one freshness read.
 
+    prior must be a proven current baseline; known optionally supplies retained
+    identities for tombstone/departure reconciliation without seeding resources.
     On scope expansion from a minimal prior Snapshot, request a replacement to
     recover unchanged resources owned by entrants (Sync does not re-emit them).
     This is data hydration, never error/token recovery, and is bounded once.
@@ -414,6 +421,10 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
         validate(prior, hidden_names)
         if prior.binding != binding:
             raise CurrentError('prior snapshot binding differs from supplied binding')
+    if known is not None and known is not prior:
+        validate(known, hidden_names)
+        if known.binding != binding:
+            raise CurrentError('known snapshot binding differs from supplied binding')
     if prior is None and sync_token is not None and not replace:
         raise CurrentError('incremental token requires a prior Snapshot')
     initial = prior is None or replace
@@ -422,6 +433,13 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     if initial and not full:
         raise CurrentError('requested full Sync returned a delta')
     state = {name: {} for name in _COLLECTIONS} if full else _seed(prior)
+    if not full and known is not None and reminder_ids is not None:
+        # Proven Sync reminder membership may include an archived owner. Seed
+        # only those wire resources, never the archived items or their comments.
+        reminder_seed = _seed(dataclass_replace(known,
+            items={}, comments={}, occurrences={},
+            reminders={k: r for k, r in known.reminders.items() if k in reminder_ids}))
+        state['reminders'].update(reminder_seed['reminders'])
     _merge(state, response, full)
     account = prior.account if prior else None
 
@@ -462,7 +480,7 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
             # A full active read can omit an item that already left scope and
             # was then completed. Keep only its confirmed identity, not its
             # unrelated live content. Later explicit item facts supersede this.
-            for identity in prior.items:
+            for identity in (known or prior).items:
                 raw = state['items'].get(identity)
                 if raw is not None and raw.get('is_deleted') is not True:
                     project_id = _id(_required(raw, 'project_id'), 'item.project_id')
@@ -472,7 +490,7 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
             if not full:
                 raise CurrentError('scope hydration requires a full Sync')
             earlier_tombstones = {identity: raw for identity, raw in state['items'].items()
-                                  if identity in prior.items and raw.get('is_deleted') is True}
+                                  if identity in (known or prior).items and raw.get('is_deleted') is True}
             state = {name: {} for name in _COLLECTIONS}
             _merge(state, response, True)
             # Keep explicit deletion evidence across hydration, never stale live
@@ -486,7 +504,7 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
             raise CurrentError('freshness Sync returned another full response')
         _merge(state, response, False)
         account = metadata(response, False, account)
-    snapshot, missing, deleted, departed = _map(state, binding, account, prior, hidden_names)
+    snapshot, missing, deleted, departed = _map(state, binding, account, prior, hidden_names, known)
     departed = departed | (earlier_departures - state['items'].keys())
     missing = missing - departed
     # Owners absent from active Sync need lifecycle scope resolution before their
@@ -498,4 +516,4 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     duplicates = tuple((left, right) for name, left, right in state.get('_duplicates', ())
         if name == 'reminders' and right['id'] in unresolved_ids)
     return Current(snapshot, token, missing, deleted, departed, unresolved, duplicates,
-                   frozenset(k for k, raw in state['reminders'].items() if raw.get('is_deleted') is not True))
+                   frozenset(k for k, raw in state['reminders'].items() if raw.get('is_deleted') is not True), snapshot)

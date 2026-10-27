@@ -178,7 +178,9 @@ class MoveWorkflow:
             # Retaining the original prior also preserves explicit deletion and
             # scope-departure attribution; never seed the requested open hierarchy.
             before = Current(snapshot, '*' if category != source.category_id
-                             else result.state.sync_token)
+                             else result.state.sync_token,
+                current_snapshot=result.state.current_snapshot,
+                reminder_ids=result.state.current_reminder_ids)
             context = ('move ' + self._item_context(snapshot, source) + ' to ' +
                 (self._item_context(snapshot, snapshot.items[parent_id]) if parent_id else
                  'standalone task in ' + snapshot.categories[category].name))
@@ -232,9 +234,10 @@ class MoveWorkflow:
         try:
             current = operation.after
             if current is None:
-                current = retrieve(sync.transport, original.binding, prior=original,
+                current = retrieve(sync.transport, original.binding, prior=state.current_snapshot or original,
                                    sync_token=state.sync_token,
-                                   replace=candidate.items[source.id].category_id != source.category_id,
+                                   replace=state.current_snapshot is None or candidate.items[source.id].category_id != source.category_id,
+                                   known=original, reminder_ids=state.current_reminder_ids,
                                    hidden_names=settings.hidden_from_now)
             # An accepted direct move changes the known subtree's inherited
             # category. Retained completed descendants omitted by bounded history
@@ -261,7 +264,8 @@ class MoveWorkflow:
             phase = 'candidate preparation'
             candidates = prepare_candidates(snapshot, history,
                 account_display=state.binding.account_display, sync_token=current.sync_token,
-                synced_at=result.now, hidden_names=settings.hidden_from_now)
+                synced_at=result.now, hidden_names=settings.hidden_from_now,
+                current_snapshot=current.current_snapshot, current_reminder_ids=current.reminder_ids)
             before_bytes = sync._bytes(('cache.json', 'history.json', 'binding.json'))
             phase = 'local publication'
             sync.store.publish_snapshot(candidates)

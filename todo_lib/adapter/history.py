@@ -321,11 +321,14 @@ class HistoryAdapter:
                     records.append(comment)
         return Retrieval(tuple(records), tuple(pages))
 
-    def required_comments(self, current_items, completed, activities):
+    def required_comments(self, current_items, completed, activities, *, complete_comments=None):
         """Return current text separately from events and historical item text.
 
         completed/activities are successfully exhausted Retrieval values. No cache
         writes, active-only lookup or guessed archive scan occurs on this path.
+        complete_comments(owner, required_ids=None) may supply command-local
+        exhausted owner evidence. A non-None required_ids is a relevance filter,
+        not permission to retain a filtered result as complete owner evidence.
         Missing comments in a complete scoped response establish comment absence,
         never owner deletion. Returned owners include needed ancestor context.
         """
@@ -345,8 +348,12 @@ class HistoryAdapter:
         comments, pages, count = {}, [], [0]
         needed = set(owners)
         for owner in requested:
-            result = self._comments(owner, count,
-                required_ids=requested[owner] if owner not in owners else None)
+            # Unknown-owner relevance filtering must remain local: it cannot seed
+            # a complete owner lookup with a filtered/partially validated result.
+            result = (complete_comments(owner,
+                required_ids=requested[owner] if owner not in owners else None) if complete_comments is not None
+                else self._comments(owner, count,
+                    required_ids=requested[owner] if owner not in owners else None))
             pages.extend(result.pages)
             for comment in result.records:
                 if owner not in owners and comment.id not in requested[owner]:

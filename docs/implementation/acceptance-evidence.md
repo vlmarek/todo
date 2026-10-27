@@ -447,3 +447,223 @@ not live provider traffic. No account, credentials, uncontrolled network, snapsh
 refresh, dependency, provider notification guarantee or second implementation path
 was introduced. Live behavior and notification delivery remain unverified; earlier
 publication/manual-recovery and provider-evidence limitations continue to apply.
+
+
+## T27 — proven incremental report baseline and command-local comments (2026-10-27)
+
+Observed subject: HEAD `e4d8ba1c7f20766b6e9cf1c82451ef2b6c74afa5` plus the uncommitted T27 runtime and fixture changes listed below. SHA-256 of `git diff --binary HEAD --` over those paths, excluding this evidence-only appendix: `69cab9035bf5192ea61b0e98b9fe69771bbb371abbb5d6187f5dfd5f2e916fcb`. No commits or Git metadata changes.
+
+- `tests/adapter/commands/test_commands.py`
+- `tests/cli/test_composition.py`
+- `tests/delivery/final/copy_probe.py`
+- `tests/workflows/capture/test_capture.py`
+- `tests/workflows/comments/test_workflow.py`
+- `tests/workflows/lifecycle/test_lifecycle.py`
+- `tests/workflows/moves/test_moves.py`
+- `tests/workflows/reads/test_reads.py`
+- `tests/workflows/report/test_report.py`
+- `tests/workflows/report/test_tolerance.py`
+- `tests/workflows/sync/test_sync.py`
+- `todo_lib/adapter/commands.py`
+- `todo_lib/adapter/current.py`
+- `todo_lib/adapter/history.py`
+- `todo_lib/local/store.py`
+- `todo_lib/workflows/capture.py`
+- `todo_lib/workflows/comments.py`
+- `todo_lib/workflows/init.py`
+- `todo_lib/workflows/lifecycle.py`
+- `todo_lib/workflows/moves.py`
+- `todo_lib/workflows/report.py`
+- `todo_lib/workflows/sync.py`
+
+Offline authority: accepted `docs/design/external/todoist/report-retrieval-notes.md`
+and its unchanged upstream `api-v1.openapi.json` (retained SHA-256
+`9a7c4816042e5c1b66935f2be1cf83da953dc459649ee606ac364d1acbc4764c`).
+Inspected retained Sync Read resources/Incremental sync and the scoped comments,
+completed/by_completion_date and ActivityEvents endpoint definitions. All HTTP
+responses here are synthetic provider-shaped fixtures through the actual adapters
+and controlled Transport; they are not retained provider traffic or live-account
+observations. No snapshot refresh, account access or wall-clock benchmark.
+
+Implementation: optional schema-1 cache `current_resources` stores proven item
+and reminder membership beside its actual Sync token. Current owner comments are
+reconstructed from the validated merged snapshot; active membership is never
+inferred from completion flags, history, omission or saved time. Known archived
+context stays available separately to reconciliation. Legacy caches remain
+readable offline and hydrate online once; invalid disposable provenance can
+rebuild only under the existing cache rules. Required history is still validated
+first and cannot reset. Producers/consumers in init, sync, report, bounded lifecycle
+discovery, move publication and gateway/capture/comment/lifecycle calls preserve
+matching provenance or explicitly invalidate it. Init's injected historical
+ancestor context invalidates provenance. Both reminder types retain necessary
+archived owner/ancestor cache context so final pending-history cleanup cannot
+break a saved-token baseline. Binding remains the single timezone authority.
+
+One report-local lookup shares complete exhausted owner evidence between
+reconciliation and required_comments. Fresh merged Sync covers active owners,
+including authoritative empty comment sets. Successful scoped archived lookups
+are memoized; relevance-filtered unknown-owner reads and failed/partial results
+never become complete evidence. Owner/ancestor metadata resolution remains
+independent of text lookup, with the explicit unresolved archived-owner failure.
+
+The first feedback command was
+`PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.report.test_report.Reports.test_saved_baseline_reload_delta_and_shared_archived_comments -v`:
+1 test passed (exit 0, `/tmp/t27-first.log`). It observes A/B/own comments through
+the actual adapter, externally completes B through supported completed evidence,
+publishes and reloads StateStore, then reports using actual `external-token` delta
+requests. The settled case asserts changed A text, C's tombstone, unchanged D,
+current B title/actual parent A, fresh active and archived comment text, B retained
+in pending context but excluded from current membership, unchanged preview cursor,
+and the newly published `report-token`. Actual HTTP counts: 4 requests = 1 saved-token
+Sync + 1 category completed + 1 activity + 1 complete B comments lookup; zero
+per-covered-active-owner REST lookups. Exact controlled expectations reject both
+extra calls and missing calls.
+
+Additional distinguishing cases: 12 extra unchanged active owners add zero REST
+comment requests; ordinary subsequent delta reports make exactly 3 HTTP requests
+(Sync, scoped completed, activities). Old posted_at/blank current text, empty
+owners, deletion and a fresh later-command edit remain distinguishable. The
+successful multipage case counts 7 actual HTTP calls, including exactly 2 activity
+pages and 2 archived comment pages shared with reconciliation. A failed second
+archived comment page leaves normal output empty and cursor/history bytes intact.
+`test_blank_report_incomplete_page_keeps_cursor_and_no_output` now uses an uncovered
+archived owner; active malformed Sync-note failures are separately retained.
+Legacy/invalid provenance hydration and corrupt required-history refusal are
+exercised through Reporter. Both archived reminder types survive preview, final
+pending cleanup and another saved-token delta without becoming active owners.
+
+Migrated existing report fixtures source active own text from Sync notes and
+expect one exhausted archived-owner lookup. Reused exact intervals and recurring
+undo/multiplicity, current edit/deletion/blank, deep roles/ancestry, capability and
+retention, scope departure, full replacement/rebuild, malformed/repeated
+pagination, output/write/flush/cursor failures, partial publications and protected
+history failures. Retained archived metadata and parent tests still fail before
+normal output with unchanged cursor and pending bytes after earlier successful
+reports of the same IDs. A saved coverage marker is explicitly present in the
+retained-owner negative case and cannot substitute for fresh archived metadata.
+The copied-runtime report fixture now expects saved-token deltas, active Sync
+notes and one B REST lookup. It was syntax-compiled; its complete copied-runtime
+execution remains part of the runner-owned final-delivery gate.
+
+Observed focused commands on this subject, each exit 0 with no skips:
+
+- t05-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/current -p 'test_*.py' -v` — 49 tests passed; `/tmp/t27-final-current.log`.
+
+- t06-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v` — 34 tests passed; `/tmp/t27-final-history.log`.
+
+- t02-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/local -p 'test_*.py' -v` — 25 tests passed; `/tmp/t27-final-local.log`.
+
+- t08-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p 'test_*.py' -v` — 32 tests passed; `/tmp/t27-final-sync.log`.
+
+- t15-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v` — 40 tests passed; `/tmp/t27-final-report-counts.log`.
+
+- t07-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/commands -p 'test_*.py' -v` — 42 tests passed; `/tmp/t27-final-commands.log`.
+
+- affected init: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/init -p 'test_*.py' -v` — 44 tests passed; `/tmp/t27-final-init.log`.
+
+- affected moves: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/moves -p 'test_*.py' -v` — 22 tests passed; `/tmp/t27-final-moves.log`.
+
+- affected lifecycle: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/lifecycle -p 'test_*.py' -v` — 27 tests passed; `/tmp/t27-final-lifecycle.log`.
+
+- affected comments: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/comments -p 'test_*.py' -v` — 48 tests passed; `/tmp/t27-final-comments.log`.
+
+- affected capture: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/capture -p 'test_*.py' -v` — 63 tests passed; `/tmp/t27-final-capture.log`.
+
+- affected CLI: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/cli -p 'test_*.py' -v` — 36 tests passed; `/tmp/t27-final-cli.log`.
+
+- affected reads: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/reads -p 'test_*.py' -v` — 24 tests passed; `/tmp/t27-final-reads.log`.
+
+
+`git diff --check`: exit 0. No additional broad suite was run. Affected reads were
+checked because the shared Synchronizer now distinguishes synthetic/legacy
+snapshots without provenance; its fixtures and mixed-publication failure path
+needed explicit baseline/fresh archived evidence. Existing focused report tests
+could not establish that read-workflow consumer behavior. The runner's settled
+`final-delivery` complete offline suite and unchanged-copy/PATH/real-less gate
+remain required; no duplicate complete worker run or new harness is claimed.
+
+REQ-CACHE-011 outcome: retain complete category-scoped completed queries on every
+report, with existing within-command completed/activity reuse. Active Sync and
+active-only task GET do not establish current archived owner metadata; optional
+ActivityEvents extras do not guarantee complete current parent/scope/lifecycle
+correction, and ensure_last_state has no implementation. Old occurrences,
+coverage or saved sync time therefore cannot justify cross-command completion
+query skipping. No coverage schema, second archive/invalidation system, automatic
+repair or new recovery path was added. Existing per-file partial-publication and
+unresolved archived-owner limitations remain; no atomic cross-endpoint snapshot,
+later concurrent edit reread or live provider guarantee is claimed.
+
+## T27 correction: command-wide comment page progress (2026-10-27)
+
+Observed subject: retained candidate HEAD
+`3fb5ded8d6a933fbe81c3da2a9cdcf931d2edc35` plus this correction in
+`todo_lib/workflows/report.py`, `tests/workflows/report/test_report.py` and this
+append-only evidence entry. Production source SHA-256:
+`ea6dcefd27b2889bd331bc05562183e26576caae2d7c82ab4cae1d6dec5fb8af`;
+report test source SHA-256:
+`7af83c2f76bbdded8d4a54435cbdfbe931d95d44d88ad45388888777f5f59077`.
+The only test-source change after the focused runs was correcting an obsolete
+comment describing redundant A/B reads; executable test bytes were unchanged.
+
+Confirmed the review's failed assumption: memoizing complete owner responses
+preserved request reuse, but each uncached complete lookup created its own
+pagination counter, while a filtered relevance lookup explicitly supplied a new
+counter. The callback consequently bypassed required_comments' shared counter.
+The correction owns one counter in command-local _Evidence and passes it to both
+complete and filtered REST reads. Sync-covered and memoized results do not touch
+it. Pagination validation, failed/partial-result refusal and the complete versus
+filtered evidence distinction continue through the existing adapter engine.
+No shared caller signatures or persisted representations changed in this correction.
+
+First feedback reused
+`test_saved_baseline_reload_delta_and_shared_archived_comments` through actual
+adapter -> publication/reload -> Reporter, which passed: saved-token delta,
+changed parent and tombstone, unchanged active D, archived B kept non-active,
+fresh own text/ancestry, four actual report requests, exactly one archived B
+lookup and zero covered-active owner lookups, with preview cursor and pending
+context retained. In the same initial run, the new composed progress regression
+failed on the retained implementation with empty stderr instead of
+`todo: loading comments: 10 pages`. After the correction, this scenario and both
+new progress regressions passed (3 tests, exit 0).
+
+Added `test_comment_progress_counts_actual_pages_across_shared_and_filtered_owners`
+and `test_comment_progress_does_not_count_reused_or_sync_covered_owners` in the
+existing Reports harness. Synthetic provider-shaped fixtures reference retained
+Sync, comments, completed and ActivityEvents evidence; these are not retained
+provider bytes or a live-account observation. Exact actual Transport expectations
+establish respectively 14 and 16 total HTTP requests: four current/history reads
+plus 10 and 12 REST comment pages. B exhausts two pages during reconciliation and
+is reused during preparation; the remaining archives exhaust one page each.
+The final filtered unknown-owner response is a deleted note, requiring no guessed
+archived metadata; in the 10-page case it crosses the progress threshold itself.
+Both commands emit exactly one 10-page comments progress line, no 20-page line,
+zero active-A comment requests, surviving B text under actual parent A, retained
+archived pending context and unchanged preview cursor.
+
+Focused commands on this corrected subject all exited 0, without skips:
+
+- t05-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/current -p 'test_*.py' -v` — 49 tests; `/tmp/t27-correction-t05.log`.
+- t06-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v` — 34 tests; `/tmp/t27-correction-t06.log`.
+- t02-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/local -p 'test_*.py' -v` — 25 tests; `/tmp/t27-correction-t02.log`.
+- t08-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p 'test_*.py' -v` — 32 tests; `/tmp/t27-correction-t08.log`.
+- t15-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v` — 42 tests; `/tmp/t27-correction-t15.log`.
+
+Reused the retained-owner/parent negatives, incomplete archived page refusal,
+exact latest-edit/multipage cases, pagination/partial-publication failures and
+output/flush/cursor/cleanup protections in the report suite. Existing adapter
+pagination tests remain complementary to the new composed callback coverage.
+`git diff --check` exited 0. No additional broad suite was run: this correction
+changes only the report-local counter and exercises its actual adapter consumer;
+the complete offline and copied-runtime/PATH/real-less gates remain runner duties
+on the settled subject. Historical runner passes are not claimed as verification
+of these changed bytes.
+
+REQ-CACHE-011 remains conservatively settled by the retained provider evidence:
+complete category-scoped completed queries run on every report. Active Sync and
+active-only GET cannot establish current archived metadata; optional ActivityEvents
+extras do not guarantee complete ancestry/scope/lifecycle correction, and
+ensure_last_state is unimplemented. Neither old occurrences nor coverage nor
+saved sync time replaces fresh required archived evidence. No completion-query
+skipping, coverage schema, archive system, snapshot refresh or real-account access
+was introduced. The existing unresolved archived-owner and cross-endpoint
+concurrency limitations remain explicit.

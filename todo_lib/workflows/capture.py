@@ -256,7 +256,8 @@ class CaptureWorkflow:
             kwargs = dict(action.kwargs)
             if kwargs.get('parent_id') in ids:
                 kwargs['parent_id'] = ids[kwargs['parent_id']]
-            before = Current(snapshot, synchronized.state.sync_token)
+            before = Current(snapshot, synchronized.state.sync_token, current_snapshot=synchronized.state.current_snapshot,
+                reminder_ids=synchronized.state.current_reminder_ids)
             old = snapshot.items.get(target)
             receipt = None
             rendered = False

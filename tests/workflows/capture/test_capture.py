@@ -127,7 +127,7 @@ class CaptureTests(unittest.TestCase):
         current = retrieve(self.http, d.Binding('u', 'root', frozenset({'cat'})))
         with exclusive_lock('test', self.root):
             self.store.publish_snapshot(prepare_candidates(current.snapshot, empty_history(current.snapshot),
-                account_display='Person', sync_token=current.sync_token, synced_at=NOW,
+                account_display='Person', current_snapshot=current.snapshot, sync_token=current.sync_token, synced_at=NOW,
                 initial_cursor=NOW if not (self.root / 'cursor').exists() and not (self.root / 'binding.json').exists() else None))
 
     def refresh(self, state=None, *, synchronize=True):

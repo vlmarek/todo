@@ -263,7 +263,8 @@ class CommentWorkflow:
         if observed is not None:
             self.gateway.transport = observed
         try:
-            result = self.gateway.execute(operation, before=Current(current.snapshot, current.state.sync_token),
+            result = self.gateway.execute(operation, before=Current(current.snapshot, current.state.sync_token, current_snapshot=current.state.current_snapshot,
+                reminder_ids=current.state.current_reminder_ids),
                                           owner_id=owner.id)
             if observed is not None:
                 result = replace(result, issues=tuple(dict.fromkeys((*result.issues, *observed.mutation_issues()))))

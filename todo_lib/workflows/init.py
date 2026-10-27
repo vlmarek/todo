@@ -269,6 +269,10 @@ def _observe(catalogue, root, history, hidden, now):
     binding = old.binding if old else d.Binding(catalogue.account.id, root.id)
     live = current.retrieve(_Replay(responses), binding, prior=old, replace=True,
                             hidden_names=hidden)
+    if additions:
+        # Injected historical ancestors support reconciliation, not active Sync
+        # membership. The next online read must hydrate a genuine baseline.
+        live = replace(live, current_snapshot=None)
     snapshot = live.snapshot
     if history is None:
         history = empty_history(snapshot)
@@ -585,6 +589,7 @@ class Initializer:
                 phase = 'candidate preparation'
                 candidates = prepare_candidates(live.snapshot, history, account_display=after.display,
                     sync_token=live.sync_token, synced_at=now,
+                    current_snapshot=live.current_snapshot, current_reminder_ids=live.reminder_ids,
                     initial_cursor=None if state else now, hidden_names=config.hidden_from_now)
                 phase = 'local publication'
                 before = {name: read_bytes(root / name) if regular(root / name, missing=True) else None
