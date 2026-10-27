@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-007
-predecessor_revision_id: TODO3-PLAN-006
+revision_id: TODO3-PLAN-008
+predecessor_revision_id: TODO3-PLAN-007
 contract_sources:
+- docs/design/historical-reminder-contradiction.md
 - docs/design/todoist-tolerance.md
 - docs/design/external/todoist/planning-contracts.md
 - docs/design/project-sharing-field.md
@@ -4153,8 +4154,25 @@ tasks:
     read; run focused codec/adapter/render modules and directly affected lifecycle/move tests after their
     adaptations. Shared final gate covers the current serial subject. A no-change consumer result needs
     inspected source and focused evidence, not inferred compatibility.
-  correction_instructions: null
-  requirement_refs: []
+  correction_instructions: >-
+    Apply confirmed Design revision 9 REQ-SYNC-031 with precedence over only the superseded historical
+    reminder-contradiction duty in REQ-SYNC-013 and its REQ-SYNC-030 consumers. Earlier same-response
+    contradictory reminder evidence need not survive later authoritative hydration/full replacement
+    of that reminder before owner relevance is resolved. A consistent final record may publish only
+    after normal scope and final-record checks succeed. No separate historical contradiction tracker
+    is required. Preserve final relevant contradictions/required fields, unknown-scope failure,
+    actual update/deletion/full-omission versus delta semantics, account identity, privacy, pagination,
+    pending history and prior scheduling/timezone/operation-proof fixes. Historical rejection
+    ATT-a388aac9816a4c7f remains evidence against its old assignment, not a new required repair for the
+    accepted exception. This effective-assignment change restarts T23; abandoned candidate code is
+    not continuation input. Start from the runner-provided accepted repository and complete the
+    original reminder slice with this scoped limitation. Reuse adequate current tests; add a
+    representative real current/Synchronizer/store replacement-before-owner-resolution case allowing
+    the consistent final record and retaining meaningful invalid-final/unresolved-owner negatives.
+    Focused feedback for this sequence: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest
+    tests.workflows.sync.test_sync -v. This supplements the unchanged t23-focused and final-delivery gates.
+  requirement_refs:
+  - REQ-SYNC-031
   constraint_refs:
   - REQ-ARCH-002
   - REQ-VERIFY-003
@@ -4338,13 +4356,15 @@ tasks:
     starts. Focus on the shared canonical path and representative noun/creation routes rather than exhaustive
     aliases x depths. Existing capture relative-only replacement tests must be adapted to confirmation/retention
     while preserving no-op/capability/UUID/partial-outcome distinctions.'
-  correction_instructions: null
+  correction_instructions: >-
+    Consume T23 reminder interfaces under confirmed Design revision 9 REQ-SYNC-031. Preserve its replacement-before-owner-resolution limitation; do not restore a historical contradiction tracker. The exception changes no final-record, scope, privacy, scheduling, retention, command-proof or replacement-consent duty. All other existing task duties and checks remain binding.
   requirement_refs:
   - REQ-SCHED-015
   - REQ-SCHED-016
   - REQ-CLI-037
   - REQ-OUT-022
   constraint_refs:
+  - REQ-SYNC-031
   - REQ-ARCH-002
   - REQ-VERIFY-003
   - REQ-SEC-007
@@ -4520,10 +4540,12 @@ tasks:
     once and adds distinct copied/PATH and real-less probes; test_verify uses tiny suites. Existing complete
     coverage persists and changed expectations must reflect successor behavior rather than weaken negatives.
     No mandatory repeated broad worker/reviewer run or exhaustive Cartesian matrix.'
-  correction_instructions: null
+  correction_instructions: >-
+    Apply confirmed Design revision 9 REQ-SYNC-031 when assessing REQ-VERIFY-027 and upstream reminder evidence. Reuse representative T23 evidence allowing a consistent authoritative replacement before owner resolution; do not require superseded historical contradictions to survive. Preserve meaningful invalid-final, unresolved-scope, real update/deletion/omission and privacy negatives and all other original distinctions/gates. Add only a demonstrated evidence gap, with no new exhaustive matrix or live gate. Historical rejected evidence is not a verified fix.
   requirement_refs:
   - REQ-VERIFY-027
   constraint_refs:
+  - REQ-SYNC-031
   - REQ-ARCH-002
   - REQ-VERIFY-003
   - REQ-SEC-007
@@ -4726,6 +4748,7 @@ stages:
   - REQ-VERIFY-025
   satisfied_requirement_refs: []
   deferred_requirement_refs:
+  - REQ-SYNC-031
   - REQ-SYNC-028
   - REQ-INIT-010
   - REQ-VERIFY-026
@@ -4864,6 +4887,7 @@ stages:
   - REQ-INIT-009
   - REQ-VERIFY-025
   deferred_requirement_refs:
+  - REQ-SYNC-031
   - REQ-SYNC-029
   - REQ-SYNC-030
   - REQ-COMMENT-009
@@ -4881,6 +4905,7 @@ stages:
 - id: todoist-coexistence
   final_project: true
   active_requirement_refs:
+  - REQ-SYNC-031
   - REQ-SYNC-029
   - REQ-SYNC-030
   - REQ-COMMENT-009

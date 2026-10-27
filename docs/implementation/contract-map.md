@@ -1,6 +1,6 @@
 # Prepared ownership and evidence
 
-The accepted design revision 8 is authoritative. The cumulative graph preserves 116 satisfied requirements and all 20 historical owners. The todoist-coexistence stage activates 12 successor requirements under T21–T25; none are deferred. This protected ledger records planned coverage, not observed acceptance. Execution appends observations to acceptance-evidence.md.
+The accepted design revision 9 is authoritative, including only the scoped REQ-SYNC-031 precedence over superseded historical reminder contradictions. The cumulative graph preserves 116 satisfied requirements and all 20 historical owners. The todoist-coexistence stage activates 13 successor requirements under T21–T25; none are deferred. This protected ledger records planned coverage, not observed acceptance. Execution appends observations to acceptance-evidence.md.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -457,6 +457,12 @@ requirements:
     stage_status: active
     primary_owner: T22
     planned_evidence: *id017
+  REQ-SYNC-031:
+    stage_status: active
+    primary_owner: T23
+    planned_evidence:
+    - t23-focused
+    - final-delivery
   REQ-TIME-001:
     stage_status: satisfied
     primary_owner: null
