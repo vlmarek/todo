@@ -93,12 +93,14 @@ class Boundary:
     def __init__(self, steps):
         self.steps = list(steps)
         self.errors = []
+        self.paths = []
 
     def __call__(self, request, *, timeout):
         try:
             assert self.steps, 'extra HTTP'
             method, path, values, response = self.steps.pop(0)
             url = urlsplit(request.full_url)
+            self.paths.append(url.path)
             assert url.scheme == 'https' and url.netloc == 'api.todoist.com'
             assert url.path == '/api/v1' + path and not url.fragment
             assert request.get_method() == method and timeout == 30
@@ -164,6 +166,12 @@ def phase(install, name):
                 raise AssertionError('launcher did not exit')
         assert status == (1 if failure else expected_status), (argv, status, error.getvalue(), boundary.errors)
         boundary.done()
+        if argv[0] == 'report' and not any(a in argv for a in ('--set-cursor', '--show-cursor')):
+            # These are requests emitted by the copied real adapter/Transport.
+            # Exact steps also reject redundant REST reads for active A or D.
+            assert boundary.paths == ['/api/v1/sync',
+                '/api/v1/tasks/completed/by_completion_date', '/api/v1/activities',
+                '/api/v1/comments'], boundary.paths
         return output.getvalue()
 
     def report_steps(last=False):
@@ -178,7 +186,12 @@ def phase(install, name):
         steps = report_steps(last)
         method, path, query, _ = steps[-1]
         query['object_event_types'] = ['["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]']
-        steps[-1] = (method, path, query, {'results': [], 'next_cursor': None})
+        active = dict(id='active', item_id='D', content='Fresh synchronized active text',
+                      posted_at=EARLY, is_deleted=False, file_attachment=None)
+        steps[0] = sync('delta-token', delta(notes=[active]))
+        events = [] if last else [dict(id=17, object_type='note', object_id='active',
+            event_type='updated', event_date=LATE, parent_item_id='D', parent_project_id='cat')]
+        steps[-1] = (method, path, query, {'results': events, 'next_cursor': None})
         return steps + [own('B', True)]
 
     if name in ('tolerance', 'tolerance-read'):
@@ -305,6 +318,8 @@ def phase(install, name):
         assert out.index('Earlier own text') < out.index('Later own text')
         state = store.load_consistent_state()
         assert not state.snapshot.items['A'].completed and state.snapshot.items['B'].completed
+        assert set(state.current_snapshot.items) == {'A', 'D'}
+        assert 'B' in state.history.snapshot.items
         assert state.snapshot.items['A'].added_at is None
         assert d.instant_text(state.snapshot.items['B'].added_at) == CREATED
         assert d.instant_text(state.snapshot.comments['late'].added_at) == LATE
@@ -319,8 +334,15 @@ def phase(install, name):
         final = name != 'preview'
         out = call(['report'] + (['--final'] if final else []), reports(name == 'cleanup'),
                    FINAL if name == 'cleanup' else END, failure=name == 'failure')
-        if name != 'cleanup': assert 'B' in out and 'Alpha' in out
+        if name != 'cleanup':
+            assert 'B' in out and 'Alpha' in out
+            assert out.count('Fresh synchronized active text') == 1
+            assert 'Comment on step: D' in out
+            assert 'Newer pending work' not in out
         state = store.load_consistent_state()
+        assert set(state.current_snapshot.items) == {'A', 'D'}
+        assert state.current_snapshot.comments['active'].body == 'Fresh synchronized active text'
+        assert 'late' not in state.current_snapshot.comments
         if name in ('preview', 'failure'):
             assert (store.root / 'report-cursor').read_bytes() == before
             assert 'B' in state.history.snapshot.items and 'late' in state.history.snapshot.comments
@@ -337,7 +359,9 @@ def phase(install, name):
         filename = getattr(module, '__file__', None)
         if filename and 'todo_lib' in str(filename):
             assert Path(filename).resolve().is_relative_to(install)
-    print('copied: ' + name + ' passed (separate process, zero network)')
+    detail = ', 4 report HTTP / 1 archived REST / 0 active REST' if name in (
+        'preview', 'failure', 'final', 'cleanup') else ''
+    print('copied: ' + name + ' passed (separate process, zero network' + detail + ')')
 
 
 if __name__ == '__main__':
