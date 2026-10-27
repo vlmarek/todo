@@ -558,7 +558,7 @@ class CurrentTests(unittest.TestCase):
         result = self.changed(first, delta(items=[item(checked=False, completed_at=None)]))
         self.assertFalse(result.snapshot.items['task'].completed)
         self.assertIsNone(result.snapshot.items['task'].completed_at)
-        for field in ('date', 'timezone', 'string', 'lang', 'is_recurring'):
+        for field in ('date', 'string', 'lang', 'is_recurring'):
             raw_due = due()
             raw_due.pop(field)
             if field == 'date':
@@ -626,7 +626,7 @@ class CurrentTests(unittest.TestCase):
         self.assertIn('task', first.snapshot.items)
         self.assertIn('note', first.snapshot.comments)
 
-    def test_managed_comment_requires_attachment_metadata_after_ownership(self):
+    def test_managed_comment_ignores_attachment_metadata_after_ownership(self):
         first = self.initial(full(notes=[note()]))
         missing = note()
         missing.pop('file_attachment')
@@ -634,9 +634,9 @@ class CurrentTests(unittest.TestCase):
                              ([('delta-token', delta(notes=[missing]))], first)):
             with self.subTest(initial=prior is None):
                 transport, _ = self.boundary(steps)
-                with self.assertRaisesRegex(CurrentError, 'missing required file_attachment'):
-                    retrieve(transport, BINDING, prior=prior.snapshot if prior else None,
-                             sync_token=prior.sync_token if prior else None)
+                result = retrieve(transport, BINDING, prior=prior.snapshot if prior else None,
+                                  sync_token=prior.sync_token if prior else None)
+                self.assertEqual(result.snapshot.comments['note'].body, 'own note')
         unrelated = dict(missing, id='private-note', item_id='outside', content={'secret': 1})
         result = self.initial(full(notes=[note(posted_at=None), unrelated,
                                           {'id': 'deleted-note', 'is_deleted': True}]))

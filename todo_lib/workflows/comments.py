@@ -78,7 +78,7 @@ def encode_buffer(comments, timezone='UTC'):
     blocks = []
     for comment in ordered_comments(comments):
         body = '\n'.join('\\' + line if line.startswith('\\') or _header_like(line) else line
-                         for line in p.edge(comment.body).split('\n'))
+                         for line in p.edge(d.incoming_text(comment.body)).split('\n'))
         blocks.append(f'[id: {comment.id} posted: {p.compact(comment.added_at, timezone)}]\n{body}')
     return '\n\n'.join((*blocks, '[new]\n'))
 
@@ -107,7 +107,7 @@ def decode_buffer(text, originals):
     originals = ordered_comments(originals)
     known = {c.id: c for c in originals}
     blocks, seen = [], set()
-    for line in text.split('\n'):
+    for line in d.incoming_text(text).split('\n'):
         if line == '[new]':
             blocks.append((None, []))
         elif _header_like(line):
@@ -134,13 +134,15 @@ def decode_buffer(text, originals):
         body = p.edge('\n'.join(lines))
         if identity is None and not body and index == len(blocks) - 1:
             continue
-        d.validate_body(body)  # Validation only: preserve nonblank-line whitespace.
+        unchanged = identity is not None and body == p.edge(d.incoming_text(known[identity].body))
+        if not unchanged:
+            d.validate_body(body)  # New text and emptied nonblank bodies stay strict.
         if identity is None:
             additions.append(Change('add', body=body))
         else:
             retained.add(identity)
             old = known[identity]
-            if body != p.edge(old.body):
+            if not unchanged:
                 edits.append(Change('edit', identity, body, old.added_at, originals.index(old) + 1))
     deletions = [Change('delete', c.id, timestamp=c.added_at, position=i)
                  for i, c in enumerate(originals, 1) if c.id not in retained]

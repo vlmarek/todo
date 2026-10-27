@@ -102,31 +102,6 @@ def _select(snapshot, completed, activities, start, end, hidden_names, *, now=No
     return finished, progress, hidden
 
 
-class _ActivityScope:
-    """Discard proven unrelated global rows before managed-field validation.
-
-    Preserve known owners even when the event predates entry into managed scope.
-    Everything ambiguous still goes through the ordinary strict adapter mapper.
-    Page shape and continuation validation remain the adapter's responsibility.
-    """
-    def __init__(self, transport, owners, projects):
-        self.transport, self.owners, self.projects = transport, owners, projects
-
-    def request(self, method, path, **kwargs):
-        raw = self.transport.request(method, path, **kwargs)
-        if path != '/activities' or not isinstance(raw, dict) or not isinstance(raw.get('results'), list):
-            return raw
-        def unrelated(row):
-            if not isinstance(row, dict):
-                return False
-            project = row.get('parent_project_id')
-            owner = row.get('object_id') if row.get('object_type') == 'item' else row.get('parent_item_id')
-            return (isinstance(project, str) and bool(project)
-                    and project not in self.projects and isinstance(owner, (str, type(None)))
-                    and owner not in self.owners)
-        return {**raw, 'results': [row for row in raw['results'] if not unrelated(row)]}
-
-
 class _Evidence:
     """Reuse already exhausted endpoint evidence during sync reconciliation."""
     def __init__(self, adapter, completed, activities):
@@ -287,9 +262,7 @@ class Reporter:
                 raise LocalError('report start is earlier than retained activity history')
             phase = 'report history retrieval'
             lower = min((start, state.cursor, state.synced_at or state.cursor), key=d.instant_key)
-            adapter = HistoryAdapter(_ActivityScope(self.transport,
-                set(known.items) | set(current.snapshot.items),
-                set(current.snapshot.categories) | {current.snapshot.root.id}),
+            adapter = HistoryAdapter(self.transport,
                 timezone=current.account.timezone, stderr=self.streams.stderr)
             records, pages = [], []
             for category in sorted(current.snapshot.categories):
@@ -297,7 +270,6 @@ class Reporter:
                 records.extend(result.records)
                 pages.extend(result.pages)
             self.completed = Retrieval(tuple(records), tuple(pages), lower, now)
-            adapter.transport.owners.update(r.item.id for r in records)
             self.activities = adapter.activities(lower, now)
             evidence = _Evidence(adapter, self.completed, self.activities)
             snapshot, pending = _reconcile(current, known, state.history, evidence,

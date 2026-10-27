@@ -169,7 +169,7 @@ def phase(install, name):
         upper = '2026-10-22T12:00:02Z' if last else '2026-10-22T12:00:01Z'
         return [sync('*', full([a(), item('D', 'A')], notes(True)[2:])), sync('full-token', delta()),
             completed(lower, upper), rest('/activities', dict(date_from=lower, date_to=upper,
-                annotate_notes='true', limit='200', object_event_types='unused'), {})]
+                limit='200', object_event_types='unused'), {})]
 
     # Activity has repeated query parameters; state the independent contract here.
     def reports(last=False):

@@ -124,7 +124,7 @@ class Operation:
         if 'due' in args and args['due'] is not None:
             if not isinstance(args['due'], dict):
                 raise DomainError('due must be an object or null')
-            args['due']['lang'] = 'en'
+            args['due'].setdefault('lang', 'en')
         if self.expected_attention is not _UNSET and self.expected_attention is not None and not isinstance(self.expected_attention, Attention):
             raise DomainError('expected attention must be an Attention value or null')
         if 'auto_reminder' in args and type(args['auto_reminder']) is not bool:
@@ -231,7 +231,10 @@ def due_arguments(attention, previous=None):
                     digits = str(fraction.numerator * (10**scale // fraction.denominator)).zfill(scale)
                     text = text.split('.')[0].removesuffix('Z') + '.' + digits + 'Z'
             raw['date'] = text
-    raw['lang'] = 'en'
+    if value.recurring:
+        raw['lang'] = value.language
+    elif value.kind == 'unresolved' or not value.raw_due:
+        raw['lang'] = 'en'
     if value.recurring:
         raw.update(string=value.rule, is_recurring=True, timezone=value.zone)
     return raw

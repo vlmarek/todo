@@ -99,6 +99,9 @@ def snapshot_from(data, zone):
                 value['attention'] = d.Attention(**a)
             items[key] = d.Item(**value)
         def timed(records, cls, field):
+            if cls is d.Comment:
+                records = {k: {name: v for name, v in raw.items() if name != 'file_attachment'}
+                           for k, raw in records.items()}
             return {key: cls(**{**value, field: parse_instant(value[field]) if value[field] is not None else None})
                     for key, value in records.items()}
         return d.validate(d.Snapshot(binding, account, d.Project(**data['root']),

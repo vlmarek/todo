@@ -2,7 +2,7 @@
 
 Authority inspected 2026-10-26: retained api-v1.openapi.json GET completed by
 completion date (items, omitted terminal next_cursor, <=3 months, [since,until)),
-activities (separate object/event fields, integer/null ID, string extra_data),
+activities (separate object/event fields, integer/null ID, ignored extra_data),
 comments (task_id, NoteSyncView without item_id), paginated results/null cursor.
 The documented full-page terminal omission is distinct from our synthetic pages.
 Wire expectations below are literal independently chosen bounds and filters.
@@ -27,7 +27,7 @@ COMPLETED_QUERY = [('since', '2026-10-20T12:00:00Z'),
                    ('until', '2026-10-20T12:00:01Z'), ('limit', '200')]
 ACTIVITY_QUERY = [('date_from', '2026-10-20T12:00:00Z'),
                   ('date_to', '2026-10-20T12:00:01Z'),
-                  ('annotate_notes', 'true'), ('limit', '200'),
+                  ('limit', '200'),
                   ('object_event_types', 'item:completed'),
                   ('object_event_types', 'item:uncompleted'),
                   ('object_event_types', 'note:added'),
@@ -132,7 +132,7 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual([r.id for r in result.records], [None, '2', None, '4', '5'])
         self.assertEqual(result.records[0].owner_id, 'step')
         self.assertEqual(result.records[0].object_id, 'note')
-        self.assertEqual(result.records[-1].annotation, 'task title')
+        self.assertIsNone(result.records[-1].annotation)
         self.assertIsNone(result.records[-2].annotation)
         self.assertEqual(instant_text(result.records[1].event_date), END)
 
@@ -165,8 +165,7 @@ class HistoryTests(unittest.TestCase):
     def test_attachment_uses_documented_field(self):
         adapter, _ = self.boundary([('/comments', comments_query('step'),
             {'results': [comment(file_attachment={'file_name': 'a.png'})], 'next_cursor': None})])
-        with self.assertRaisesRegex(HistoryError, 'attachments are unsupported'):
-            adapter.comments('step')
+        self.assertEqual(adapter.comments('step').records[0].body, 'Current text')
 
     def test_required_cursors_are_not_completed_exception(self):
         for path, query, field in [('/activities', ACTIVITY_QUERY, 'results'),
@@ -199,8 +198,7 @@ class HistoryTests(unittest.TestCase):
 
     def test_malformed_required_event_data_fails_explicitly(self):
         variants = [event(id=True), event(id='1'), event(object_id=5), event(parent_item_id=None),
-                    event(event_date=None), event(event_date='2026-10-20T12:00:00'),
-                    event(extra_data={'content': {'note': 'invented shape'}})]
+                    event(event_date=None), event(event_date='2026-10-20T12:00:00')]
         for key in ('object_type', 'object_id', 'event_type', 'event_date', 'parent_item_id'):
             raw = event(); del raw[key]; variants.append(raw)
         for raw in variants:
@@ -274,7 +272,7 @@ class HistoryTests(unittest.TestCase):
         result = adapter.required_comments(current, completed, activity)
         self.assertEqual(result.comments['note'].item_id, 'archived')
         self.assertEqual(result.comments['note'].body, 'Current text')
-        self.assertEqual(activity.records[0].annotation, 'Observed old text')
+        self.assertIsNone(activity.records[0].annotation)
         self.assertEqual(result.owners['task'].title, 'Current task')
         self.assertEqual(result.comments['own-open'].item_id, 'open-step')
 
@@ -341,8 +339,8 @@ class HistoryTests(unittest.TestCase):
                         else:
                             adapter.comments('task')
 
-    def test_missing_required_comment_timestamp_and_attachment(self):
-        for field in ('posted_at', 'file_attachment'):
+    def test_missing_required_comment_timestamp(self):
+        for field in ('posted_at',):
             raw = comment(); del raw[field]
             adapter, _ = self.boundary([('/comments', comments_query('task'),
                                        {'results': [raw], 'next_cursor': None})])

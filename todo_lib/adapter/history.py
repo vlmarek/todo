@@ -9,8 +9,8 @@ HistoryAdapter(transport, timezone='UTC', stderr=None).completed(start,end,scope
 per-request continuation evidence. Scope is an optional endpoint-specific mapping
 of documented string filters, copied before any request. Times use the domain's
 precise values. CompletedRecord.item is historical evidence, never an instruction
-to overwrite current lifecycle/text. Activity.annotation is an observation, never
-current comment text. Only comments() supplies current surviving Comment records.
+to overwrite current lifecycle/text. Activity.annotation is retained as an unused compatibility slot; annotation
+metadata is ignored. Only comments() supplies current surviving Comment records.
 
 required_comments() composes current and bounded completed evidence for report
 owners, including steps and ancestors, without an all-history scan. Unknown
@@ -29,6 +29,7 @@ from todo_lib.domain import (
     instant_key, instant_text, resolve_remote_due, incoming_text,
 )
 from .transport import HTTPFailure, Replay
+from .current import _due
 
 
 class HistoryError(DomainError):
@@ -151,16 +152,8 @@ def _activity(raw):
     project = raw.get('parent_project_id')
     if project is not None:
         _id(project, 'parent_project_id')
-    extra = raw.get('extra_data')
-    annotation = None
-    if extra is not None:
-        _object(extra)
-        if kind in ('item', 'note') and 'content' in extra:
-            annotation = extra['content']
-            if not isinstance(annotation, str):
-                raise HistoryError('activity extra_data.content must be text')
     return Activity(identity, kind, obj, event,
-                    instant_from_wire(_required(raw, 'event_date')), owner, project, annotation)
+                    instant_from_wire(_required(raw, 'event_date')), owner, project)
 
 
 class HistoryAdapter:
@@ -210,6 +203,7 @@ class HistoryAdapter:
 
     def completed(self, start, end, scope=None):
         filters = _scope(scope, _COMPLETED)
+        project_filter = dict(filters).get('project_id')
         lower, upper = _bounds(start, end)
         records, pages, seen, count = [], [], set(), [0]
 
@@ -217,11 +211,23 @@ class HistoryAdapter:
             _id(_required(raw, 'id'), 'item.id')
             _id(_required(raw, 'project_id'), 'item.project_id')
             completed_at = instant_from_wire(_required(raw, 'completed_at'))
-            added_at = _required(raw, 'added_at')
-            added_at = None if added_at is None else instant_from_wire(added_at)
+            deleted = _required(raw, 'is_deleted')
+            if type(deleted) is not bool:
+                raise HistoryError('item.is_deleted must be boolean')
+            if (not _eligible(completed_at, start, end) or
+                (project_filter is not None and raw['project_id'] != project_filter)):
+                return None
             parent = _required(raw, 'parent_id')
             if parent is not None:
                 _id(parent, 'item.parent_id')
+            if deleted:
+                # A tombstone carries lifecycle context, never live display content.
+                item = Item(raw['id'], raw['project_id'], '', parent,
+                            completed=True, completed_at=completed_at)
+                identity = item.id + '@' + str(instant_key(completed_at))
+                return CompletedRecord(item, Occurrence(identity, item.id, completed_at, False), True)
+            added_at = _required(raw, 'added_at')
+            added_at = None if added_at is None else instant_from_wire(added_at)
             title = _required(raw, 'content')
             title = incoming_text(title, title=True)
             description = raw.get('description')
@@ -236,6 +242,7 @@ class HistoryAdapter:
             for field in ('checked', 'is_deleted'):
                 if type(_required(raw, field)) is not bool:
                     raise HistoryError('item.' + field + ' must be boolean')
+            _due(_required(raw, 'due'))
             item = Item(raw['id'], raw['project_id'], title, parent, description,
                 5 - priority, resolve_remote_due(_required(raw, 'due'), self.timezone),
                 frozenset(labels), added_at, raw['checked'], completed_at)
@@ -253,6 +260,8 @@ class HistoryAdapter:
                                             omission=True, count=count):
                 pages.append(page)
                 for value in values:
+                    if value is None:
+                        continue
                     key = (value.item.id, instant_key(value.occurrence.completed_at))
                     if _eligible(value.occurrence.completed_at, start, end) and key not in seen:
                         seen.add(key)
@@ -264,7 +273,7 @@ class HistoryAdapter:
         filters = _scope(scope, '/activities')
         lower, upper = _bounds(start, end)
         parameters = filters + (('date_from', instant_text(lower)),
-            ('date_to', instant_text(upper)), ('annotate_notes', 'true'), ('limit', '200'))
+            ('date_to', instant_text(upper)), ('limit', '200'))
         parameters += tuple(('object_event_types', value) for value in _EVENTS)
         records, pages, seen = [], [], set()
         for values, page in self._pages('/activities', parameters, _activity):
@@ -282,7 +291,7 @@ class HistoryAdapter:
     def comments(self, owner_id):
         return self._comments(owner_id)
 
-    def _comments(self, owner_id, count=None):
+    def _comments(self, owner_id, count=None, *, required_ids=None):
         owner_id = _id(owner_id, 'comment owner')
         records, pages, seen = [], [], {}
 
@@ -291,12 +300,10 @@ class HistoryAdapter:
             deleted = _required(raw, 'is_deleted')
             if type(deleted) is not bool:
                 raise HistoryError('comment.is_deleted must be boolean')
+            if deleted or (required_ids is not None and identity not in required_ids):
+                return identity, None
             posted = _required(raw, 'posted_at')
             posted = None if posted is None else instant_from_wire(posted)
-            if deleted:
-                return identity, None
-            if _required(raw, 'file_attachment') is not None:
-                raise HistoryError('managed comment attachments are unsupported')
             body = raw.get('content', '')  # documented default, domain still requires text
             body = incoming_text(body)
             return identity, Comment(identity, owner_id, body, posted)
@@ -337,7 +344,8 @@ class HistoryAdapter:
         comments, pages, count = {}, [], [0]
         needed = set(owners)
         for owner in requested:
-            result = self._comments(owner, count)
+            result = self._comments(owner, count,
+                required_ids=requested[owner] if owner not in owners else None)
             pages.extend(result.pages)
             for comment in result.records:
                 if owner not in owners and comment.id not in requested[owner]:

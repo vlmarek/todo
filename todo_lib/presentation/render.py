@@ -29,7 +29,7 @@ def _reminders(snapshot, item):
 def _comments(snapshot, item, indent=''):
     comments = sorted((c for c in snapshot.comments.values() if c.item_id == item.id),
                       key=lambda c: (c.added_at is None, instant_key(c.added_at) if c.added_at is not None else 0, c.id))
-    return [multiline(c.body, indent + '- ' + compact(c.added_at, snapshot.account.timezone) + '  ', indent + '  ') for c in comments]
+    return [multiline(c.body if c.body.strip() else '[no text]', indent + '- ' + compact(c.added_at, snapshot.account.timezone) + '  ', indent + '  ') for c in comments]
 
 
 def render_comments(snapshot, item):

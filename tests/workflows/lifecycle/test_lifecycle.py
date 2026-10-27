@@ -414,7 +414,7 @@ class AdapterLifecycleTests(unittest.TestCase):
         from tests.adapter.history.test_history import Expected
         query = [('object_type', 'item'), ('object_id', identity),
             ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
-            ('annotate_notes', 'true'), ('limit', '200'),
+            ('limit', '200'),
             ('object_event_types', 'item:completed'), ('object_event_types', 'item:uncompleted'),
             ('object_event_types', 'note:added'), ('object_event_types', 'note:updated'),
             ('object_event_types', 'note:deleted')]
