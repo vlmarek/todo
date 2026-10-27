@@ -28,11 +28,7 @@ COMPLETED_QUERY = [('since', '2026-10-20T12:00:00Z'),
 ACTIVITY_QUERY = [('date_from', '2026-10-20T12:00:00Z'),
                   ('date_to', '2026-10-20T12:00:01Z'),
                   ('limit', '200'),
-                  ('object_event_types', 'item:completed'),
-                  ('object_event_types', 'item:uncompleted'),
-                  ('object_event_types', 'note:added'),
-                  ('object_event_types', 'note:updated'),
-                  ('object_event_types', 'note:deleted')]
+                  ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
 
 
 def item(identity='task', at=END, **kw):
@@ -64,7 +60,7 @@ def comments_query(owner):
 
 
 class Expected:
-    """Small repeated-query-aware request check used with the shared opener."""
+    """Exact scalar fields and one JSON activity filter at the encoded boundary."""
     def __init__(self, path, query):
         self.path, self.query = path, list(query)
 
@@ -75,7 +71,19 @@ class Expected:
         assert request.get_method() == 'GET' and request.data is None
         assert request.get_header('Authorization') == 'Bearer secret'
         assert timeout == 30
-        assert parse_qsl(url.query, keep_blank_values=True) == self.query, 'query drift or unsupported keys'
+        actual = parse_qsl(url.query, keep_blank_values=True)
+        if self.path == '/activities':
+            # Independent retained parameter + x-codeSamples "Multiple event types".
+            # Compare decoded JSON, never allow repeated scalar filter values.
+            values = [v for k, v in actual if k == 'object_event_types']
+            assert len(values) == 1, 'activity filter must have exactly one value'
+            assert json.loads(values[0]) == [
+                'item:completed', 'item:uncompleted', 'note:added', 'note:updated', 'note:deleted']
+            actual = [(k, v) for k, v in actual if k != 'object_event_types']
+            expected = [(k, v) for k, v in self.query if k != 'object_event_types']
+        else:
+            expected = self.query
+        assert actual == expected, 'query drift or unsupported keys'
 
 
 class HistoryTests(unittest.TestCase):
@@ -122,13 +130,14 @@ class HistoryTests(unittest.TestCase):
 
     def test_activities_string_annotations_ids_source_order_and_precise_bounds(self):
         a = event(None, '2026-10-20T12:00:00.123456705Z')
+        query = [('parent_project_id', 'cat')] + ACTIVITY_QUERY
         adapter, _ = self.boundary([
-            ('/activities', ACTIVITY_QUERY, {'results': [event(0, START), a, event(2)], 'next_cursor': 'a.b'}),
-            ('/activities', ACTIVITY_QUERY + [('cursor', 'a.b')], {'results': [a, event(2),
+            ('/activities', query, {'results': [event(0, START), a, event(2)], 'next_cursor': 'a.b'}),
+            ('/activities', query + [('cursor', 'a.b')], {'results': [a, event(2),
                 event(3, AFTER), event(4, event_type='deleted', extra_data=None),
                 event(5, object_type='item', object_id='task', event_type='completed',
                       parent_item_id=None, extra_data={'content': 'task title'})], 'next_cursor': None})])
-        result = adapter.activities(stamp(START), stamp(END), None)
+        result = adapter.activities(stamp(START), stamp(END), {'parent_project_id': 'cat'})
         self.assertEqual([r.id for r in result.records], [None, '2', None, '4', '5'])
         self.assertEqual(result.records[0].owner_id, 'step')
         self.assertEqual(result.records[0].object_id, 'note')

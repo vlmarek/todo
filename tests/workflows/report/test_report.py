@@ -53,7 +53,7 @@ class Reports(unittest.TestCase):
         cq = [('project_id', 'cat'), ('since', lo), ('until', hi), ('limit', '200')]
         aq = [('date_from', lo), ('date_to', hi),
               ('limit', '200')]
-        aq += [('object_event_types', x) for x in ('item:completed', 'item:uncompleted', 'note:added', 'note:updated', 'note:deleted')]
+        aq += [('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
         active = current_items if current_items is not None else [item('A'), item('B', parent_id='A')]
         steps = [self.sync('*', full(items=active, notes=current_notes or [], user_plan_limits=limits(access, days))),
                  self.sync('full-token', delta())]

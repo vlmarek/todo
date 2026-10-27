@@ -71,7 +71,7 @@ def _require_waiting_label(transport):
     """
     labels, token = {}, '*'
     for full in (True, False):
-        response = transport.request('POST', '/sync', replay=Replay.READ,
+        response = transport.request('POST', '/sync', operation='read waiting label', replay=Replay.READ,
             form={'sync_token': token, 'resource_types': '["labels"]'})
         if (not isinstance(response, dict) or response.get('full_sync') is not full
                 or not isinstance(response.get('sync_token'), str)

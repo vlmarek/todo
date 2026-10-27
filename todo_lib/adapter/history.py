@@ -21,6 +21,7 @@ Nothing here establishes complete archived child enumeration.
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import json
 import re
 import sys
 
@@ -274,7 +275,7 @@ class HistoryAdapter:
         lower, upper = _bounds(start, end)
         parameters = filters + (('date_from', instant_text(lower)),
             ('date_to', instant_text(upper)), ('limit', '200'))
-        parameters += tuple(('object_event_types', value) for value in _EVENTS)
+        parameters += (('object_event_types', json.dumps(_EVENTS)),)
         records, pages, seen = [], [], set()
         for values, page in self._pages('/activities', parameters, _activity):
             pages.append(page)

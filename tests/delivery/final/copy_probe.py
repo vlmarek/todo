@@ -173,11 +173,11 @@ def phase(install, name):
             completed(lower, upper), rest('/activities', dict(date_from=lower, date_to=upper,
                 limit='200', object_event_types='unused'), {})]
 
-    # Activity has repeated query parameters; state the independent contract here.
+    # Pinned activities parameter and "Multiple event types" example: one JSON value.
     def reports(last=False):
         steps = report_steps(last)
         method, path, query, _ = steps[-1]
-        query['object_event_types'] = ['item:completed', 'item:uncompleted', 'note:added', 'note:updated', 'note:deleted']
+        query['object_event_types'] = ['["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]']
         steps[-1] = (method, path, query, {'results': [], 'next_cursor': None})
         return steps + ([own('B', True)] if last else [own('B', True), own('B', True)]) + [own('A', True), own('D', True)]
 
