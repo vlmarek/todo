@@ -8,5 +8,5 @@ from .render import (Document, document, render_now, render_detail, render_comme
 from .report import ReportEvent, render_report
 from .receipts import (CommentOutcome, render_mutation, render_move,
                        render_created_category, render_comment_bodies, render_comment_edit,
-                       render_receipts)
+                       render_receipts, render_reminder_replacement)
 from .delivery import OriginalStreams, OutputError, deliver

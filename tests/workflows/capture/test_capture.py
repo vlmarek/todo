@@ -630,7 +630,7 @@ class CaptureTests(unittest.TestCase):
         result = self.run_request(['add', 'cat', 'Timed task', '--at=tomorrow 10', '--reminder=0m'])
         self.assertEqual(result.status, 0, result.document.stderr)
         self.assertEqual(result.snapshot.reminders['zero'].minutes, 0)
-        self.assertIn('Reminders: none -> 0m', result.document.stdout)
+        self.assertIn('  Reminders: 0m', result.document.stdout)
 
     def test_nested_parent_creation_uses_effective_priority(self):
         self.wire_items += [item('branch', content='Branch', parent_id='parent', priority=2),

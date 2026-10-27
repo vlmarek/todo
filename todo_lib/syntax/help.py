@@ -14,7 +14,7 @@ SYNOPSES = {
     'comment': 'comment [--refresh|--edit] SELECTOR | comment SELECTOR... --comment TEXT...',
     'done': 'done SELECTOR [TEXT...] | done SELECTOR... --comment TEXT...',
     'reopen': 'reopen SELECTOR...', 'delete': 'delete [--yes] SELECTOR...',
-    'schedule': 'schedule SELECTOR... --at WHEN [--hide] [--reason VALUE] [--reminder OFFSET]... | schedule SELECTOR... --reminder OFFSET | schedule SELECTOR... clear',
+    'schedule': 'schedule SELECTOR... [--at WHEN] [--hide] [--reason VALUE] [--reminder OFFSET|keep]... [--reminder-at WHEN|keep]... | schedule SELECTOR... --reminder clear | schedule SELECTOR... clear',
     'hide': 'hide SELECTOR... [--at WHEN] [--reason VALUE]',
     'unhide': 'unhide SELECTOR...', 'priority': 'priority SELECTOR... P',
     'rename': 'rename SELECTOR... --to NEW_NAME...',
@@ -62,7 +62,7 @@ DESCRIPTIONS = {
     'done': 'Complete selected work; descendants complete before parents. Accepted work is never rolled back.',
     'reopen': 'Reopen recently completed work. Accepts no comment creation; recurring undo affects an occurrence.',
     'delete': 'Delete selected work after confirmation; --yes bypasses only this confirmation. Deletion is destructive.',
-    'schedule': 'Set attention, hiding or reminders. Use clear to remove scheduling; reminders require timed attention.',
+    'schedule': 'Set attention, hiding or reminders. Use clear to remove scheduling; relative reminders require timed attention; absolute reminders are independent.',
     'hide': 'Hide until a future attention day, with an optional reason. Inherited hiding applies to steps.',
     'unhide': 'Remove own hiding while preserving attention and reminders; parent hiding may still apply.',
     'priority': 'Set task or step priority P1 through P4. A new step copies its immediate parent priority once; later priority changes are independent.',
@@ -73,7 +73,7 @@ DESCRIPTIONS = {
 }
 
 DETAILS = {
-    'add': 'Optional task/step creation flags: --at WHEN, --hide, --reason VALUE, --reminder OFFSET, --done. '
+    'add': 'Optional task/step creation flags: --at WHEN, --hide, --reason VALUE, --reminder OFFSET, --reminder-at WHEN, --done. '
            'Completed creation cannot have attention, hiding or reminders. --close/--closed alias --done. '
            'Creation aliases: task/step --add/--new/--create, task --step PARENT TEXT..., category --add/--create, add comment.',
     'category': 'Creation alias: todo category --create "Client Work". Categories are direct children of the bound root.',
@@ -131,7 +131,7 @@ def render_help(command=None):
     if command in ('task', 'step'):
         result += ('Leading scalar actions take VALUE immediately: todo task --due "tomorrow 10:00" '
                    '"Release plan"; todo step --due tomorrow "Release plan" "Write summary".\n'
-                   'Other adjacent scalar aliases: --priority P1, --reminder 10m, --rename "New name", '
+                   'Other adjacent scalar aliases: --priority P1, --reminder 10m, --reminder-at "Friday 09:00", --rename "New name", '
                    '--move "New parent". A multiword date, new name or move destination is one quoted shell argument. '
                    'Creation: --add/--create/--new; lifecycle: --done/--close/--closed, --undone/--unclose, --delete; '
                    'progress: --comment; scheduling: --at/--due/--schedule, --wait/--waiting; priority: -p1 through -p4 or --p1 through --p4.\n'
@@ -144,6 +144,20 @@ def render_help(command=None):
     if command in ('schedule', 'hide', 'add'):
         result += ('Scalar values support --option=VALUE and --option VALUE. Quote multiword dates, category names and reasons. '
                    '--hide is boolean; --hide --reason "no time" sets a reason and --reason= removes only the reason.\n')
+    if command in ('schedule', 'task', 'step', 'add'):
+        result += ('Reminders form one complete set: repeat/mix --reminder OFFSET (before timed task due; 0m is at due) '
+                   'and --reminder-at WHEN (independent exact time, also on undated/date-only tasks). '
+                   'Absolute WHEN uses account time: 2h is elapsed time, calendar units retain wall time; ambiguous/nonexistent local DST times fail. '
+                   'Unknown/recurring English expressions such as "every Monday at 09:00" go to Todoist; exact time is required. '
+                   'Omitting both options preserves all reminders. --reminder keep retains relative IDs/metadata; '
+                   '--reminder-at keep retains absolute IDs/metadata. Keep is lowercase and occurs once per type. '
+                   'Only keep or complete locally established matches guarantee retained IDs; equivalent Todoist-parsed wording may create a new ID. '
+                   'Replacement removals show schedules, additions (including expression (Todoist): input) and keep hints before any writes. '
+                   'Confirmation defaults to cancel and noninteractive removal replacement refuses; there is no --yes bypass. '
+                   'Example: todo schedule "Release plan" --reminder keep --reminder-at "Friday 09:00". '
+                   'Example: todo schedule "Release plan" --reminder-at keep --reminder 30m. '
+                   'Direct --reminder clear removes both reminder types; schedule SELECTOR clear also removes attention, recurrence and hiding. '
+                   '--reminder-at clear is invalid. Task/step leading --reminder-at VALUE takes its adjacent value before selector operands.\n')
     if command in ('task', 'step', 'add', 'comment', 'done', 'reopen', 'delete', 'schedule', 'hide', 'unhide', 'priority', 'rename', 'move', 'search'):
         result += '--literal ARG preserves an argument without option interpretation.\n'
     return result

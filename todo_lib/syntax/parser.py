@@ -50,6 +50,7 @@ class CommandRequest:
     selector_literals: tuple[int, ...] = ()
     parent_literals: tuple[int, ...] = ()
     destination_literals: tuple[int, ...] = ()
+    reminder_markers: tuple[tuple[str, str], ...] = ()
 
     def option(self, name, default=None):
         return dict(self.options).get(name, default)
@@ -97,7 +98,7 @@ def _values(words):
 
 READS = {'now', 'waiting', 'someday', 'task', 'step', 'category', 'search', 'lookup'}
 GLOBAL = {'color', 'refresh', 'clear-cache'}
-SCALAR = {'color', 'at', 'reason', 'category', 'reminder', 'priority', 'since', 'until', 'set-cursor'}
+SCALAR = {'color', 'at', 'reason', 'category', 'reminder', 'reminder-at', 'priority', 'since', 'until', 'set-cursor'}
 BOOL = {'refresh', 'clear-cache', 'all', 'hide', 'done', 'yes', 'edit', 'final', 'show-cursor'}
 OPTION_ALIASES = {'due': 'at', 'schedule': 'at', 'close': 'done', 'closed': 'done'}
 
@@ -109,6 +110,7 @@ def parse(argv):
         raise UsageError('todo', 'arguments must be strings')
     words, missing_literal = _words(argv)
     options = {}
+    reminder_markers = []
     command = 'now'
 
     def fail(problem, offending=None):
@@ -119,7 +121,8 @@ def parse(argv):
             fail('missing literal argument', '--literal')
 
     def store(name, value):
-        if name == 'reminder':
+        if name in ('reminder', 'reminder-at'):
+            reminder_markers.append((name, value))
             options[name] = options.get(name, ()) + (value,)
         elif name in options:
             fail('duplicate or conflicting option', '--' + name)
@@ -180,7 +183,7 @@ def parse(argv):
         simple = {'--done': 'done', '--close': 'done', '--closed': 'done',
                   '--undone': 'reopen', '--unclose': 'reopen', '--delete': 'delete'}
         scalar_actions = {'--at': 'schedule', '--due': 'schedule', '--schedule': 'schedule',
-                          '--priority': 'priority', '--reminder': 'schedule',
+                          '--priority': 'priority', '--reminder': 'schedule', '--reminder-at': 'schedule',
                           '--rename': 'rename', '--move': 'move'}
         fixed = action in {f'{prefix}p{n}' for prefix in ('-', '--') for n in range(1, 5)}
         if not words[0].literal and action in creation:
@@ -205,7 +208,7 @@ def parse(argv):
                 if inline is None:
                     words = words[index:]
                 if command == 'schedule':
-                    store('reminder' if action == '--reminder' else 'at', action_value)
+                    store(action[2:] if action in ('--reminder', '--reminder-at') else 'at', action_value)
             elif fixed:
                 if inline is not None:
                     fail('fixed priority takes no value', action)
@@ -247,9 +250,9 @@ def parse(argv):
     if command == 'now': allowed |= {'all', 'category'}
     if command == 'search': allowed |= {'all'}
     if command == 'add' and target in ('task', 'step'):
-        allowed |= {'done', 'at', 'hide', 'reason', 'reminder'}
+        allowed |= {'done', 'at', 'hide', 'reason', 'reminder', 'reminder-at'}
         if target == 'task': allowed |= {'priority', 'category'}
-    if command == 'schedule': allowed |= {'at', 'hide', 'reason', 'reminder'}
+    if command == 'schedule': allowed |= {'at', 'hide', 'reason', 'reminder', 'reminder-at'}
     if command == 'hide': allowed |= {'at', 'reason'}
     if command == 'delete': allowed |= {'yes'}
     if command == 'comment': allowed |= {'edit'}
@@ -422,11 +425,11 @@ def parse(argv):
         elif wait_alias:
             store('reason', joined(positional, 'waiting reason'))
         elif positional: fail('unexpected scheduling operands', _values(positional))
-        if not any(key in options for key in ('at', 'reminder')) and selector and selector[-1].value == 'clear' and not selector[-1].literal:
+        if not any(key in options for key in ('at', 'reminder', 'reminder-at')) and selector and selector[-1].value == 'clear' and not selector[-1].literal:
             selector = selector[:-1]
             store('clear', True)
-        if not any(key in options for key in ('at', 'reminder', 'clear')):
-            fail('schedule requires --at VALUE, --reminder VALUE, or clear')
+        if not any(key in options for key in ('at', 'reminder', 'reminder-at', 'clear')):
+            fail('schedule requires --at VALUE, --reminder VALUE, --reminder-at VALUE, or clear')
         if wait_alias and 'at' not in options: fail('waiting requires --at VALUE')
         nonempty(selector)
     elif command in ('task', 'step', 'lookup', 'search', 'reopen', 'delete', 'hide', 'unhide'):
@@ -442,17 +445,20 @@ def parse(argv):
         options['priority'] = 'P' + value
     if 'color' in options and options['color'] not in ('auto', 'always', 'never'):
         fail('color must be auto, always, or never', options['color'])
-    if 'reminder' in options:
-        reminders = options['reminder']
-        if 'clear' in reminders:
-            if len(reminders) != 1 or command != 'schedule':
-                fail('reminder clear cannot combine with reminder offsets or creation', reminders)
-        else:
+    for kind in ('reminder', 'reminder-at'):
+        values = options.get(kind, ())
+        if values.count('keep') > 1:
+            fail('keep may appear once per reminder type', values)
+        if any(v.lower() in ('keep', 'clear') and v not in ('keep', 'clear') for v in values):
+            fail('reserved reminder values must be lowercase', values)
+        if 'clear' in values and (kind != 'reminder' or len(reminder_markers) != 1 or command != 'schedule'):
+            fail('reminder clear is exclusive and only valid with --reminder', values)
+        if kind == 'reminder' and 'clear' not in values:
             try:
-                offsets = tuple(parse_reminder(v) for v in reminders)
+                offsets = tuple(parse_reminder(v) for v in values if v != 'keep')
             except DomainError as exc:
-                fail(str(exc), reminders)
-            if len(set(offsets)) != len(offsets): fail('duplicate reminder offsets', reminders)
+                fail(str(exc), values)
+            if len(set(offsets)) != len(offsets): fail('duplicate reminder offsets', values)
     if 'at' in options and options['at'].strip().lower() in ('ask', 'none', '-'):
         fail('invalid attention value', options['at'])
     if 'reason' in options and options['reason']:
@@ -464,7 +470,7 @@ def parse(argv):
         fail('reason requires --hide --reason VALUE', '--reason')
     if options.get('hide') and command in ('add', 'schedule') and 'at' not in options:
         fail('--hide requires --at VALUE; reasons use --hide --reason VALUE')
-    if options.get('done') and any(k in options for k in ('at', 'hide', 'reason', 'reminder')):
+    if options.get('done') and any(k in options for k in ('at', 'hide', 'reason', 'reminder', 'reminder-at')):
         fail('completed creation cannot have scheduling, hiding or reminders')
     cache_read = command in READS or (command == 'comment' and not groups and not options.get('edit'))
     if options.get('refresh') and not cache_read:
@@ -482,4 +488,4 @@ def parse(argv):
     return CommandRequest(command, target, _values(selector), _values(parent), tuple(groups),
                           tuple(sorted(options.items())), None if destination is None else _values(destination),
                           destination_kind, _literal_indices(selector), _literal_indices(parent),
-                          () if destination is None else _literal_indices(destination))
+                          () if destination is None else _literal_indices(destination), tuple(reminder_markers))

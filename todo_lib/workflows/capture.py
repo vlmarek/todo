@@ -12,6 +12,7 @@ from todo_lib.adapter.current import Current
 from todo_lib.adapter.transport import HTTPFailure, Replay
 from todo_lib.local import exclusive_lock, load_config, LocalError
 from todo_lib.syntax import parse
+from todo_lib.syntax.input import prompt, InputError
 from .reads import select_title, select_child
 from .sync import SyncError, SyncInterrupted
 from .scheduling import propose, validate_proposals, offsets, offset_text
@@ -45,6 +46,15 @@ class _Action:
     kwargs: dict = field(default_factory=dict)
     expected: object = None
     retained: tuple[int, ...] | None = None
+    creating_owner: bool = False
+
+
+def reminder_values(snapshot, owner_id):
+    from todo_lib.presentation.formatting import reminders_text
+    reminders = [r for r in snapshot.reminders.values() if r.item_id == owner_id]
+    relative = sorted(r.minutes for r in reminders if r.type == 'relative')
+    absolute = [r for r in reminders if r.type == 'absolute']
+    return ', '.join(v for v in (offset_text(relative), reminders_text(absolute, snapshot.account.timezone)) if v) or None
 
 
 def _same_item(left, right, zone):
@@ -104,6 +114,21 @@ class CaptureWorkflow:
             actions, adding_hiding = self._plan(request, snapshot, now, settings.hidden_from_now,
                 p.Color.for_stdout((self.streams or p.OriginalStreams.current()).stdout,
                     request.option('color', 'auto'), slots=settings.colors))
+            if self.previews:
+                streams = self.streams or p.OriginalStreams.current()
+                for preview in self.previews:
+                    streams.stdout.write(preview.stdout + '\n')
+                streams.stdout.flush()
+                try:
+                    answer = prompt('Replace reminders and remove the listed existing reminders? [y/N]:',
+                        stdin=streams.stdin, stdout=streams.stdout, stderr=streams.stderr, default='n')
+                    if answer.lower() not in ('y', 'yes'):
+                        raise InputError('reminder replacement cancelled')
+                except InputError as error:
+                    result = CaptureResult(snapshot, (), p.document(warnings=str(error)), error.status, error)
+                    if deliver:
+                        p.deliver(result.document, settings, streams, view_kind='mutation')
+                    return result
             if adding_hiding:
                 _require_waiting_label(self.synchronizer.transport)
             result = self._run(actions, synchronized, settings.hidden_from_now, now)
@@ -113,6 +138,7 @@ class CaptureWorkflow:
         return result
 
     def _plan(self, request, snapshot, now, hidden, color=p.Color()):
+        self.previews = []
         actions, proposals = [], []
         adding_hiding = False
         options = dict(request.options)
@@ -140,7 +166,7 @@ class CaptureWorkflow:
             else:
                 category_id = d.lookup_category(snapshot, options['category']).id
                 priority = int(str(options.get('priority', 'P2')).lower().removeprefix('p'))
-            if options.get('done') and any(k in options for k in ('at', 'hide', 'reason', 'reminder')):
+            if options.get('done') and any(k in options for k in ('at', 'hide', 'reason', 'reminder', 'reminder-at')):
                 raise d.DomainError('completed creation cannot have scheduling or hiding')
             # Validate all original active sibling sets together, including inline children.
             items = dict(snapshot.items)
@@ -156,7 +182,7 @@ class CaptureWorkflow:
                     title=title, parent_id=item.parent_id, priority=priority,
                     attention=proposal.item.attention, labels=proposal.item.labels,
                     description=proposal.item.description), proposal.item, ()))
-                self._reminders(actions, context, key, title, proposal.reminders)
+                self._reminders(actions, key, title, proposal.additions, creating_owner=True)
                 for j, child_title in enumerate(inline):
                     child_key = self._temporary(items, f'{index}-{j}')
                     child = d.Item(child_key, category_id, child_title, key, priority=priority)
@@ -186,8 +212,7 @@ class CaptureWorkflow:
                 actions.append(_Action('update_task', item.id, item.title, kwargs, updated, offsets(snapshot, item.id)))
             else:
                 proposal = propose(request, snapshot, item, now)
-                removes_absolute = not proposal.retain_absolute and any(r.item_id == item.id and r.type == 'absolute' for r in snapshot.reminders.values())
-                if _same_item(item, proposal.item, snapshot.account.timezone) and set(offsets(snapshot, item.id)) == set(proposal.reminders) and not removes_absolute:
+                if _same_item(item, proposal.item, snapshot.account.timezone) and not proposal.removals and not proposal.additions:
                     raise d.DomainError('unchanged attention, hiding and reminders (complete no-op)')
                 validate_proposals(snapshot, [proposal], hidden)
                 adding_hiding = proposal.item.waiting and not item.waiting
@@ -197,15 +222,15 @@ class CaptureWorkflow:
                     same = d.same_attention(old, new, snapshot.account.timezone) if name == 'attention' else old == new
                     if not same:
                         kwargs[name] = new
-                # Explicit clear may remove reminders before changing to date-only/none.
-                markers = 'reminder' in options or options.get('clear')
-                if markers and (set(offsets(snapshot, item.id)) != set(proposal.reminders) or removes_absolute):
-                    self._reminders(actions, snapshot, item.id, item.title, (), delete_only=True)
+                if proposal.removals and not options.get('clear') and options.get('reminder') != ('clear',):
+                    self.previews.append(p.render_reminder_replacement(snapshot, item,
+                        proposal.removals, proposal.additions))
+                for reminder in proposal.removals:
+                    actions.append(_Action('delete_reminder', reminder.id, item.title))
                 if kwargs:
                     actions.append(_Action('update_task', item.id, item.title, kwargs, proposal.item,
-                        offsets(snapshot, item.id) if not markers or set(offsets(snapshot, item.id)) == set(proposal.reminders) else ()))
-                if markers and (set(offsets(snapshot, item.id)) != set(proposal.reminders) or removes_absolute):
-                    self._reminders(actions, replace(snapshot, reminders={}), item.id, item.title, proposal.reminders)
+                        tuple(r.minutes for r in proposal.retained if r.type == 'relative')))
+                self._reminders(actions, item.id, item.title, proposal.additions)
         return actions, adding_hiding
 
     @staticmethod
@@ -216,13 +241,10 @@ class CaptureWorkflow:
         return key
 
     @staticmethod
-    def _reminders(actions, snapshot, item_id, title, values, delete_only=False):
-        for reminder in snapshot.reminders.values():
-            if reminder.item_id == item_id:
-                actions.append(_Action('delete_reminder', reminder.id, title))
-        if not delete_only:
-            for minutes in values:
-                actions.append(_Action('create_reminder', item_id, title, {'minutes': minutes}))
+    def _reminders(actions, item_id, title, values, *, creating_owner=False):
+        for reminder in values:
+            kwargs = {'minutes': reminder.minutes} if reminder.type == 'relative' else {'due': reminder.due}
+            actions.append(_Action('create_reminder', item_id, title, kwargs, creating_owner=creating_owner))
 
     def _run(self, actions, synchronized, hidden, now):
         snapshot = synchronized.snapshot
@@ -295,14 +317,30 @@ class CaptureWorkflow:
                                 or actual.category_id != expected.category_id):
                             issues.append('accepted item has unexpected parent/category')
                 if action.method == 'create_reminder':
-                    if actual is None or (actual.item_id, actual.minutes) != (target, kwargs['minutes']):
-                        issues.append('accepted reminder differs from reconciled owner/offset')
+                    if actual is None or actual.item_id != target:
+                        issues.append('accepted reminder differs from reconciled owner')
+                    elif 'minutes' in kwargs:
+                        if actual.type != 'relative' or actual.minutes != kwargs['minutes']:
+                            issues.append('accepted reminder differs from reconciled offset')
+                    elif actual.type != 'absolute' or not actual.due.exact or (kwargs['due'].kind != 'unresolved' and not d.reconciles_attention(kwargs['due'], actual.due, snapshot.account.timezone)):
+                        # Keep provider precision and scheduling semantics in the
+                        # failure, without exposing unrelated open-object fields.
+                        actual_due = ({k: v for k, v in actual.due.raw_due.items()
+                            if k in ('date', 'timezone', 'is_recurring', 'string', 'lang')}
+                            if actual.due is not None and actual.due.raw_due is not None else actual.due)
+                        issues.append('accepted absolute reminder differs from requested exact schedule: '
+                            f'requested {due_arguments(kwargs["due"])!r}; actual {actual_due!r} '
+                            f'(type {actual.type}; account timezone {snapshot.account.timezone})')
                 elif action.method == 'delete_reminder' and target in snapshot.reminders:
                     issues.append('accepted reminder deletion remains in reconciled state')
                 elif action.method == 'complete' and (actual is None or not actual.completed):
                     issues.append('accepted ordinary completion is absent from reconciled lifecycle state')
                 if action.method in ('create_reminder', 'delete_reminder'):
                     owner_id = target if action.method == 'create_reminder' else before.snapshot.reminders[target].item_id
+                    for key, reminder in before.snapshot.reminders.items():
+                        if (reminder.item_id == owner_id and key != target
+                                and not d.preserves_reminder(reminder, snapshot.reminders.get(key), snapshot.account.timezone)):
+                            issues.append('reminder operation changed another preserved reminder')
                     owner_before = before.snapshot.items[owner_id]
                     owner_after = snapshot.items.get(owner_id)
                     if owner_after is None or not d.preserves_item(owner_before, owner_after, snapshot.account.timezone):
@@ -319,7 +357,8 @@ class CaptureWorkflow:
                                    for k, r in retained.items())):
                         issues.append('accepted attention changed the preserved reminder set')
                 outcomes[-1] = replace(outcomes[-1], actual=actual, issues=tuple(issues))
-                documents.append(self._document(action, old, actual, snapshot, now, before.snapshot))
+                if not issues:
+                    documents.append(self._document(action, old, actual, snapshot, now, before.snapshot))
                 rendered = True
                 if issues:
                     failure = '; '.join(issues) + '. Read-only recovery: todo --refresh now; do not replay the mutation.'
@@ -332,7 +371,7 @@ class CaptureWorkflow:
                     outcomes.append(OperationOutcome(action.method, action.title, 'unknown', target,
                         issues=(str(error),)))
                 elif receipt.accepted:
-                    if not rendered and receipt.actual is not None and receipt.after is not None:
+                    if not rendered and not receipt.issues and receipt.actual is not None and receipt.after is not None:
                         try:
                             documents.append(self._document(action, old, receipt.actual,
                                 receipt.after.snapshot, now, before.snapshot))
@@ -365,8 +404,10 @@ class CaptureWorkflow:
             owner = snapshot.items.get(reminder.item_id) if reminder else None
             if owner is None:
                 return p.document()
+            if action.method == 'create_reminder' and action.creating_owner:
+                return p.document('  Reminders: ' + reminder_values(snapshot, owner.id))
             return p.render_mutation(snapshot, owner, changes=(('Reminders',
-                offset_text(offsets(before_snapshot, owner.id)), offset_text(offsets(snapshot, owner.id))),))
+                reminder_values(before_snapshot, owner.id), reminder_values(snapshot, owner.id)),))
         if actual is None:
             return p.document()
         if action.method == 'create_task':
@@ -397,8 +438,8 @@ class CaptureWorkflow:
             document = p.document(f'Accepted scheduling for {actual.role}: {d.scalar_title(actual.title)}\n'
                                   '  Due: ' + p.actual_due(actual.attention, zone))
         extra = []
-        if action.retained:
-            extra.append('  Reminders retained: ' + offset_text(action.retained))
+        if action.retained is not None and reminder_values(snapshot, actual.id):
+            extra.append('  Reminders retained: ' + reminder_values(snapshot, actual.id))
         if old.waiting and not actual.waiting and d.visibility(snapshot, actual.id, now).ancestor_hidden:
             extra.append('  Still hidden by an ancestor policy.')
         return p.render_receipts((document, p.document('\n'.join(extra))))
