@@ -1,9 +1,36 @@
 # todo-3 product specification
 
-Design revision: **10 — activity-filter encoding and waiting-label request conformance, 2026-10-27**.
-State: **accepted scoped clarification; subsequent Planning records the committed baseline**.
+Design revision: **11 — report retrieval reuse and incremental synchronization, 2026-10-27**.
+State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 10
+## Current revision 11
+
+Read [report-retrieval-reuse.md](report-retrieval-reuse.md) first. The operator
+confirmed reuse of fresh synchronized comments and complete owner-scoped comment
+responses, safe incremental synchronization for reports, and investigation of
+completion-history reuse without weakening current-truth reporting. Concurrent
+edits during retrieval are not a concern. Keep category-scoped completion reads,
+JSON storage, existing progress output and existing recovery rules. Concurrency
+and account-wide completion-query consolidation are deferred.
+
+REQ-REPORT-016 narrowly succeeds the separate-comment-endpoint interpretation in
+REQ-SYNC-025 and REQ-REPORT-014 where complete fresh Sync evidence already exists.
+REQ-SYNC-034 applies the existing incremental synchronization contract to reports.
+REQ-CACHE-011 makes completion caching conditional on evidence, and
+REQ-VERIFY-029 identifies distinguishing offline outcomes. OUT-REPORT-002 records
+the agreed scope. Earlier definitions and accepted effective assignments remain
+unchanged; the new file identifies the exact precedence and affected guarantees.
+
+The initial request was "$cml-design discuss that change with me". Individual
+choices and the final "yes" to the complete scope after the JSON-storage
+clarification establish this agreement; exact excerpts and their context are
+retained separately from interpretation in the external Design report. This pass
+changes documentation only, with no commit, plan authoring, implementation or
+execution. Planning must use supported successor work and preserve accepted
+assignments, bind the complete Design tree to committed inputs and assess the
+remaining completion-cache evidence before preparing execution.
+
+## Preserved revision 10
 
 Read [request-conformance.md](request-conformance.md) first. REQ-SYNC-032 makes
 the existing activity-retrieval contract explicit: send `object_event_types` as
@@ -381,9 +408,10 @@ proof, report-owner resolution and pending-history cleanup ordering.
 Revision 6 has no unresolved product decisions and its written confirmation is
 retained; technical feasibility was not certified by that confirmation.
 Revision 7's individual choices and written agreement are confirmed. Its provider
-evidence needs remain explicit. The currently authorized fresh Planning pass
-consumes revision 9 and its retained handoff, assesses affected unfinished work,
-preserves accepted assignments and
-useful implementation, and prepares the matching supported revision. Historical
-revision-7/8 Design-only restrictions describe those earlier passes; the current
-scoped authorization is recorded above.
+evidence needs remain explicit. Revision 9's authorized Planning pass consumed its
+retained handoff, assessed affected unfinished work and preserved accepted
+assignments and useful implementation; revision 10 was subsequently planned and
+implemented. Those authorizations and revision-7/8 Design-only restrictions
+describe their historical scopes. Current revision 11 is Design-only; its confirmed
+scope, uncommitted status and remaining evidence needs are recorded above and in
+report-retrieval-reuse.md. Planning and execution are not started by this handoff.

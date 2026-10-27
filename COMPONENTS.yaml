@@ -451,3 +451,16 @@ interfaces:
     Preserve all other framing, streams/color/order and report eligibility supplied by workflows. Do not
     introduce a second rendering stack.'
   supersedes_ref: rendered-documents
+- id: reused-report-retrieval
+  owner: workflows
+  status: provisional
+  supersedes_ref: report-finalization
+  description: Successor Reporter.run/report with unchanged CommandRequest, ReportResult and classified
+    failures. Use a proven active Sync baseline and matching token for incremental reports, keeping retained
+    archived context separate. Complete fresh Sync comments cover active owners; one command-local complete
+    owner-scoped retrieval serves reconciliation and report preparation. Preserve required archived metadata/completeness
+    failure, scoped completion queries, precise eligibility, exact output and final write/flush -> cursor
+    -> cleanup ordering. Local show/set cursor stay offline; legacy cache may hydrate once without changing
+    protected history or cursor. Internal adapter/store extensions remain compatible and all callers preserve
+    or invalidate actual current-resource provenance with its token. No cross-command completion-query
+    skipping is supported by retained evidence.

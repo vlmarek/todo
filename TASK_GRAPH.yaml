@@ -1,8 +1,10 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-009
-predecessor_revision_id: TODO3-PLAN-008
+revision_id: TODO3-PLAN-010
+predecessor_revision_id: TODO3-PLAN-009
 contract_sources:
+- docs/design/report-retrieval-reuse.md
+- docs/design/external/todoist/report-retrieval-notes.md
 - docs/design/request-conformance.md
 - docs/design/historical-reminder-contradiction.md
 - docs/design/todoist-tolerance.md
@@ -451,6 +453,19 @@ interfaces:
     Preserve all other framing, streams/color/order and report eligibility supplied by workflows. Do not
     introduce a second rendering stack.'
   supersedes_ref: rendered-documents
+  source_path: COMPONENTS.yaml
+- id: reused-report-retrieval
+  owner: workflows
+  supersedes_ref: report-finalization
+  description: Successor Reporter.run/report with unchanged CommandRequest, ReportResult and classified
+    failures. Use a proven active Sync baseline and matching token for incremental reports, keeping retained
+    archived context separate. Complete fresh Sync comments cover active owners; one command-local complete
+    owner-scoped retrieval serves reconciliation and report preparation. Preserve required archived metadata/completeness
+    failure, scoped completion queries, precise eligibility, exact output and final write/flush -> cursor
+    -> cleanup ordering. Local show/set cursor stay offline; legacy cache may hydrate once without changing
+    protected history or cursor. Internal adapter/store extensions remain compatible and all callers preserve
+    or invalidate actual current-resource provenance with its token. No cross-command completion-query
+    skipping is supported by retained evidence.
   source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
@@ -4825,6 +4840,427 @@ tasks:
     missing-label/read-failure refusal; preserve existing complete-report/current-text/cursor negatives.
   - Existing final-delivery shared gate must pass on the settled integrated subject; no task-owned
     duplicate whole-suite gate.
+- id: T27
+  title: Reuse complete report evidence with a proven incremental Sync baseline
+  origin_stage_ref: report-retrieval-reuse
+  observable_outcome: A report with saved proven current state sends its token, applies real deltas/tombstones
+    without promoting archived context, avoids per-active-owner REST comment reads and reuses one complete
+    archived-owner response while preserving report output, failures and cursor/history ordering.
+  dependencies:
+  - task_ref: T26
+    kind: repository_state
+    interface_ref: null
+    reason: Start from the accepted request-conformance application and real-boundary fixtures; preserve
+      its activity JSON filter and waiting-label repair.
+  - task_ref: T15
+    kind: interface
+    interface_ref: report-finalization
+    reason: Extend the actual Reporter fixed-end retrieval, selection and finalization path.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Keep shared synchronization, pending-history reconciliation and publication usable for every
+      existing workflow.
+  - task_ref: T23
+    kind: interface
+    interface_ref: reminder-current
+    reason: Use the accepted mixed-reminder Current mapping and replacement evidence; preserve unchanged
+      reminder metadata and omitted deltas.
+  - task_ref: T22
+    kind: interface
+    interface_ref: tolerant-history
+    reason: Extend HistoryAdapter complete scoped comments and required_comments without weakening relevance,
+      owner or pagination validation.
+  - task_ref: T19
+    kind: interface
+    interface_ref: state-store-precise
+    reason: Consume accepted state-store-precise and history-store-precise together; keep protected StateStore/LocalState, exact serialization, compatible files and finalization-only cleanup.
+  - task_ref: T04
+    kind: interface
+    interface_ref: http-transport
+    reason: Use production Transport and existing controlled HTTP helpers for meaningful request counts
+      and protocol failures.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Preserve public command composition/result shapes and adapt directly affected CLI doubles.
+  goal: 'Implement confirmed Design revision 11 using docs/design/external/todoist/report-retrieval-notes.md for
+    the inspected provider conclusions and source navigation. Preserve accepted T01-T26 assignments and
+    useful code. Own comment reuse, safe incremental report retrieval and the evidence-conditional completion-history
+    decision as one coherent adapter/store/workflow slice. Retained upstream bytes and synthetic fixtures
+    are distinct evidence; do not refresh the provider snapshot or access a real account.
+
+
+    Start in todo_lib/workflows/report.py: Reporter._prepare currently calls retrieve(... prior=_known(state),
+    replace=True), fetches per-category completed plus activities and passes _Evidence to _reconcile,
+    then bypasses that evidence wrapper by calling HistoryAdapter.required_comments. HistoryAdapter.required_comments(current_items,
+    completed, activities) returns CommentEvidence(owners, comments, pages), currently calls private _comments
+    directly for every owner, and validates current owner/ancestor resolution separately from comment
+    text. _Evidence.comments already memoizes one complete Retrieval but is not shared with final comment
+    preparation. Preserve this metadata/text distinction and the explicit unresolved archived-owner failure.
+
+
+    Current retrieve(transport, binding, prior=None, sync_token=None, replace=False, hidden_names=())
+    returns Current(snapshot, sync_token, disappeared/deleted/departed IDs, reminder evidence). Its _seed
+    reconstructs every item/comment in prior; _known and LocalState.snapshot contain retained archived
+    context after reconciliation. Establish the smallest explicit current-resource provenance paired with
+    the token in existing cache storage, so only an actual current baseline seeds current._seed. Keep
+    all known archived identities/context separately available for disappearance, tombstone, scope departure,
+    recurring/reminder and ancestor reconciliation. Never infer active membership from completed flags,
+    delta omission, history observations or saved sync time. Existing schema-1 caches lacking provenance
+    remain readable offline and may receive one necessary full-plus-freshness hydration online; protected
+    history, binding and cursor must not reset. Invalid disposable provenance may rebuild under existing
+    cache rules; corrupt required history must still refuse. An ordinary subsequent report with a valid
+    new baseline must use the saved token, preserve unchanged resources, merge meaningful changes/deletions
+    and retain necessary bounded hydration on genuine scope expansion or server full replacement. Generic
+    errors do not authorize token-reset/full fallback.
+
+
+    Adapt the producing and consuming call sites together. LocalState, _cache, prepare_candidates and
+    StateStore publication in todo_lib/local/store.py currently carry combined snapshot/token/synced_at.
+    Synchronizer.refresh_locked and Reporter._prepare publish after _reconcile. Initializer._observe and
+    initialization publication, lifecycle._bounded_discover, moves._publish and Gateway.execute/current
+    retrieval also exchange or publish snapshots/tokens. CaptureWorkflow, CommentWorkflow and LifecycleWorkflow
+    construct Current from synchronized results. Inspect every retrieve/prepare_candidates/Current caller
+    and directly affected fake; preserve proven active provenance with its actual token or explicitly
+    invalidate only disposable provenance where it cannot be maintained. Do not relabel combined context
+    as fresh. Preserve operation-attributed accepted/rejected/unknown/unattempted proof, both reminder
+    types, read-only recovery and all existing callers'' usable signatures/defaults; compatible optional
+    representation changes belong in the existing modules/docstrings. Keep one retrieval engine and existing
+    JSON publication with one binding timezone authority.
+
+
+    Share one command-local complete owner-comment lookup between _reconcile and required_comments (compatible
+    optional context/callback arguments are permitted). Seed covered active owners from complete freshly
+    merged current Sync notes, including authoritative empty owner sets. An event on a covered active
+    owner selects current surviving text from that evidence without an extra REST request, even if its
+    posted_at is old or it is blank. Additional unchanged active owners must not add REST comment calls.
+    For owners not covered by fresh Sync, exhaust scoped REST comments once and reuse the successful complete
+    response, including between reconciliation and report preparation; multipage retrieval still counts
+    all actual pages. A filtered unknown-owner lookup must not masquerade as a complete owner response.
+    Keep note/owner identities, conflicting duplicates, cyclic/missing ancestors, relevance-first mapping
+    and exact continuation errors strict. Never reuse a failed or partial result. A new command must obtain
+    its own fresh required evidence; no final comparison Sync or reread for a later concurrent edit.
+
+
+    REQ-CACHE-011 investigation is settled conservatively by retained provider evidence in docs/design/external/todoist/report-retrieval-notes.md:
+    active Sync and active-only task GET do not establish current archived metadata; ActivityEvents optional
+    extras do not guarantee a complete current parent/scope/lifecycle correction; ensure_last_state has
+    no implementation. Therefore keep complete category-scoped completed retrieval on every report and
+    existing within-command completed/activity reuse. Do not add coverage-based skipping, coverage schema
+    or a second archive/invalidation system. Verify that an old retained occurrence/coverage marker cannot
+    substitute for fresh archived owner/parent evidence. This fulfills the conditional investigation with
+    an explicit limitation, not unconditional completion caching. Preserve preview intervals, gaps, binding
+    changes and corrupt protected-state behavior without introducing a new recovery path.
+
+
+    Use existing tests/workflows/report/test_report.py, test_tolerance.py and tests/workflows/sync/test_sync.py
+    controlled real adapter/store fixtures. The Reports.requests helper currently always expects full
+    Sync followed by per-A/B comments, and several tests splice positional request steps: migrate those
+    expectations and data so active current text comes from Sync notes. Preserve distinguishing outcomes
+    rather than simply deleting old REST expectations. In particular migrate test_archived_owner_with_known_parent_requires_current_own_comments
+    to one exhausted archived lookup, test_retained_archived_metadata_is_not_current_owner_evidence and
+    test_retained_archived_parent_cannot_resolve_current_comment_role to continue explicit failure, and
+    move the incomplete REST page case in test_blank_report_incomplete_page_keeps_cursor_and_no_output
+    to a genuinely uncovered/archived owner. Keep active malformed Sync note failures too. Migrate tests/delivery/final/copy_probe.py
+    reports and affected CLI/lifecycle/init/move/gateway doubles in this same task so the integrated subject
+    remains usable. Tests must not accept both redundant and optimized request sequences.
+
+
+    Begin feedback with one coherent actual adapter -> persisted reload -> Reporter scenario: observe
+    active parent A/step B/comments, externally complete B with supported evidence, save and reload, then
+    report with a true saved-token delta plus an unchanged active owner and an eligible archived comment.
+    Assert the request token, delta change/tombstone effects, B''s non-active provenance, fresh/current
+    report text/actual ancestry, one complete archived REST lookup and zero per-covered-active-owner lookups;
+    assert preview leaves cursor and pending context intact. Extend remaining fixtures after that slice
+    is usable. Reuse existing precise interval/recurring undo, edited/deleted/current blank comments,
+    capabilities/retention, full replacement/rebuild, malformed/repeated pagination, output/flush/cursor
+    failures, partial-publication and scope-departure cases. Missing required archived metadata must still
+    fail before normal output with unchanged cursor and required pending bytes, even after a previous
+    successful report saved the same ID. A failed extra comment page cannot establish complete evidence
+    or advance final cursor. Request count assertions must observe actual adapter/Transport requests,
+    not only mock method calls; fixtures cite the retained Sync/comments/completed/ActivityEvents evidence.
+    No wall-clock benchmark, cross-product matrix or new harness is needed.
+
+
+    Use t05-focused, t06-focused, t02-focused, t08-focused and t15-focused as directed working feedback,
+    starting with relevant methods/modules. Run t07-focused and the affected init/move/lifecycle/comment/CLI
+    modules when touching their shared calls/fakes. The runner supplies the existing final-delivery complete
+    offline suite and unchanged-copy/PATH/real-less gate once on the settled integrated subject; do not
+    mandate duplicate complete worker runs. Append exact observed subject, changed and reused cases, request-count
+    results, focused commands/outcomes and the completion-query limitation to docs/implementation/acceptance-evidence.md
+    without rewriting historical evidence. On interruption continue from retained code, focused test failures
+    and runner evidence, not a prior transcript.'
+  failure_domain: Fresh report evidence provenance and reuse across the existing adapter, JSON publication
+    and report workflow.
+  verification_rationale: One coupled implementation task avoids an intermediate state that exposes hybrid
+    snapshots as active truth or breaks caller fixtures before final delivery. Existing current/history/local/sync/report
+    checks each exercise a distinct production boundary; their IDs and prerequisites already exist. Actual
+    request counts plus nonempty report/current metadata and cursor/history observations distinguish unsafe
+    or cosmetic optimizations. Still-required validation negatives are retained in relevant suites. The
+    directed first slice validates provenance and a producer/consumer path before fixture-wide changes.
+    Shared consumer modules and t07-focused cover necessary API adaptation. Complete regression and delivered-copy
+    evidence remain in final-delivery; no new check ID or repeated broad worker duty.
+  correction_instructions: Revision 11 succeeds only redundant REST comment retrieval and forced full
+    report interpretation. It does not weaken current archived metadata, complete pagination, exact eligibility,
+    activity-time ordering, late-edit/deletion semantics or report output-before-cursor/cleanup rules.
+    REQ-CACHE-009/010 and REQ-LOCAL-007 control older intact-set publication wording. REQ-SYNC-028 requires is_shared instead of the older shared field, REQ-SCHED-015 permits both reminder types, and REQ-DOM-018 controls tolerant imported text. Keep progress templates/count
+    meaning, JSON storage, sequential reads, precise stored times, ordinary command-time precision and
+    prior reminder contradiction limitation. Do not edit frozen design/planning sources or import abandoned/sibling
+    implementations. Report a concrete provider contradiction or protected-input defect; do not silently
+    choose a new product policy.
+  requirement_refs:
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  constraint_refs:
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-025
+  - REQ-SYNC-005
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-026
+  - REQ-COMMENT-009
+  - REQ-DOM-009
+  - REQ-DOM-018
+  - REQ-SYNC-028
+  - REQ-SCHED-015
+  - REQ-CLI-029
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-007
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-CLI-036
+  - REQ-VERIFY-003
+  - REQ-VERIFY-013
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  exclusion_refs: &r11id001
+  - OUT-REPORT-001
+  - OUT-REPORT-002
+  - OUT-ARCHIVE-001
+  - OUT-SEARCH-001
+  - OUT-PRIVACY-001
+  - OUT-LOCAL-001
+  - OUT-OPS-003
+  - OUT-TEST-001
+  - OUT-LOGGING-001
+  - OUT-TIME-002
+  component_refs:
+  - adapter
+  - local
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - reused-report-retrieval
+  consumes_interface_refs:
+  - report-finalization
+  - synchronized-state
+  - reminder-current
+  - tolerant-history
+  - state-store-precise
+  - history-store-precise
+  - http-transport
+  - public-cli
+  expected_paths: &r11id002
+  - todo_lib/adapter/current.py
+  - todo_lib/adapter/history.py
+  - todo_lib/adapter/commands.py
+  - todo_lib/local/**
+  - todo_lib/workflows/**
+  - tests/adapter/**
+  - tests/local/**
+  - tests/workflows/**
+  - tests/cli/**
+  - tests/support/**
+  - tests/delivery/final/copy_probe.py
+  - docs/implementation/acceptance-evidence.md
+  denied_paths: &r11id003
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - docs/design/external/todoist/report-retrieval-notes.md
+  check_refs:
+  - t05-focused
+  - t06-focused
+  - t02-focused
+  - t08-focused
+  - t15-focused
+  required_evidence:
+  - t05-focused
+  - t06-focused
+  - t02-focused
+  - t08-focused
+  - t15-focused
+  - Actual saved-token report with changed/tombstoned resources, retained archived context and no stale-active
+    leakage after save/reload.
+  - 'Request-count evidence: adding covered unchanged active owners adds no owner REST requests; one complete
+    archived-owner retrieval is shared within a report; partial/failed evidence is refused.'
+  - Preserved report current-text/owner/ancestor, precise eligibility, required-data failure and finalization
+    protections, plus directly affected caller/gateway fixtures.
+  - Append observed implementation evidence and retained category-scoped completion-query decision to
+    docs/implementation/acceptance-evidence.md.
+- id: T28
+  title: Audit retrieval reduction and preserved report finalization through source and copied runtime
+  origin_stage_ref: report-retrieval-reuse
+  observable_outcome: Current acceptance evidence proves fewer redundant report requests with unchanged
+    observable eligibility, required-data failures, cursor and pending-history protection in the delivered
+    application.
+  dependencies:
+  - task_ref: T27
+    kind: interface
+    interface_ref: reused-report-retrieval
+    reason: Audit the implemented optimized Reporter and all coupled provenance/caller/fixture changes.
+  - task_ref: T17
+    kind: interface
+    interface_ref: routine-check
+    reason: Reuse the established single-suite verify-clean and unchanged-copy/PATH/real-less probes.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Exercise the actual copied public command composition and statuses.
+  goal: 'Own REQ-VERIFY-029 acceptance of the composed revision-11 behavior. Read T27''s actual code/tests
+    and retained provider conclusions in docs/design/external/todoist/report-retrieval-notes.md. Audit meaningful
+    observable behavior and missing evidence; do not rebuild accepted features or add a new test framework.
+    Inspect whether tests actually exercise saved-token deltas rather than a server full response under
+    a token, whether source/copy fixtures provide fresh active notes and whether their counted requests
+    originate in the real adapter/Transport. Existing passed historical checks are provenance, not verification
+    of this changed subject.
+
+
+    Verify representative covered-active-owner counts, one complete archived-owner response shared by
+    reconciliation/report preparation, edited/deleted/blank/nested comments and activity-time collapse/order,
+    current ancestry/scope, reopen or departure, required missing archived metadata and partial-page refusal.
+    Establish the distinct saved-active-baseline versus retained-archive case after publication/reload;
+    stale archived observations must not resolve current metadata or create active rows. Verify one legacy-cache
+    hydration followed by actual incremental reuse, representative necessary replacement/rebuild, and
+    unchanged failure behavior for generic token/network errors. Reuse adequate T27/existing tests and
+    add only missing distinguishing cases. Retain complete category-scoped completion queries; do not
+    invent caching to make a request-count claim.
+
+
+    Trace preview/recovery intervals and successful/failed finalization through existing tests: preview
+    can publish reusable current evidence but cannot advance cursor or prune, incomplete retrieval/output/flush/cursor
+    failure protects pending work, final direct complete output precedes cursor and cleanup, later cleanup
+    failure remains safe. Keep exact Finished/Progress/Hidden/progress output and report capability/retention
+    checks. Adapt only demonstrated coverage/compatibility defects in declared code and tests; preserve
+    original history in docs/implementation/acceptance-evidence.md and append exact subject, focused commands/results,
+    reused/new cases, counts, limitations and references to matching runner results once available. Do
+    not record a future final gate as passed.
+
+
+    Use existing t15-focused for the report acceptance cases and t25-focused for CLI coexistence plus
+    tiny delivery-harness self-tests; run relevant upstream focused checks for concrete repairs. The runner''s
+    unchanged final-delivery performs scripts/verify-clean, one scripts/check complete offline suite,
+    and distinct unchanged copied-runtime/PATH/real-less probes on the settled integrated subject. Ensure
+    copy_probe.py reports rejects redundant active-owner REST reads and exercises fresh notes and correct
+    cursor/history outcomes in the copy. Do not add a second whole-suite invocation for this audit or
+    make self-tests launch application suites. Current source/copy evidence stays synthetic/offline; no
+    real account, production credentials, latency promise or notification-delivery claim.'
+  failure_domain: Composed report request/eligibility correctness and delivered-runtime acceptance evidence.
+  verification_rationale: 'Separate acceptance after the coupled implementation supplies a usable dependency
+    boundary: all runtime/callers/fixtures already compose, and this task closes concrete observable evidence
+    gaps. t15-focused observes real report/store failures; t25-focused checks CLI coexistence and the
+    miniature delivery harness. Existing final-delivery supplies broad regression and distinct copied
+    subject evidence without new check IDs. Shared-role reuse does not imply reuse across changed subjects.'
+  correction_instructions: Preserve all unaffected requirements, accepted assignments, earlier evidence
+    bytes and the completion-caching limitation. Correct only demonstrated defects or missing distinguishing
+    evidence within revision 11. No frozen-input edits, new retrieval engine, concurrency, storage redesign,
+    changed progress text or new product promises.
+  requirement_refs:
+  - REQ-VERIFY-029
+  constraint_refs:
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-025
+  - REQ-SYNC-005
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-026
+  - REQ-COMMENT-009
+  - REQ-DOM-009
+  - REQ-DOM-018
+  - REQ-SYNC-028
+  - REQ-SCHED-015
+  - REQ-CLI-029
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-007
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-CLI-036
+  - REQ-VERIFY-003
+  - REQ-VERIFY-013
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-002
+  exclusion_refs: *r11id001
+  component_refs:
+  - adapter
+  - local
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - reused-report-retrieval
+  - routine-check
+  - public-cli
+  expected_paths: *r11id002
+  denied_paths: *r11id003
+  check_refs:
+  - t15-focused
+  - t25-focused
+  required_evidence:
+  - t15-focused
+  - t25-focused
+  - Append subject-bound request-count, actual incremental merge and required-data/cursor/pending-history
+    acceptance results to docs/implementation/acceptance-evidence.md.
+  - Existing final-delivery shared gate must pass on settled integrated subject, with one complete suite
+    and distinct copied-runtime/PATH/real-less evidence; no duplicate broad worker gate.
 stages:
 - id: release-1
   final_project: false
@@ -4963,6 +5399,10 @@ stages:
   - REQ-SYNC-032
   - REQ-SYNC-033
   - REQ-VERIFY-028
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-VERIFY-029
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -5102,6 +5542,10 @@ stages:
   - REQ-SYNC-032
   - REQ-SYNC-033
   - REQ-VERIFY-028
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-VERIFY-029
   check_refs:
   - final-delivery
 - id: todoist-coexistence
@@ -5241,10 +5685,14 @@ stages:
   - REQ-SYNC-032
   - REQ-SYNC-033
   - REQ-VERIFY-028
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-VERIFY-029
   check_refs:
   - final-delivery
 - id: request-conformance
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-SYNC-032
   - REQ-SYNC-033
@@ -5379,6 +5827,153 @@ stages:
   - REQ-DOM-018
   - REQ-OUT-022
   - REQ-VERIFY-027
+  deferred_requirement_refs:
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-VERIFY-029
+  check_refs:
+  - final-delivery
+- id: report-retrieval-reuse
+  final_project: true
+  active_requirement_refs:
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-VERIFY-029
+  satisfied_requirement_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  - REQ-INIT-009
+  - REQ-VERIFY-025
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
+  - REQ-SYNC-031
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-027
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
   deferred_requirement_refs: []
   check_refs:
   - final-delivery

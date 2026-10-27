@@ -1,11 +1,12 @@
 # Prepared ownership and evidence
 
-The accepted Design revision 10 is authoritative for activity-filter encoding and
-waiting-label request conformance. The request-conformance stage retains all 129
-previously accepted requirements as satisfied, preserving T01–T25 and their checks.
-T26 owns the three new clarifications and directly affected consumer repairs.
-This frozen ledger records planned coverage; observed subject-bound results append
-to `docs/implementation/acceptance-evidence.md`. No requirement is deferred.
+Confirmed Design revision 11 governs report evidence reuse and safe incremental
+report synchronization. T27 owns the coupled implementation and evidence-conditional
+completion-history outcome; T28 owns its distinguishing acceptance evidence.
+All 132 earlier requirements remain satisfied with historical owners T01-T26
+preserved in the cumulative graph. Four successor requirements are active and
+none are deferred. This frozen ledger records planned coverage; append observed
+results to `docs/implementation/acceptance-evidence.md` without changing this map.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -570,24 +571,57 @@ requirements:
     - t25-focused
     - final-delivery
   REQ-SYNC-032:
-    stage_status: active
-    primary_owner: T26
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t06-focused
     - t12-focused
     - final-delivery
   REQ-SYNC-033:
-    stage_status: active
-    primary_owner: T26
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t06-focused
     - t12-focused
     - final-delivery
   REQ-VERIFY-028:
-    stage_status: active
-    primary_owner: T26
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t06-focused
     - t12-focused
     - final-delivery
+  REQ-REPORT-016:
+    stage_status: active
+    primary_owner: T27
+    planned_evidence:
+    - t05-focused
+    - t06-focused
+    - t02-focused
+    - t08-focused
+    - t15-focused
+  REQ-SYNC-034:
+    stage_status: active
+    primary_owner: T27
+    planned_evidence:
+    - t05-focused
+    - t06-focused
+    - t02-focused
+    - t08-focused
+    - t15-focused
+  REQ-CACHE-011:
+    stage_status: active
+    primary_owner: T27
+    planned_evidence:
+    - t05-focused
+    - t06-focused
+    - t02-focused
+    - t08-focused
+    - t15-focused
+  REQ-VERIFY-029:
+    stage_status: active
+    primary_owner: T28
+    planned_evidence:
+    - t15-focused
+    - t25-focused
 ```

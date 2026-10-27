@@ -1,3 +1,30 @@
+# Current continuation: TODO3-PLAN-010
+
+Reuse the completed application at `f3eb3b2c88d40bede17edf70a0c7437707c528bd`.
+Confirmed Design revision 11 in `docs/design/report-retrieval-reuse.md` controls
+only report retrieval reuse and safe incremental synchronization. T27 owns the
+coupled adapter/storage/workflow/caller/fixture implementation; T28 audits observable
+request reduction and preserved delivery/cursor/history behavior. Keep all 26
+accepted effective assignments and their referenced definitions unchanged.
+The report-retrieval-reuse stage activates four successor requirements; all 132
+earlier obligations remain satisfied and applicable where coupled. Nothing is deferred.
+
+`docs/design/external/todoist/report-retrieval-notes.md` records retained provider evidence,
+the active-baseline versus archived-context distinction, compatibility duties and
+the conservative completion-history investigation outcome. Keep category-scoped
+completed queries: retained evidence does not justify cross-command skipping while
+preserving required current archived metadata. Reuse complete fresh active Sync
+comments and complete owner-scoped evidence within each command. Keep JSON storage,
+progress text, sequential reads, precise eligibility and all finalization safeguards.
+
+T27 and T28 run sequentially because they share the implemented outcome and repair
+paths; configured concurrency is unchanged. Broad edit scopes permit only the
+owned behavior and necessary caller/test adaptations. The runner's existing
+final-delivery checks the settled integrated subject, including one full offline
+suite and distinct unchanged-copy probes. Directed worker feedback remains focused.
+Historical sections below retain earlier baselines and scope. This plan authorizes
+no execution. Stop before any additional Design/Plan scope change.
+
 # Current continuation: TODO3-PLAN-009
 
 Reuse the completed application at `f3d6bd20daddf35bb955e86649d0ace093cfe3dc`.
