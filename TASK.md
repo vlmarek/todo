@@ -1,3 +1,17 @@
+# Current continuation: TODO3-PLAN-008
+
+Confirmed Design revision 9 in `docs/design/historical-reminder-contradiction.md`
+applies REQ-SYNC-031 only to superseded historical reminder contradictions across
+an authoritative replacement before owner relevance is resolved. All other
+revision-8 and earlier obligations remain binding. T23 implements this scoped
+alignment; T24 and T25 consume it without restoring the superseded duty.
+Preserve all 22 accepted effective assignments. The current accepted integration
+baseline is `3df2ae75dd1b47130be93deff4e80043be1f3e89`; use the runner-provided
+repository, never import abandoned T23 candidate source. Existing gates, settings
+and limits remain. The following earlier continuation sections are history;
+current revision-9 instructions take precedence only within their stated scope.
+Stop before any further product/plan change outside this approved amendment.
+
 # Current continuation: TODO3-PLAN-007
 
 Reuse the integrated application at `b392afec90759a8aa804c26f4e864c80c81909fd`.
