@@ -22,7 +22,9 @@ A command request exposes:
   values are unprefixed; the completion workflow adds `Done: ` after acceptance.
 - `options`: sorted `(name, value)` pairs; `option(name, default)` reads a value.
   Names omit `--`. Booleans are `True`, scalar values retain their contents
-  (priority normalizes to `P1`…`P4`), repeated reminders are a tuple in marker order.
+  (priority normalizes to `P1`…`P4`), repeated values for each reminder option are tuples.
+  `reminder_markers` preserves interleaved `(option, value)` order across both
+  `reminder` and `reminder-at`, including a leading noun action.
   Absent options stay absent; in particular absent `reason` differs from `''`.
   Category creation uses the joined `name` option. No temporal reference is sampled.
 - `destination`, `destination_kind`: `None` when absent. Positional move joins

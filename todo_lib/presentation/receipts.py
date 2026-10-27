@@ -129,3 +129,30 @@ def render_receipts(receipts):
     receipts = tuple(receipts)
     return document('\n'.join(r.stdout for r in receipts if r.stdout),
                     '\n'.join(r.stderr for r in receipts if r.stderr))
+
+
+def render_reminder_replacement(snapshot, item, removals, additions):
+    """Proposed removals only; unresolved expressions are never accepted dates."""
+    from .formatting import reminders_text
+    zone = snapshot.account.timezone
+    lines = ['Reminder replacement for: ' + owner_title(snapshot, item), 'Remove:']
+    lines.extend('  - ' + reminders_text([r], zone) for r in removals)
+    lines.append('Add:')
+    for r in additions:
+        value = ('expression (Todoist): ' + scalar_title(r.due.expression)
+                 if r.type == 'absolute' and r.due.kind == 'unresolved'
+                 else reminders_text([r], zone))
+        lines.append('  - ' + value)
+    if not additions:
+        lines.append('  None.')
+    lines.append('To keep existing reminders, include:')
+    hints = []
+    for r in removals:
+        hint = '--reminder-at keep'
+        if r.type == 'relative':
+            value = '0m' if r.minutes == 0 else reminders_text([r], zone).removesuffix(' before')
+            hint = '--reminder ' + value
+        if hint not in hints:
+            hints.append(hint)
+    lines.extend('  ' + hint for hint in hints)
+    return document('\n'.join(lines))

@@ -126,3 +126,11 @@ handler must map it to exit 130, with no fallback or cursor advancement. A child
 terminated by SIGINT follows the same interruption path. Final reports always
 write/flush directly; cursor/history cleanup belongs after successful delivery.
 The application supplies no default pager and requires no external executable.
+
+`render_reminder_replacement(snapshot, item, removals, additions)` returns a pure
+proposed-change document, using safe owner paths, complete reminder scheduling
+fragments and type-specific retention hints. Unresolved additions are labelled
+`expression (Todoist): ...`; no timestamp is inferred. The workflow delivers it
+directly and invokes the shared default-cancel prompt before any mutation.
+Accepted reminder receipts use reconciled values with scalar `0m`/offsets and
+the shared `at ...` absolute fragment. Creation shows `  Reminders: RESULT`.
