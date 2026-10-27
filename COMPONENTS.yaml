@@ -370,3 +370,84 @@ interfaces:
     Missing, corrupt, foreign or mixed required history fails without resetting it. Cache clear/cursor
     set never authorize cleanup, and cleanup failure never rolls back a successful output/cursor.
   status: provisional
+- id: coexistence-model
+  owner: domain
+  status: provisional
+  description: Successor in todo_lib.domain.model/text to the accepted precise model. validate accepts
+    imported duplicate task/step titles, scheduled hidden categories, inactive waiting labels, literal
+    malformed/orphaned reason text and normalized inbound CRLF/blank descriptions without relaxing category
+    uniqueness, hierarchy, identity or ancestor-day checks. New imported-title validation stays separate
+    from CLI validate_title. Action-local collision comparison rejects newly introduced active sibling
+    collisions and permits unchanged/resolved imported collisions, including reopened ancestors. Visibility
+    interprets a waiting label only with attention. Document concrete callable APIs/errors in existing
+    domain API.md/docstrings; no I/O in domain code.
+  supersedes_ref: managed-model-precise
+- id: tolerant-current
+  owner: adapter
+  status: provisional
+  description: 'Successor in todo_lib.adapter.current.retrieve and init discovery: same Current(snapshot,sync_token,missing/deleted/departed
+    evidence) contract, but consumed signatures ignore attachment/unused metadata, optional due timezone
+    is null, relevance precedes unused live content and inbound text uses coexistence-model. Relevant
+    project safety still requires boolean is_shared; unrelated data cannot invent managed eligibility.
+    Blank comments preserve stable ownership/time. Preserve full/freshness/incremental/tombstone completeness
+    and operation evidence.'
+  supersedes_ref: current-retrieval
+- id: tolerant-history
+  owner: adapter
+  status: provisional
+  description: Successor in todo_lib.adapter.history.HistoryAdapter completed/activities/comments/required_comments,
+    returning the existing Retrieval/Page/Activity/Comment evidence shapes. Identity/scope/lifecycle/interval
+    are established before unused content; scoped comments permit documented blank defaults, ignore attachments,
+    and preserve IDs/time. Do not request annotate_notes or consume annotation text; retain move/scope
+    metadata used by synchronization. Preserve exact covering windows, endpoint terminal rules, event-ID
+    validation, and explicit unresolved archived-owner failure.
+  supersedes_ref: history-retrieval
+- id: reminder-model
+  owner: domain
+  status: provisional
+  description: Extend the existing ID-owned Reminder(id,item_id,minutes) model compatibly with tagged
+    relative/absolute scheduling and necessary original due/recipient/urgent metadata. Reuse Attention/time
+    helpers for resolved scheduling; preserve raw floating/fixed recurrence/language/zone and exact stored
+    values, type-specific validity and no reminder effect on urgency. Existing positional relative constructors
+    and old local history remain readable. Document concrete APIs in existing domain API.md; consumers
+    use actual predecessor symbols, not a parallel model.
+  supersedes_ref: coexistence-model
+- id: reminder-current
+  owner: adapter
+  status: provisional
+  description: Extend current.retrieve/_seed/_signature/_merge/_map to round-trip relative and independent
+    absolute reminders, type-specific consumed scheduling and preserved notify_uid/is_urgent/due metadata.
+    Keep tolerant-current behavior, type-aware duplicate comparison, stable ID ownership, omitted delta
+    preservation and account-zone re-resolution. Necessary metadata is preserved without turning unused
+    fields into blanket required predicates. Shared model/codec remains a single path.
+  supersedes_ref: tolerant-current
+- id: reminder-gateway
+  owner: adapter
+  status: provisional
+  description: 'Extend existing Operation/Gateway create_reminder/update_reminder/delete_reminder compatibly:
+    Sync reminder_add item_id/type and minute_offset for relative or due for absolute; updates id plus
+    actual requested fields; stable UUID/temp-ID proof, Current reconciliation and Result outcomes unchanged.
+    English new expressions use due.string/lang en, retained rules preserve original language/zone. Compare
+    known exact predictions with inclusive two-second remote tolerance and strict kind/day/recurrence/zone;
+    unresolved expressions require actual exact-time result. Preserve metadata on retained IDs; no endpoint
+    parse/dedup guarantee.'
+  supersedes_ref: mutation-gateway
+- id: complete-reminder-scheduling
+  owner: workflows
+  status: provisional
+  description: Successor CaptureWorkflow/SchedulingWorkflow consumes both marker types into one desired
+    set, retains keep/local matches by ID, validates complete plans and confirms removals before any write,
+    then executes sequentially with actual reconciled receipts. Unknown expressions remain unresolved
+    until Todoist; explicit clear variants differ. Task due/recurrence/hiding and absolute reminders remain
+    independent; capability/no-op/partial/unknown/unattempted rules persist. Reuse the actual CommandRequest,
+    streams, prompt and gateway types.
+  supersedes_ref: capture-scheduling
+- id: coexistence-rendering
+  owner: presentation
+  status: provisional
+  description: 'Successor existing pure render/formatting/receipts/report API: safe escaped scalar titles,
+    blank comment marker, inactive waiting detail/receipts, complete sorted relative/absolute timing including
+    undated reminder-only rows, exact removal preview and actual reconciled set receipts under REQ-OUT-022.
+    Preserve all other framing, streams/color/order and report eligibility supplied by workflows. Do not
+    introduce a second rendering stack.'
+  supersedes_ref: rendered-documents

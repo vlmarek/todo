@@ -1,3 +1,25 @@
+# Current continuation: TODO3-PLAN-007
+
+Reuse the integrated application at `b392afec90759a8aa804c26f4e864c80c81909fd`.
+Design revision 8 in `docs/design/todoist-tolerance.md` supplies scoped successor
+obligations; its precedence table controls only the named earlier clauses.
+All 20 accepted assignments and original definitions remain historical and unchanged.
+T21 implements imported conventions; T22 provider relevance and blank comments;
+T23 supplies the mixed-reminder import/storage/gateway/read slice; T24 completes
+public reminder scheduling and consent; T25 verifies composed/copied delivery.
+These tasks follow actual shared-model/consumer dependencies and run sequentially;
+configured concurrency remains 3 for compatible future work. Any listed shared
+runtime/test path is writable only for the task's concrete owned behavior or
+necessary consumer/test adaptation. Do not implement future slices early or
+weaken gates to tolerate an unusable intermediate application.
+
+`docs/design/external/todoist/planning-contracts.md` supplements source navigation and
+technical choices for new work; original provider notes and accepted assignments
+remain intact. The current final stage is `todoist-coexistence`, with no deferred
+requirements. The following first-release and prior-continuation text is retained
+as provenance, not an instruction to rebuild code or restore superseded behavior.
+Stop before any further product/plan change outside this approved amendment.
+
 # todo-3 implementation assignment
 
 Current follow-up: TODO3-PLAN-006 appends the project-sharing correction after

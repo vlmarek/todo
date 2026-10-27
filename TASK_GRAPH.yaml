@@ -1,8 +1,10 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-006
-predecessor_revision_id: TODO3-PLAN-005
+revision_id: TODO3-PLAN-007
+predecessor_revision_id: TODO3-PLAN-006
 contract_sources:
+- docs/design/todoist-tolerance.md
+- docs/design/external/todoist/planning-contracts.md
 - docs/design/project-sharing-field.md
 - COMPONENTS.yaml
 - docs/implementation/provider-contracts.md
@@ -367,6 +369,87 @@ interfaces:
     Missing, corrupt, foreign or mixed required history fails without resetting it. Cache clear/cursor
     set never authorize cleanup, and cleanup failure never rolls back a successful output/cursor.
   source_path: COMPONENTS.yaml
+- id: coexistence-model
+  owner: domain
+  description: Successor in todo_lib.domain.model/text to the accepted precise model. validate accepts
+    imported duplicate task/step titles, scheduled hidden categories, inactive waiting labels, literal
+    malformed/orphaned reason text and normalized inbound CRLF/blank descriptions without relaxing category
+    uniqueness, hierarchy, identity or ancestor-day checks. New imported-title validation stays separate
+    from CLI validate_title. Action-local collision comparison rejects newly introduced active sibling
+    collisions and permits unchanged/resolved imported collisions, including reopened ancestors. Visibility
+    interprets a waiting label only with attention. Document concrete callable APIs/errors in existing
+    domain API.md/docstrings; no I/O in domain code.
+  supersedes_ref: managed-model-precise
+  source_path: COMPONENTS.yaml
+- id: tolerant-current
+  owner: adapter
+  description: 'Successor in todo_lib.adapter.current.retrieve and init discovery: same Current(snapshot,sync_token,missing/deleted/departed
+    evidence) contract, but consumed signatures ignore attachment/unused metadata, optional due timezone
+    is null, relevance precedes unused live content and inbound text uses coexistence-model. Relevant
+    project safety still requires boolean is_shared; unrelated data cannot invent managed eligibility.
+    Blank comments preserve stable ownership/time. Preserve full/freshness/incremental/tombstone completeness
+    and operation evidence.'
+  supersedes_ref: current-retrieval
+  source_path: COMPONENTS.yaml
+- id: tolerant-history
+  owner: adapter
+  description: Successor in todo_lib.adapter.history.HistoryAdapter completed/activities/comments/required_comments,
+    returning the existing Retrieval/Page/Activity/Comment evidence shapes. Identity/scope/lifecycle/interval
+    are established before unused content; scoped comments permit documented blank defaults, ignore attachments,
+    and preserve IDs/time. Do not request annotate_notes or consume annotation text; retain move/scope
+    metadata used by synchronization. Preserve exact covering windows, endpoint terminal rules, event-ID
+    validation, and explicit unresolved archived-owner failure.
+  supersedes_ref: history-retrieval
+  source_path: COMPONENTS.yaml
+- id: reminder-model
+  owner: domain
+  description: Extend the existing ID-owned Reminder(id,item_id,minutes) model compatibly with tagged
+    relative/absolute scheduling and necessary original due/recipient/urgent metadata. Reuse Attention/time
+    helpers for resolved scheduling; preserve raw floating/fixed recurrence/language/zone and exact stored
+    values, type-specific validity and no reminder effect on urgency. Existing positional relative constructors
+    and old local history remain readable. Document concrete APIs in existing domain API.md; consumers
+    use actual predecessor symbols, not a parallel model.
+  supersedes_ref: coexistence-model
+  source_path: COMPONENTS.yaml
+- id: reminder-current
+  owner: adapter
+  description: Extend current.retrieve/_seed/_signature/_merge/_map to round-trip relative and independent
+    absolute reminders, type-specific consumed scheduling and preserved notify_uid/is_urgent/due metadata.
+    Keep tolerant-current behavior, type-aware duplicate comparison, stable ID ownership, omitted delta
+    preservation and account-zone re-resolution. Necessary metadata is preserved without turning unused
+    fields into blanket required predicates. Shared model/codec remains a single path.
+  supersedes_ref: tolerant-current
+  source_path: COMPONENTS.yaml
+- id: reminder-gateway
+  owner: adapter
+  description: 'Extend existing Operation/Gateway create_reminder/update_reminder/delete_reminder compatibly:
+    Sync reminder_add item_id/type and minute_offset for relative or due for absolute; updates id plus
+    actual requested fields; stable UUID/temp-ID proof, Current reconciliation and Result outcomes unchanged.
+    English new expressions use due.string/lang en, retained rules preserve original language/zone. Compare
+    known exact predictions with inclusive two-second remote tolerance and strict kind/day/recurrence/zone;
+    unresolved expressions require actual exact-time result. Preserve metadata on retained IDs; no endpoint
+    parse/dedup guarantee.'
+  supersedes_ref: mutation-gateway
+  source_path: COMPONENTS.yaml
+- id: complete-reminder-scheduling
+  owner: workflows
+  description: Successor CaptureWorkflow/SchedulingWorkflow consumes both marker types into one desired
+    set, retains keep/local matches by ID, validates complete plans and confirms removals before any write,
+    then executes sequentially with actual reconciled receipts. Unknown expressions remain unresolved
+    until Todoist; explicit clear variants differ. Task due/recurrence/hiding and absolute reminders remain
+    independent; capability/no-op/partial/unknown/unattempted rules persist. Reuse the actual CommandRequest,
+    streams, prompt and gateway types.
+  supersedes_ref: capture-scheduling
+  source_path: COMPONENTS.yaml
+- id: coexistence-rendering
+  owner: presentation
+  description: 'Successor existing pure render/formatting/receipts/report API: safe escaped scalar titles,
+    blank comment marker, inactive waiting detail/receipts, complete sorted relative/absolute timing including
+    undated reminder-only rows, exact removal preview and actual reconciled set receipts under REQ-OUT-022.
+    Preserve all other framing, streams/color/order and report eligibility supplied by workflows. Do not
+    introduce a second rendering stack.'
+  supersedes_ref: rendered-documents
+  source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
   command: git diff --check
@@ -531,6 +614,48 @@ checks:
   command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.workflows.init.test_init tests.workflows.sync.test_sync tests.cli.test_composition.PublicInit -v
   prerequisite_task_refs:
   - T20
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t21-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.domain.test_coexistence tests.workflows.capture.test_coexistence
+    tests.presentation.test_coexistence -v
+  prerequisite_task_refs:
+  - T21
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t22-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_tolerance tests.adapter.history.test_tolerance
+    tests.workflows.comments.test_tolerance tests.workflows.report.test_tolerance tests.workflows.init.test_tolerance
+    -v
+  prerequisite_task_refs:
+  - T22
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t23-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.domain.test_reminders tests.local.test_reminders
+    tests.adapter.current.test_reminders tests.adapter.commands.test_reminders tests.presentation.test_reminders
+    tests.workflows.reads.test_reminders -v
+  prerequisite_task_refs:
+  - T23
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t24-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_reminders tests.workflows.capture.test_reminders
+    tests.presentation.test_reminder_receipts tests.cli.test_reminders -v
+  prerequisite_task_refs:
+  - T24
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t25-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_coexistence tests.delivery.final.test_verify
+    -v
+  prerequisite_task_refs:
+  - T25
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -3573,6 +3698,915 @@ tasks:
   - t20-focused
   - final-delivery
   - docs/implementation/acceptance-evidence.md
+- id: T21
+  title: Accept imported task conventions while preserving mutation safety
+  origin_stage_ref: todoist-coexistence
+  observable_outcome: Accept imported task conventions while preserving mutation safety.
+  dependencies:
+  - task_ref: T20
+    kind: repository_state
+    reason: Reuse the complete accepted application and sharing correction, including T17 delivery tooling
+      and its accepted ancestors.
+    interface_ref: null
+  - task_ref: T19
+    kind: interface
+    reason: Use the completed managed-model-precise capability and its concrete source API. Also supplies
+      time-policy-precise.
+    interface_ref: managed-model-precise
+  - task_ref: T12
+    kind: interface
+    reason: Use the completed capture-scheduling capability and its concrete source API.
+    interface_ref: capture-scheduling
+  - task_ref: T13
+    kind: interface
+    reason: Use the completed hierarchy-moves capability and its concrete source API.
+    interface_ref: hierarchy-moves
+  - task_ref: T18
+    kind: interface
+    reason: Use the completed lifecycle-transitions capability and its concrete source API.
+    interface_ref: lifecycle-transitions
+  - task_ref: T09
+    kind: interface
+    reason: Use the completed rendered-documents capability and its concrete source API.
+    interface_ref: rendered-documents
+  - task_ref: T10
+    kind: interface
+    reason: Use the completed read-commands capability and its concrete source API.
+    interface_ref: read-commands
+  goal: 'Extend the existing shared model and its actual consumers for imported-data coexistence. Baseline
+    symbols are domain.model.validate/validate_sibling_uniqueness/reopen_chain/visibility/validate_hiding;
+    domain.text.validate_title/validate_body/split_waiting/with_waiting_reason; capture._plan, scheduling.propose/validate_proposals,
+    moves.moved_snapshot, lifecycle.execute; presentation.formatting.owner_title/ancestor_path and render/report/receipts.
+    Keep the existing strict CLI title/body validators and add only the needed inbound interpretation.
+    Normalize permitted CRLF before controls, permit LF/tab in imported titles and whitespace-only descriptions,
+    preserve nonblank content. Model blank incoming comments as valid to enable T22, while explicit CLI
+    comment creation stays strict. Escape scalar title backslash/LF/tab everywhere a title appears (views,
+    ancestor paths, chooser, prompts/receipts/errors), never changing selector matching or category names.
+
+
+    Remove global imported task/step collision rejection, but enforce newly introduced collisions on CLI
+    create/batch/rename/move/reopen including restored ancestors. Compare affected before/after sibling
+    relationships so a pre-existing collision permits unrelated operations, a unique new sibling and a
+    resolving rename; completed titles do not collide and category uniqueness stays strict. Hidden category
+    becomes a filter: scheduled items, moves and external rename remain valid; normal now excludes them
+    even overdue, now --all/someday/search keep their populations, waiting/report Hidden exclude category-hidden
+    work. Preserve scheduling and own metadata through moves.
+
+
+    Interpret waiting label without attention as inactive, with a safe owner diagnostic; inherited suppression
+    still applies. Only canonical trailing reason associated with valid own policy is a Reason. Malformed/duplicate/orphaned
+    blocks remain Description; reads never repair them. Unsafe reason rewrites fail before writes; label
+    removal preserves literal text. Detail and changed hiding receipts use the inactive fragments in REQ-OUT-022;
+    label removal is a real mutation. Preserve reasonless valid policy, future-day CLI rules and earlier-descendant/valid-hidden-ancestor
+    refusal. Adapt old tests expecting blanket imported collision/hidden-category/malformed-reason rejection;
+    retain control/hierarchy/category/CLI-collision negatives. T22 owns provider metadata/relevance/blank
+    editor behavior; T23/T24 own absolute reminders and reminder fragments. Do not implement those features
+    prematurely. Existing import validators in adapter may need direct changes here to admit the owned
+    inbound conventions.
+
+
+    Use confirmed Design revision 8 in docs/design/todoist-tolerance.md: its explicit successor table
+    overrides only the named older clauses in inherited contracts. Earlier obligations otherwise remain
+    binding. Historical task assignments are evidence, not instructions to restore superseded restrictions.
+    Reuse the integrated application; do not rebuild it. Read docs/design/external/todoist/planning-contracts.md
+    and the actual predecessor source/tests before editing. Preserve all accepted assignments, protected
+    planning inputs and prior evidence. Implement the smallest shared path; no generic compatibility framework,
+    local recurrence engine, live account access or new recovery command. Controlled tests use synthetic
+    secrets and isolated state/HTTP/clocks/terminals. New source fixtures cite the pinned upstream location,
+    not the mapper''s output. Update directly affected old tests/fakes when the approved policy supersedes
+    their expectation, preserving meaningful required-data negatives and unrelated behavior. Focused commands
+    below are worker feedback and runner task evidence; the existing final-delivery runner gate supplies
+    whole-product checks. Do not rerun the full suite for every role label. After interruption recover
+    remaining work from source, focused results and supported runner evidence, never conversation memory.
+
+
+    Focused command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.domain.test_coexistence
+    tests.workflows.capture.test_coexistence tests.presentation.test_coexistence -v'
+  failure_domain: Accept imported task conventions while preserving mutation safety
+  verification_rationale: A shared model change must ship with its mutation and display consumers to avoid
+    accepting unsafe writes or breaking all reads. Start with imported duplicate siblings plus unrelated
+    rename versus newly colliding rename, and one inactive/literal-reason detail path; then extend actual
+    shared callers. Focused new modules establish current policy; directed existing model/moves/lifecycle/presentation
+    tests verify still-required semantics. Tests/fakes across those consumers can be adapted in this serial
+    task; no parallel shared-file edits are assumed.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-VERIFY-003
+  - REQ-SEC-007
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-MUT-001
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-SCHED-011
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-OUT-015
+  - REQ-OUT-022
+  - REQ-CLI-035
+  - REQ-COMMENT-009
+  - REQ-CLI-032
+  exclusion_refs:
+  - OUT-FEATURE-002
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-LOCAL-001
+  - OUT-INIT-001
+  - OUT-TIME-002
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - coexistence-model
+  consumes_interface_refs:
+  - managed-model-precise
+  - time-policy-precise
+  - capture-scheduling
+  - hierarchy-moves
+  - lifecycle-transitions
+  - rendered-documents
+  - read-commands
+  expected_paths:
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/syntax/**
+  - todo_lib/adapter/**
+  - todo_lib/presentation/**
+  - todo_lib/workflows/**
+  - todo_lib/cli.py
+  - tests/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - docs/design/external/todoist/planning-contracts.md
+  check_refs:
+  - t21-focused
+  required_evidence:
+  - t21-focused
+  - Imported duplicates persist through validation/reload; existing ambiguity/cancel/noninteractive handling;
+    new collision refuses before mutation while unchanged/resolved collisions succeed.
+  - Scheduled hidden categories remain filtered; inactive own waiting plus valid ancestor, literal malformed
+    text, unsafe rewrite refusal, valid ancestor-day refusal and CRLF/title escaping distinguish tolerance
+    from blanket skipping.
+- id: T22
+  title: Consume relevant provider data and preserve blank comments end to end
+  origin_stage_ref: todoist-coexistence
+  observable_outcome: Consume relevant provider data and preserve blank comments end to end.
+  dependencies:
+  - task_ref: T21
+    kind: interface
+    reason: Use the completed coexistence-model capability and its concrete source API.
+    interface_ref: coexistence-model
+  - task_ref: T04
+    kind: interface
+    reason: Use the completed http-transport capability and its concrete source API.
+    interface_ref: http-transport
+  - task_ref: T05
+    kind: interface
+    reason: Use the completed current-retrieval capability and its concrete source API.
+    interface_ref: current-retrieval
+  - task_ref: T06
+    kind: interface
+    reason: Use the completed history-retrieval capability and its concrete source API.
+    interface_ref: history-retrieval
+  - task_ref: T08
+    kind: interface
+    reason: Use the completed synchronized-state capability and its concrete source API.
+    interface_ref: synchronized-state
+  - task_ref: T11
+    kind: interface
+    reason: Use the completed initialization capability and its concrete source API.
+    interface_ref: initialization
+  - task_ref: T14
+    kind: interface
+    reason: Use the completed comment-editing capability and its concrete source API.
+    interface_ref: comment-editing
+  - task_ref: T15
+    kind: interface
+    reason: Use the completed report-finalization capability and its concrete source API.
+    interface_ref: report-finalization
+  - task_ref: T16
+    kind: interface
+    reason: Use the completed public-cli capability and its concrete source API.
+    interface_ref: public-cli
+  goal: 'Apply consumed-field/relevance rules across current/full/incremental mapping, initialization
+    discovery/preflight/retained history, scoped and archived comments, bounded completed/activity retrieval,
+    synchronization and reconciliation. Actual baseline navigation: current._SIGNATURE_FIELDS/_DUE_FIELDS/_signature/_merge/_projects/_map/_seed
+    and retrieve; history._activity/_pages/completed/_comments/required_comments; init._Catalogue.projects/_discover/_observe;
+    commands.due_arguments; workflows.comments encode_buffer/decode_buffer and CommentWorkflow; local.codec.snapshot_from;
+    presentation comment/report rendering. Current._merge creates consumed signatures before scope mapping,
+    and init discovery validates every project/label today: fix those upstream choke points, not only
+    downstream mapping.
+
+
+    Ignore file_attachment completely at every consumed-record comparison/mapping/persistence stage, including
+    absent/non-null metadata. Never include it in note_update or recreate an updated comment ID. Stop
+    requesting annotate_notes and ignore unused extra_data.content/type while preserving consumed move/owner
+    context. Accept omitted due.timezone as null, keeping supplied invalid timezone/required due date
+    and task recurrence data strict. due_arguments must use lang en only for new English expressions and
+    preserve original language/string/flag/zone for retained recurrence; test actual outgoing operation
+    wrappers too.
+
+
+    Determine required identity, ownership, deletion and interval before remaining content validation.
+    A deleted scoped comment can lack live body/post time; a demonstrably irrelevant completed row need
+    not have a readable title. Strict identity/context/pagination still fails where relevance cannot be
+    established. Relevant projects still need safe is_shared/ownership/inbox/workspace metadata; unsafe
+    candidates can be excluded with identifying diagnostics. Irrelevant label text cannot block setup.
+    Preserve tombstone/departure cleanup and pending history, do not treat malformed unknown ownership
+    as unrelated. Preserve full required retrieval and unchanged report cursor/no normal partial report
+    on failure.
+
+
+    Support documented omitted-content defaults per endpoint and empty/ordinary whitespace comments with
+    stable ID/owner/time through map/merge/codec/history/reload/report and editor. Show [no text] only
+    in views/qualifying activity reports, search actual body, generate empty editor body with original
+    header. Unchanged blank or CRLF-normalized buffer succeeds without HTTP; filling blank updates same
+    ID; removing block deletes with existing delete-all/concurrency rules. Emptying nonblank or explicit
+    new/Done comment remains invalid; one unused trailing starter is a no-op. T21 supplies imported text/convention
+    rules, T23/T24 own reminder extension. Preserve all unrelated endpoint contract negatives; specifically
+    replace old attachment-required/unsupported and annotation-shape tests rather than leaving contradictory
+    gates.
+
+
+    Use confirmed Design revision 8 in docs/design/todoist-tolerance.md: its explicit successor table
+    overrides only the named older clauses in inherited contracts. Earlier obligations otherwise remain
+    binding. Historical task assignments are evidence, not instructions to restore superseded restrictions.
+    Reuse the integrated application; do not rebuild it. Read docs/design/external/todoist/planning-contracts.md
+    and the actual predecessor source/tests before editing. Preserve all accepted assignments, protected
+    planning inputs and prior evidence. Implement the smallest shared path; no generic compatibility framework,
+    local recurrence engine, live account access or new recovery command. Controlled tests use synthetic
+    secrets and isolated state/HTTP/clocks/terminals. New source fixtures cite the pinned upstream location,
+    not the mapper''s output. Update directly affected old tests/fakes when the approved policy supersedes
+    their expectation, preserving meaningful required-data negatives and unrelated behavior. Focused commands
+    below are worker feedback and runner task evidence; the existing final-delivery runner gate supplies
+    whole-product checks. Do not rerun the full suite for every role label. After interruption recover
+    remaining work from source, focused results and supported runner evidence, never conversation memory.
+
+
+    Focused command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_tolerance
+    tests.adapter.history.test_tolerance tests.workflows.comments.test_tolerance tests.workflows.report.test_tolerance
+    tests.workflows.init.test_tolerance -v'
+  failure_domain: Consume relevant provider data and preserve blank comments end to end
+  verification_rationale: One mapped comment/record identity must survive every consumer; separating codec/editor/report
+    from mapper would leave an unusable representation. Use small independently sourced due/blank-comment
+    examples and a composed refresh->reload->unchanged editor->eligible report path, plus tombstone/out-of-window
+    cases. Existing tests at adapter/current test_managed_comment_requires_attachment_metadata_after_ownership,
+    history test_attachment_uses_documented_field/test_missing_required_comment_timestamp_and_attachment
+    and init retained-note cases contain superseded expectations; adapt them explicitly, preserving required
+    timestamp/type/scope failures.
+  correction_instructions: null
+  requirement_refs:
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-VERIFY-003
+  - REQ-SEC-007
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-DOM-018
+  - REQ-DOM-017
+  - REQ-SYNC-028
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-REPORT-003
+  - REQ-REPORT-011
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-OUT-022
+  - REQ-SYNC-021
+  exclusion_refs:
+  - OUT-FEATURE-002
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-LOCAL-001
+  - OUT-INIT-001
+  - OUT-TIME-002
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - tolerant-current
+  - tolerant-history
+  consumes_interface_refs:
+  - coexistence-model
+  - http-transport
+  - current-retrieval
+  - history-retrieval
+  - synchronized-state
+  - initialization
+  - comment-editing
+  - report-finalization
+  - public-cli
+  expected_paths:
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/syntax/**
+  - todo_lib/adapter/**
+  - todo_lib/presentation/**
+  - todo_lib/workflows/**
+  - todo_lib/cli.py
+  - tests/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - docs/design/external/todoist/planning-contracts.md
+  check_refs:
+  - t22-focused
+  required_evidence:
+  - t22-focused
+  - Original omitted-timezone due example succeeds; invalid supplied zone/date still fails; non-English
+    recurrence survives real request arguments.
+  - Attachment absent/non-null differences map identically; note_update keeps ID and omits attachment
+    fields; unused annotation shapes do not matter and no annotate_notes=true request.
+  - Blank/default/CRLF comments survive refresh, codec and unchanged editor; qualifying report includes
+    [no text]; forbidden controls, empty explicit/new nonblank edit, unknown scope, incomplete page and
+    unresolved required archive owner still fail with unchanged cursor.
+- id: T23
+  title: Round-trip both reminder types through model transport storage and reads
+  origin_stage_ref: todoist-coexistence
+  observable_outcome: Round-trip both reminder types through model transport storage and reads.
+  dependencies:
+  - task_ref: T21
+    kind: interface
+    reason: Use the completed coexistence-model capability and its concrete source API.
+    interface_ref: coexistence-model
+  - task_ref: T22
+    kind: interface
+    reason: Use the completed tolerant-current capability and its concrete source API. Also supplies tolerant-history.
+    interface_ref: tolerant-current
+  - task_ref: T19
+    kind: interface
+    reason: Use the completed time-policy-precise capability and its concrete source API. Also supplies
+      state-store-precise. Also supplies history-store-precise.
+    interface_ref: time-policy-precise
+  - task_ref: T07
+    kind: interface
+    reason: Use the completed mutation-gateway capability and its concrete source API.
+    interface_ref: mutation-gateway
+  - task_ref: T08
+    kind: interface
+    reason: Use the completed synchronized-state capability and its concrete source API.
+    interface_ref: synchronized-state
+  - task_ref: T16
+    kind: interface
+    reason: Use the completed public-cli capability and its concrete source API.
+    interface_ref: public-cli
+  goal: 'Implement the reminder representation and provider boundary portion of REQ-SCHED-015; T24 owns
+    public write grammar/replacement. Extend existing Reminder(id,item_id,minutes), Snapshot validation,
+    local.codec snapshot_data/snapshot_from and pending History round-trips. Keep old relative constructors/stored
+    history readable with backward-compatible defaults; no reset or loss of unreported history. Preserve
+    stable ID, actual type, original due scheduling/language/recurrence/timezone plus supplied notify_uid/is_urgent
+    needed for retention. Do not interpret an absolute reminder''s offset or a relative reminder''s unused
+    due as the other type. Absolute schedules require exact time independent of item due; relative offsets
+    including zero still require timed task due. Location reminders remain an explicit supported-feature
+    limitation for relevant owners, discarded if clearly unrelated.
+
+
+    Extend current._seed/_signature/_map and account-timezone re-resolution; inherited model validation
+    and Synchronizer/history serialization must use the same representation. Extend Operation/Gateway
+    through existing Sync UUID/temp-ID path for exact absolute due and due.string parser requests. Read
+    docs/design/external/todoist/planning-contracts.md for resolved command arguments, minimal due example,
+    retained metadata and bounded matching policy. Do not copy the contradictory relative example or REST
+    field names. Reuse fixed/floating Attention helpers without tightening reminder due to require fields
+    absent in its source example. Supplied meaningful values stay validated; new English parser requests
+    versus retained non-English recurrence remain distinct.
+
+
+    Reconciliation must use actual mapped reminder by operation ID: relative offset equality, absolute
+    exact-time and known prediction checks with inclusive +/-2s and strict day/kind/recurrence/zone, actual
+    normalized response for unresolved expressions, and truthful accepted partial failure on invalid/date-only
+    result. Preserve unknown versus rejected and stop/recovery behavior; no matching schedule proves create
+    acceptance. Preserve retained IDs/metadata and task state through rename/moves/reschedule/completion/undo;
+    adapt consumers that assume every reminder has minutes and never reschedule absolute reminders merely
+    for task occurrence advancement.
+
+
+    Deliver a thin composed read slice now: independently sourced Sync relative zero on a timed task plus
+    fixed/floating/recurring absolute on a separate undated task -> real mapping -> store/history reload
+    -> public offline detail/now. Implement shared timing primitives needed for that slice under REQ-OUT-022
+    (relative before absolute, next instant/ID ties, original rule, reminder-only blue block with no fake
+    due). T24 completes all receipts/preview and CLI writes. Adapt old absolute-unsupported tests and
+    any callable consumer assumption now so the interim application remains usable. No temporary second
+    model or speculative recurrence parser.
+
+
+    Use confirmed Design revision 8 in docs/design/todoist-tolerance.md: its explicit successor table
+    overrides only the named older clauses in inherited contracts. Earlier obligations otherwise remain
+    binding. Historical task assignments are evidence, not instructions to restore superseded restrictions.
+    Reuse the integrated application; do not rebuild it. Read docs/design/external/todoist/planning-contracts.md
+    and the actual predecessor source/tests before editing. Preserve all accepted assignments, protected
+    planning inputs and prior evidence. Implement the smallest shared path; no generic compatibility framework,
+    local recurrence engine, live account access or new recovery command. Controlled tests use synthetic
+    secrets and isolated state/HTTP/clocks/terminals. New source fixtures cite the pinned upstream location,
+    not the mapper''s output. Update directly affected old tests/fakes when the approved policy supersedes
+    their expectation, preserving meaningful required-data negatives and unrelated behavior. Focused commands
+    below are worker feedback and runner task evidence; the existing final-delivery runner gate supplies
+    whole-product checks. Do not rerun the full suite for every role label. After interruption recover
+    remaining work from source, focused results and supported runner evidence, never conversation memory.
+
+
+    Focused command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.domain.test_reminders tests.local.test_reminders
+    tests.adapter.current.test_reminders tests.adapter.commands.test_reminders tests.presentation.test_reminders
+    tests.workflows.reads.test_reminders -v'
+  failure_domain: Round-trip both reminder types through model transport storage and reads
+  verification_rationale: The model, mapper, storage and actual read consumer form one coherent independently
+    verifiable slice. Keep gateway schema/proof checks with this representation, since a minute-only gateway
+    would be an unusable input to T24. Start with imported absolute plus old relative cache and a public
+    read; run focused codec/adapter/render modules and directly affected lifecycle/move tests after their
+    adaptations. Shared final gate covers the current serial subject. A no-change consumer result needs
+    inspected source and focused evidence, not inferred compatibility.
+  correction_instructions: null
+  requirement_refs: []
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-VERIFY-003
+  - REQ-SEC-007
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-SCHED-015
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-DOM-016
+  - REQ-OUT-022
+  - REQ-SYNC-026
+  - REQ-SCHED-013
+  - REQ-LOCAL-005
+  - REQ-CACHE-006
+  - REQ-SYNC-013
+  - REQ-SCHED-010
+  exclusion_refs:
+  - OUT-FEATURE-002
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-LOCAL-001
+  - OUT-INIT-001
+  - OUT-TIME-002
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - reminder-model
+  - reminder-current
+  - reminder-gateway
+  consumes_interface_refs:
+  - coexistence-model
+  - tolerant-current
+  - tolerant-history
+  - time-policy-precise
+  - state-store-precise
+  - history-store-precise
+  - mutation-gateway
+  - synchronized-state
+  - public-cli
+  expected_paths:
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/syntax/**
+  - todo_lib/adapter/**
+  - todo_lib/presentation/**
+  - todo_lib/workflows/**
+  - todo_lib/cli.py
+  - tests/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - docs/design/external/todoist/planning-contracts.md
+  check_refs:
+  - t23-focused
+  required_evidence:
+  - t23-focused
+  - Old relative pending-history bytes reload, then mixed relative/absolute snapshot/history persists
+    exact IDs, raw recurrence/language/zone and preserved supplied metadata without a second timezone
+    authority.
+  - Minimal independent absolute due example and missing/null unused offset succeed; bad consumed type/time/ownership
+    fails; floating values re-resolve on account-zone change while fixed values retain instant.
+  - Real Operation serialization and UUID/temp-ID proof distinguish relative and absolute; valid independent
+    absolute on undated/date-only task leaves task due/urgency unchanged, known +/-2s checks remain strict
+    on day/rule/zone; imported read slice runs through public CLI.
+- id: T24
+  title: Expose complete reminder replacement with consent and truthful output
+  origin_stage_ref: todoist-coexistence
+  observable_outcome: Expose complete reminder replacement with consent and truthful output.
+  dependencies:
+  - task_ref: T23
+    kind: interface
+    reason: Use the completed reminder-model capability and its concrete source API. Also supplies reminder-current.
+      Also supplies reminder-gateway.
+    interface_ref: reminder-model
+  - task_ref: T22
+    kind: interface
+    reason: Use the completed tolerant-history capability and its concrete source API.
+    interface_ref: tolerant-history
+  - task_ref: T03
+    kind: interface
+    reason: Use the completed command-grammar capability and its concrete source API. Also supplies prompt-input.
+    interface_ref: command-grammar
+  - task_ref: T12
+    kind: interface
+    reason: Use the completed capture-scheduling capability and its concrete source API.
+    interface_ref: capture-scheduling
+  - task_ref: T08
+    kind: interface
+    reason: Use the completed synchronized-state capability and its concrete source API.
+    interface_ref: synchronized-state
+  - task_ref: T10
+    kind: interface
+    reason: Use the completed read-commands capability and its concrete source API.
+    interface_ref: read-commands
+  - task_ref: T09
+    kind: interface
+    reason: Use the completed rendered-documents capability and its concrete source API.
+    interface_ref: rendered-documents
+  - task_ref: T16
+    kind: interface
+    reason: Use the completed public-cli capability and its concrete source API.
+    interface_ref: public-cli
+  goal: 'Complete public reminder workflows from real CommandRequest parsing through CaptureWorkflow/SchedulingWorkflow,
+    Gateway and receipts, reusing T23''s concrete model/gateway. Baseline parser SCALAR/store/alias-action
+    map/allowed options and scheduling.Proposal/propose/validate_proposals are relative-only; capture._plan/_reminders/_run/_document
+    currently delete/recreate complete offset sets. Replace that behavior with one desired set supporting
+    repeated/mixed --reminder and --reminder-at, separated/equals scalar forms and applicable task/step
+    noun aliases. Preserve interleaved marker order (the existing per-option dictionary alone loses it),
+    grouping/inline-step exclusions, selector adjacency and strict single-line CLI titles. Add keep once
+    per type, lower-case reserved spelling, empty-type contributions, exclusive --reminder clear, no --reminder-at
+    clear and existing all-scheduling clear.
+
+
+    Use one synchronized command time/account zone for absolute WHEN; local elapsed/calendar grammar,
+    exact-time requirement and DST refusal come from existing time-policy. Unknown/recurring expressions
+    remain provider due.string/lang en. Locally known date-only/duplicate/no-op/invalid relative eligibility
+    fails before writes; do not reject unknown semantic equivalence or invent local recurrence parsing.
+    Determine retention only by explicit keep or complete locally established scheduling match; compare
+    fixed/floating, recurrence/rule/language/timezone, not merely next instant. Preserve all IDs/metadata
+    of retained reminders. Known duplicate requests including overlaps with keep fail, shared next instant
+    across different recurrences does not prove a duplicate.
+
+
+    Before any task/reminder write, show removal/addition preview and hints if any existing reminder is
+    not retained. Use shared prompt/default cancellation, status 1 and no writes on decline/blank/EOF/noninteractive
+    use. Unknown expression preview uses exact expression (Todoist) fragment, no preflight network parser.
+    No new bypass. Non-removing additions and explicit reminder/all-scheduling clear do not acquire replacement
+    confirmation. After consent execute ordered operations with UUID proof and reconciliation, retaining
+    accepted changes on later failure and reporting rejected/unknown/unattempted. Do not delete retained
+    reminders just to simplify operation ordering. Task due/recurrence/hiding is independent of absolute
+    schedule; omit options preserves both types, date-only task proposal with surviving relative reminder
+    rejects clearly, keep-absolute plus replacement can remove relative explicitly. Recurring task completion
+    must not cause an application absolute-reminder reschedule.
+
+
+    Complete REQ-OUT-022 across current view/receipts/help/creation and replacement preview, building
+    on T21/T22/T23 fragments. Actual created/changed reminder set lines show reconciled values, never
+    unresolved input as accepted schedule; no extra report/search reminder summary. Preserve blank comment/search/editor
+    distinctions, safe scalar titles, inactive waiting/inherited context and exact existing template framing.
+    Help/docs teach parser delegation, limited ID guarantee, whole-set replacement/keep/clear and noninteractive
+    refusal. Use gateway-controlled after-states for normalized outcomes, including an unresolved expression
+    normalizing equivalent with a new ID and accepted date-only normalization producing nonzero partial
+    failure. Preserve still-required relative-zero, direct clear, parent hiding, local publication and
+    signal behavior.
+
+
+    Use confirmed Design revision 8 in docs/design/todoist-tolerance.md: its explicit successor table
+    overrides only the named older clauses in inherited contracts. Earlier obligations otherwise remain
+    binding. Historical task assignments are evidence, not instructions to restore superseded restrictions.
+    Reuse the integrated application; do not rebuild it. Read docs/design/external/todoist/planning-contracts.md
+    and the actual predecessor source/tests before editing. Preserve all accepted assignments, protected
+    planning inputs and prior evidence. Implement the smallest shared path; no generic compatibility framework,
+    local recurrence engine, live account access or new recovery command. Controlled tests use synthetic
+    secrets and isolated state/HTTP/clocks/terminals. New source fixtures cite the pinned upstream location,
+    not the mapper''s output. Update directly affected old tests/fakes when the approved policy supersedes
+    their expectation, preserving meaningful required-data negatives and unrelated behavior. Focused commands
+    below are worker feedback and runner task evidence; the existing final-delivery runner gate supplies
+    whole-product checks. Do not rerun the full suite for every role label. After interruption recover
+    remaining work from source, focused results and supported runner evidence, never conversation memory.
+
+
+    Focused command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_reminders tests.workflows.capture.test_reminders
+    tests.presentation.test_reminder_receipts tests.cli.test_reminders -v'
+  failure_domain: Expose complete reminder replacement with consent and truthful output
+  verification_rationale: 'Public replacement needs syntax, pure proposal, preview/consent, operation
+    planning and rendered actual results together: separate acceptance would permit writes before consent
+    or identity loss. T23 provides an executable imported/read slice and documented APIs before this work
+    starts. Focus on the shared canonical path and representative noun/creation routes rather than exhaustive
+    aliases x depths. Existing capture relative-only replacement tests must be adapted to confirmation/retention
+    while preserving no-op/capability/UUID/partial-outcome distinctions.'
+  correction_instructions: null
+  requirement_refs:
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-OUT-022
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-VERIFY-003
+  - REQ-SEC-007
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-SYNC-029
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-COMMENT-009
+  - REQ-CLI-012
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-035
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-MUT-001
+  - REQ-SCHED-010
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SYNC-026
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-TIME-001
+  - REQ-LOCAL-006
+  - REQ-OUT-009
+  - REQ-CLI-030
+  exclusion_refs:
+  - OUT-FEATURE-002
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-LOCAL-001
+  - OUT-INIT-001
+  - OUT-TIME-002
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - complete-reminder-scheduling
+  - coexistence-rendering
+  consumes_interface_refs:
+  - reminder-model
+  - reminder-current
+  - reminder-gateway
+  - tolerant-history
+  - command-grammar
+  - prompt-input
+  - capture-scheduling
+  - synchronized-state
+  - read-commands
+  - rendered-documents
+  - public-cli
+  expected_paths:
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/syntax/**
+  - todo_lib/adapter/**
+  - todo_lib/presentation/**
+  - todo_lib/workflows/**
+  - todo_lib/cli.py
+  - tests/**
+  - README.md
+  - docs/user/**
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - docs/design/external/todoist/planning-contracts.md
+  check_refs:
+  - t24-focused
+  required_evidence:
+  - t24-focused
+  - Mixed desired-set replacement preserves keep/local matches IDs and metadata; unknown recurring input
+    previews exact expression before all writes, cancel/noninteractive writes nothing and accepted normalized
+    equivalence may use a new ID.
+  - Both direct clear forms preserve their specified effects; omitted options preserve both types; no-op/duplicates/local
+    date-only/DST/relative-eligibility fail before writes; no removing additions need no confirmation.
+  - Canonical/equals/noun/creation parsing keeps scalar adjacency, interleaved order and group exclusions;
+    actual creation/scheduling receipts and undated reminder-only color match REQ-OUT-022.
+  - Known predicted +/-2s strict semantic reconciliation and provider-invalid accepted outcomes remain
+    truthful, including stop after partial failure without rollback.
+- id: T25
+  title: Verify the complete coexistence amendment in the copied application
+  origin_stage_ref: todoist-coexistence
+  observable_outcome: Verify the complete coexistence amendment in the copied application.
+  dependencies:
+  - task_ref: T24
+    kind: interface
+    reason: Use the completed complete-reminder-scheduling capability and its concrete source API. Also
+      supplies coexistence-rendering.
+    interface_ref: complete-reminder-scheduling
+  - task_ref: T23
+    kind: interface
+    reason: Use the completed reminder-model capability and its concrete source API. Also supplies reminder-current.
+      Also supplies reminder-gateway.
+    interface_ref: reminder-model
+  - task_ref: T22
+    kind: interface
+    reason: Use the completed tolerant-history capability and its concrete source API.
+    interface_ref: tolerant-history
+  - task_ref: T16
+    kind: interface
+    reason: Use the completed routine-check capability and its concrete source API. Also supplies public-cli.
+    interface_ref: routine-check
+  goal: 'Integrate and audit the complete REQ-VERIFY-027 distinctions against actual predecessor source
+    and independently retained source examples. Reuse adequate focused tests, add missing composed cases
+    and fix concrete implementation/fixture compatibility defects within this amendment. Do not create
+    another broad harness. Use existing public CLI composition and controlled boundary: task/comment refresh
+    with ignored metadata and blank/default content -> stored reload -> unchanged editor -> eligible current-text
+    report; imported duplicate/hidden/inactive waiting/text fixtures through selection/unrelated mutation
+    and strict new CLI collision; mixed reminder create/read/change/keep/removal preview/cancel/clear
+    through authoritative normalized results. Cover new absolute on undated item, recurrence language
+    and fixed/floating semantics, invalid consumed data, unknown relevance, incomplete pagination and
+    unchanged report cursor. Verify required title escaping in prompts/receipts as well as views; preserve
+    reasonless policies and earlier-child/hidden-ancestor refusal.
+
+
+    Inspect the real copied-runtime probes in tests/delivery/final/copy_probe.py and extend a representative
+    copied public reminder/tolerance workflow so final-delivery verifies this amendment outside the source
+    tree, with isolated HOME/PATH and controlled transport. Keep scripts/verify-clean''s one complete
+    scripts/check execution, byte-identical copied runtime, real-less and hygiene checks; its test_verify
+    self-tests use small synthetic fixtures and must not launch the full suite recursively. No new live
+    gate, account use, delivery/recurrence notification claim, stress matrix or new packaging. Existing
+    final-delivery supplies runner task/integration/stage/project broad evidence on the settled subject;
+    the t25-focused command supplies early composition and harness feedback. Worker broad execution is
+    needed only for a concrete gap beyond runner evidence.
+
+
+    Append actual subject, commands/results, requirement distinctions, remaining technical uncertainty
+    and evidence limits to docs/implementation/acceptance-evidence.md, preserving all historical records.
+    Clearly separate pinned-contract application conformance, synthetic operation outcomes, copied-entry
+    evidence and unverified live notification/attachment behavior. Ensure user documentation/help teach
+    the settled behavior. No primary ownership is reassigned: T21-T24 implement the new behavior; this
+    task owns complete evidence and permitted demonstrated cross-consumer repairs. Report a protected-input
+    contradiction instead of editing it. Complete offline suite plus installed-entry probes and combined
+    independent runtime review remain required.
+
+
+    Use confirmed Design revision 8 in docs/design/todoist-tolerance.md: its explicit successor table
+    overrides only the named older clauses in inherited contracts. Earlier obligations otherwise remain
+    binding. Historical task assignments are evidence, not instructions to restore superseded restrictions.
+    Reuse the integrated application; do not rebuild it. Read docs/design/external/todoist/planning-contracts.md
+    and the actual predecessor source/tests before editing. Preserve all accepted assignments, protected
+    planning inputs and prior evidence. Implement the smallest shared path; no generic compatibility framework,
+    local recurrence engine, live account access or new recovery command. Controlled tests use synthetic
+    secrets and isolated state/HTTP/clocks/terminals. New source fixtures cite the pinned upstream location,
+    not the mapper''s output. Update directly affected old tests/fakes when the approved policy supersedes
+    their expectation, preserving meaningful required-data negatives and unrelated behavior. Focused commands
+    below are worker feedback and runner task evidence; the existing final-delivery runner gate supplies
+    whole-product checks. Do not rerun the full suite for every role label. After interruption recover
+    remaining work from source, focused results and supported runner evidence, never conversation memory.
+
+
+    Focused command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_coexistence tests.delivery.final.test_verify
+    -v'
+  failure_domain: Verify the complete coexistence amendment in the copied application
+  verification_rationale: 'The final audit composes previously working slices, with write scope for concrete
+    gaps. Reuse final-delivery rather than inventing another broad check: verify-clean invokes scripts/check
+    once and adds distinct copied/PATH and real-less probes; test_verify uses tiny suites. Existing complete
+    coverage persists and changed expectations must reflect successor behavior rather than weaken negatives.
+    No mandatory repeated broad worker/reviewer run or exhaustive Cartesian matrix.'
+  correction_instructions: null
+  requirement_refs:
+  - REQ-VERIFY-027
+  constraint_refs:
+  - REQ-ARCH-002
+  - REQ-VERIFY-003
+  - REQ-SEC-007
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-013
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-REPORT-003
+  - REQ-REPORT-011
+  - REQ-REPORT-014
+  - REQ-SYNC-028
+  - REQ-SYNC-026
+  - REQ-LOCAL-005
+  - REQ-SYNC-025
+  - REQ-CLI-032
+  exclusion_refs:
+  - OUT-FEATURE-002
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-LOCAL-001
+  - OUT-INIT-001
+  - OUT-TIME-002
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - complete-reminder-scheduling
+  - coexistence-rendering
+  - reminder-model
+  - reminder-current
+  - reminder-gateway
+  - tolerant-history
+  - routine-check
+  - public-cli
+  expected_paths:
+  - todo
+  - todo_lib/**
+  - tests/**
+  - scripts/**
+  - README.md
+  - docs/user/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - docs/design/external/todoist/planning-contracts.md
+  check_refs:
+  - t25-focused
+  - final-delivery
+  required_evidence:
+  - t25-focused
+  - final-delivery
+  - Append exact observed current amendment evidence to docs/implementation/acceptance-evidence.md; every
+    REQ-VERIFY-027 bullet has representative existing/new evidence, limitations and no unsupported live
+    claim.
 stages:
 - id: release-1
   final_project: false
@@ -3695,10 +4729,22 @@ stages:
   - REQ-SYNC-028
   - REQ-INIT-010
   - REQ-VERIFY-026
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-027
   check_refs:
   - final-delivery
 - id: project-sharing-correction
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-SYNC-028
   - REQ-INIT-010
@@ -3817,6 +4863,153 @@ stages:
   - REQ-VERIFY-023
   - REQ-INIT-009
   - REQ-VERIFY-025
+  deferred_requirement_refs:
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-027
+  check_refs:
+  - final-delivery
+- id: todoist-coexistence
+  final_project: true
+  active_requirement_refs:
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-027
+  satisfied_requirement_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  - REQ-INIT-009
+  - REQ-VERIFY-025
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
   deferred_requirement_refs: []
   check_refs:
   - final-delivery

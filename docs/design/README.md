@@ -1,9 +1,69 @@
 # todo-3 product specification
 
-Design revision: **6 — provider is_shared-only correction, 2026-10-26**.
-State: **confirmed current specification; design commit recorded in the durable handoff**.
+Design revision: **8 — delegate reminder expression resolution to Todoist, 2026-10-27**.
+State: **confirmed scoped product agreement; uncommitted revision**.
 
-## Current revision and accepted-assignment boundary
+## Current revision 8
+
+Revision 8 clarifies only revision 7's reminder replacement behavior. Todoist
+parses and normalizes unresolved expressions. Before any writes, the replacement
+preview shows known existing removals and the requested unresolved expression as
+entered, without inventing its resolved date. Explicit `keep` and locally
+established equivalent schedules preserve reminder IDs and metadata. Equivalent
+wording resolved only by Todoist may recreate a reminder with a different ID.
+No local recurrence/equivalence engine or provider deduplication guarantee is
+required. Existing local validation, removal confirmation, direct clears and
+authoritative result/partial-failure handling remain.
+
+The operator asked “Can this be let to todoist to handle that?” and answered
+“I agree with that” to the policy above, including the possible changed ID.
+That confirms this scoped understanding; no further interview question or
+confirmation is pending. The actual instruction and interpretation are retained
+separately under
+`runtime/planning-reports/design-reminder-delegation-20261027/decision.md` and
+the durable Design handoff. This pass authorizes no commit, Plan or execution.
+Affected definitions are REQ-SCHED-015/016, REQ-CLI-037, REQ-OUT-022 and
+REQ-VERIFY-027. All other revision-7 choices and earlier accepted assignments
+remain unchanged.
+
+## Preserved revision 7 scope, with the revision 8 clarification
+
+Read [todoist-tolerance.md](todoist-tolerance.md) first. It adds scoped successor
+requirements for ignored comment attachment/activity metadata, documented omitted
+due timezone and preserved recurrence language; incoming blank comments; full
+relative/absolute reminders with `--reminder-at`, type-specific `keep`, and a
+replacement-removal preview; relevance-first validation; imported duplicate
+task/step titles; hidden categories as filters; tolerant waiting conventions and
+safe incoming text. The reminder schedules do not affect urgency. The operator
+retained the earlier-child/hidden-ancestor date restriction and deferred speculative
+capability/event-ID/cursor compatibility.
+
+The operator requested this discussion through `$cml-design` after supplying
+`brittle.txt`; its research proposals were not prior approval. Selected decisions,
+their actual answers and final written confirmation are retained in the
+external Design session. The operator answered “yes” to the presented written
+revision on 2026-10-27. This is a Design-only revision. No application/test/plan
+change, commit or execution is requested. Full reminder support and safe provider
+handling still need Planning's consumed-contract investigation and normal isolated
+implementation evidence; product confirmation does not certify technical feasibility.
+
+All earlier requirement definitions and accepted execution assignments remain
+unchanged. Revision 7's precedence table identifies only successor scopes for
+future follow-up work. Revision 6 and the earlier accepted publication/time/manual-
+recovery limitations remain binding outside those scopes. The current workspace
+baseline before this draft was clean commit
+`b392afec90759a8aa804c26f4e864c80c81909fd`.
+The Git revision for this agreement is explicitly uncommitted.
+
+Historical completion claims, prior scope-specific execution authorizations and
+stop-before-further-change instructions below describe their recorded passes.
+The current operator request opens this scoped Design discussion; it neither
+reuses those authorizations for new execution nor approves every research proposal.
+
+Source navigation and limits for the added behavior are in
+[external/todoist/tolerance-notes.md](external/todoist/tolerance-notes.md).
+
+## Preserved revision 6 and accepted-assignment boundary
 
 Read [project-sharing-field.md](project-sharing-field.md) first. It supersedes
 only the erroneous `shared`/`is_shared` provider-field rule in REQ-SYNC-021 and
@@ -144,7 +204,8 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped successor
-precedence in project-sharing-field.md, partial-initialization-failure.md,
+precedence in todoist-tolerance.md,
+project-sharing-field.md, partial-initialization-failure.md,
 command-time-precision.md and
 publication-failure.md governing
 current unfinished/successor work;
@@ -259,9 +320,10 @@ are supporting context, not implementation acceptance. Remaining evidence needs
 are explicit in open-questions.md, especially archived subtree moves, operation
 proof, report-owner resolution and pending-history cleanup ordering.
 
-There are no unresolved product decisions. The operator confirmed this written
-revision; technical feasibility is not certified by that confirmation.
-The earlier fresh-implementation handoff is historical. Current Planning consumes
-revision 6 and its retained handoff, assesses the completed run, protects accepted
-assignments, and prepares only the approved follow-up correction using supported
-revision adoption.
+Revision 6 has no unresolved product decisions and its written confirmation is
+retained; technical feasibility was not certified by that confirmation.
+Revision 7's individual choices and written agreement are confirmed. Its provider
+evidence needs remain explicit. A separately requested fresh Planning pass consumes
+revision 8 and its retained handoff, assesses the completed run, preserves accepted
+assignments and prepares supported follow-up work. No Planning or execution pass
+is requested by this Design discussion.
