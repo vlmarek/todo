@@ -19,13 +19,15 @@ from uuid import UUID
 from todo_lib import domain as d, presentation as p
 from todo_lib.adapter.commands import Gateway
 from todo_lib.adapter.current import retrieve
-from todo_lib.adapter.transport import Replay
+from todo_lib.adapter.transport import Replay, Transport, HTTPFailure
 from todo_lib.local import LocalError, StateStore, prepare_candidates, empty_history, exclusive_lock
 from todo_lib.syntax import parse, UsageError
 from todo_lib.workflows.sync import Synchronizer, SyncError
 from todo_lib.workflows.capture import CaptureWorkflow
 from todo_lib.workflows.reads import NoMatch, AmbiguityError
 from tests.adapter.current.test_current import full, delta, item, reminder, project, RESOURCES
+from tests.support.http import ControlledHTTP, ExpectedRequest, Response
+from tests.workflows.lifecycle.test_lifecycle import CommandRequest
 
 NOW = d.instant_from_wire('2026-10-22T12:00:00.123456789012350Z')
 PRECISE = '2026-10-20T12:00:00.123456789012349Z'
@@ -407,6 +409,68 @@ class CaptureTests(unittest.TestCase):
         self.http.read({'full_sync': False, 'sync_token': 'lf'}, '["labels"]')
         with self.assertRaisesRegex(d.DomainError, 'todo init'):
             self.run_request(['hide', 'Parent', '--due', 'tomorrow'])
+
+    def real_boundary(self, label_steps, after_steps=()):
+        """Production signature and HTTP encoding for the shared hiding lookup."""
+        def read(token, resources, response):
+            return ExpectedRequest('POST', '/sync', 'secret', form={
+                'sync_token': token, 'resource_types': resources}), response
+        steps = [read('delta-token', RESOURCES, self.state()),
+                 read('full-token', RESOURCES, delta())]
+        steps += [read(token, '["labels"]', response) for token, response in label_steps]
+        steps += list(after_steps)
+        http = ControlledHTTP([(expected, response if isinstance(response, Response)
+            else Response(json.dumps(response).encode())) for expected, response in steps])
+        self.addCleanup(http.assert_done)
+        sync = Synchronizer(Transport('secret', opener=http, sleep=lambda _: None),
+                            self.store, clock=lambda: NOW)
+        return CaptureWorkflow(sync, streams=self.workflow.streams), http
+
+    def test_hide_through_production_transport_stores_authoritative_hiding(self):
+        self.wire_items[0]['due'] = due('2026-10-23')
+        self.seed()
+        state = self.state(items=[dict(i, labels=['waiting']) if i['id'] == 'parent'
+                                 else i for i in self.wire_items])
+        command = CommandRequest(self, 'item_update', {'id': 'parent', 'labels': ['waiting']})
+        after = [command.step()]
+        for _ in range(2):  # gateway authoritative read, then publication refresh
+            for token, response in [('delta-token', state), ('full-token', delta())]:
+                after.append((ExpectedRequest('POST', '/sync', 'secret', form={
+                    'sync_token': token, 'resource_types': RESOURCES}), response))
+        workflow, http = self.real_boundary([
+            ('*', {'full_sync': True, 'sync_token': 'labels',
+                   'labels': [{'id': 'l', 'name': 'waiting'}]}),
+            ('labels', {'full_sync': False, 'sync_token': 'fresh'})], after)
+        result = workflow.execute(parse(['hide', 'Parent']))
+        self.assertEqual(result.status, 0, result.document.stderr)
+        self.assertIn('Hiding: off -> on', result.document.stdout)
+        self.assertTrue(result.snapshot.items['parent'].waiting)
+        self.assertTrue(self.store.load_consistent_state().snapshot.items['parent'].waiting)
+        self.assertEqual(len(command.commands), 1)
+        http.assert_done()
+
+    def test_real_waiting_label_refusals_before_mutation(self):
+        self.wire_items[0]['due'] = due('2026-10-23')
+        self.seed()
+        present = {'full_sync': True, 'sync_token': 'labels',
+                   'labels': [{'id': 'l', 'name': 'waiting'}]}
+        cases = [
+            ([('*', dict(present, labels=[])),
+              ('labels', {'full_sync': False, 'sync_token': 'fresh'})], d.DomainError, 'todo init'),
+            ([('*', present), ('labels', {'full_sync': False, 'sync_token': 'fresh',
+                'labels': [{'id': 'l', 'is_deleted': True}]})], d.DomainError, 'todo init'),
+            ([('*', Response(b'{"error":"denied"}', status=403))], HTTPFailure, 'read waiting label'),
+            ([('*', Response(b'not JSON'))], HTTPFailure, 'read waiting label'),
+            ([('*', dict(present, labels=None))], d.DomainError, 'invalid waiting label'),
+            ([('*', present), ('labels', {'full_sync': True, 'sync_token': 'bad'})],
+             d.DomainError, 'invalid waiting label')]
+        for steps, error, message in cases:
+            with self.subTest(message=message, steps=steps):
+                workflow, http = self.real_boundary(steps)
+                with self.assertRaisesRegex(error, message):
+                    workflow.execute(parse(['hide', 'Parent']))
+                http.assert_done()  # script has no mutation response
+                self.assertFalse(self.store.load_consistent_state().snapshot.items['parent'].waiting)
 
     def test_all_descendants_and_ancestor_chain_preflight(self):
         self.wire_items += [item('child', content='Child', parent_id='parent'),

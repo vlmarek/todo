@@ -375,3 +375,75 @@ or recovery command was added. Earlier per-file publication, historical coverage
 platform and live-smoke limits remain. README and public help now teach imported
 duplicates, blank editor identity and the established tolerance behavior; existing
 reminder help continues to explain keep/clear/confirmation and provider resolution.
+
+### T26 — revision-10 activity and waiting-label request conformance (2026-10-27)
+
+Observed subject: worktree HEAD `e0f7f8dbf3c2803d88bb5fe14afcbb95c03ff937`
+plus the T26 uncommitted changes in history/capture production code and their
+six affected test/probe files. SHA256 of `git diff --` for those eight files,
+excluding this append-only evidence document:
+`9c4c32dce5f03a86e26852d19a247c8782c8535ab7b6bec463f56c1a7d58dc9b`.
+Historical evidence above is retained unchanged.
+
+Independent offline wire authority inspected: retained
+`docs/design/external/todoist/upstream/api-v1.openapi.json`,
+`paths["/api/v1/activities"].get.parameters[name="object_event_types"]`
+and `x-codeSamples[label="Multiple event types"]`. The parameter describes an
+array of object:event strings, including deleted events; the curl example sends
+one JSON-array value. The existing five-event application selection still includes
+`note:deleted`. HistoryAdapter now serializes that selection once; scope, widened
+bounds, limit, cursor traversal, precise eligibility and Retrieval remain unchanged.
+Sync reads keep JSON-in-form and comments/completed keep scalar fields.
+
+REQ-VERIFY-028 distinguishing evidence reuses HistoryTests.boundary's real
+HistoryAdapter -> Transport -> ControlledHTTP composition. Its existing multipage
+activity case now includes scalar parent_project_id scope and requires exactly one
+object_event_types query value on each page. JSON decoding must equal the literal
+five-event list independently of implementation constants and JSON whitespace;
+all remaining query pairs must match the independent bounds/scope/limit and only
+the second page adds cursor. Existing anonymous ordering, stable-ID deduplication,
+precise interval, malformed-data and malformed/repeated-cursor cases still pass.
+Migrated report/lifecycle/bounded-sync fixtures use the same strict request checker.
+A repository search found no remaining repeated-scalar activity expectations.
+
+Both label full/delta requests now carry local nonempty operation metadata
+`read waiting label`; it is excluded from expected HTTP form/query fields.
+The new capture production-Transport test uses ControlledHTTP/Response and the
+existing lifecycle CommandRequest checker for the actual item_update UUID/status.
+It observes labels-only full and freshness-delta reads, one successful mutation,
+independent authoritative current reads and publication, then asserts reported,
+returned and stored hiding state. Real-boundary negative subcases cover missing
+waiting, freshness deletion of waiting (both with todo init advice), HTTP 403,
+malformed JSON, malformed full labels and malformed freshness response. Each
+script ends before any mutation and checks stored hiding remains off.
+Inspection of _plan/execute confirms creation, schedule and direct hide share this
+one lookup when adding_hiding is true. Existing creation-with-hide, scheduling,
+preflight, unhide and reminder cases are reused without grammar/API changes.
+
+Observed focused commands, all exit 0 with no skips:
+
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v`:
+  34 tests passed; captured output `/tmp/t26-t06.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/capture -p 'test_*.py' -v`:
+  63 tests passed; captured output `/tmp/t26-t12.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.report.test_report tests.workflows.lifecycle.test_lifecycle tests.workflows.sync.test_sync -v`:
+  89 tests passed; captured output `/tmp/t26-consumers.log`. Reuses current surviving
+  comment text/nonempty report output, required-history failure, unchanged cursor
+  and pre-publication file protection cases rather than a new report harness.
+- `git diff --check`: exit 0.
+
+Copied-boundary preparation: copy_probe.reports now independently expects a
+single JSON-array string value; its exact parsed-query comparison rejects the old
+five scalar values while retaining other filters and report outcomes. No new
+copied-runtime or complete-regression result is claimed for this subject. The
+runner's existing final-delivery `./scripts/verify-clean` remains the settled
+integrated-subject gate for complete offline regression, byte-identical copied
+runtime/PATH and real-less evidence. No extra broad worker run was performed;
+scripts/check, scripts/verify-clean and miniature test_verify suites are unchanged.
+Earlier copied evidence above applies only to its historical subjects.
+
+Limits: responses are controlled synthetic fixtures against the pinned authority,
+not live provider traffic. No account, credentials, uncontrolled network, snapshot
+refresh, dependency, provider notification guarantee or second implementation path
+was introduced. Live behavior and notification delivery remain unverified; earlier
+publication/manual-recovery and provider-evidence limitations continue to apply.
