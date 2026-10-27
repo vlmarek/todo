@@ -22,7 +22,7 @@ import json
 from todo_lib.domain import (
     Account, Binding, Capabilities, Comment, DomainError, Item, Project, Reminder,
     Snapshot, account_timezone, enroll_categories, instant_from_wire, instant_key, instant_text,
-    resolve_remote_due, split_waiting, validate, validate_title,
+    resolve_remote_due, validate, incoming_text,
 )
 from .transport import HTTPFailure, Replay
 
@@ -147,8 +147,8 @@ def _item(raw, zone):
         description = ''
     if not isinstance(description, str):
         raise CurrentError('item.description must be text or null')
-    validate_title(_required(raw, 'content'))
-    split_waiting(description)
+    title = incoming_text(_required(raw, 'content'), title=True)
+    description = incoming_text(description, description=True)
     due = _required(raw, 'due')
     if due is not None:
         _object(due, 'due')
@@ -157,7 +157,7 @@ def _item(raw, zone):
         _bool(due['is_recurring'], 'due.is_recurring')
         if not isinstance(due['string'], str) or not isinstance(due['lang'], str):
             raise CurrentError('due.string and due.lang must be strings')
-    return Item(raw['id'], raw['project_id'], _required(raw, 'content'),
+    return Item(raw['id'], raw['project_id'], title,
                 _parent(_required(raw, 'parent_id'), 'item.parent_id'),
                 description, 5 - priority, resolve_remote_due(due, zone),
                 frozenset(labels), _timestamp(raw, 'added_at'), completed,

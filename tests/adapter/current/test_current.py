@@ -178,7 +178,7 @@ class CurrentTests(unittest.TestCase):
                 self.assertEqual(fresh.snapshot.items['step'].description, '')
 
     def test_descriptions_strict_and_preserve_waiting_reason(self):
-        for value in (' ', '\n\t', 'a\rb', '\x00', 3, False, [], {}):
+        for value in ('a\rb', '\x00', 3, False, [], {}):
             with self.subTest(value=value):
                 transport, _ = self.boundary([('*', full(items=[item(description=value)])),
                                                ('full-token', delta())])
@@ -190,8 +190,8 @@ class CurrentTests(unittest.TestCase):
         self.initial(full(items=[item(labels=['waiting'], due=due())]))
         for changes in (dict(description=text), dict(labels=['waiting'])):
             transport, _ = self.boundary([('*', full(items=[item(**changes)])), ('full-token', delta())])
-            with self.assertRaises(DomainError):
-                retrieve(transport, BINDING)
+            result = retrieve(transport, BINDING)
+            self.assertEqual(result.snapshot.items['task'].description, changes.get('description', ''))
 
     def test_checked_only_boolean_and_priority_inversion_at_all_depths(self):
         raws = [item()]
@@ -664,7 +664,7 @@ class CurrentTests(unittest.TestCase):
         first = self.initial()
         for response in (delta(projects=[project('new', is_shared=True)]),
                          delta(items=[item('entrant', checked=None)]),
-                         delta(items=[item('entrant', description=' ')]),
+                         delta(items=[item('entrant', description='\r')]),
                          delta(items=[item('entrant', added_at='invalid')])):
             transport, _ = self.boundary([('delta-token', response)])
             with self.assertRaises(DomainError):

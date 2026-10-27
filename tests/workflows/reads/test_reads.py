@@ -364,9 +364,9 @@ class ReadsTests(unittest.TestCase):
         self.assertNotIn('Hidden child', self.read('now', '--all', '--category', 'wOrK').document.stdout)
         with self.assertRaises(d.DomainError):
             self.read('now', '--category', 'missing')
-        self.config('Work')  # Existing attention is invalid in a hidden category.
-        with self.assertRaises(d.DomainError):
-            self.read('now', '--all')
+        self.config('Work')
+        self.assertIn('Root', self.read('now', '--all').document.stdout)
+        self.assertNotIn('Root', self.read('now').document.stdout)
 
     def test_full_second_before_equal_after_due_all_read_timing_without_http(self):
         due = d.parse_attention('2026-10-22T12:00:00+00:00', d.instant_datetime(NOW), 'UTC')

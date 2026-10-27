@@ -3,7 +3,8 @@
 All IDs are nonempty strings. Collections are keyed by those IDs. A Snapshot is a
 complete candidate merge, never a provider page. Roles and depths derive from
 parent links. Call validate before publishing a candidate; validation returns the
-same snapshot without rewriting text, replacing null times, or doing I/O.
+same snapshot (or an inbound text-normalized copy) without replacing null times
+or doing I/O.
 Item/Comment creation and Item/Occurrence/LifecycleCandidate completion timestamps
 accept ExactInstant or aware datetime. Nullable fields alone accept None. Semantic
 ordering uses instant_key; datetime conversion belongs to display/calendar code.
@@ -13,14 +14,14 @@ stable identity. Discovery/enrollment is explicit through enroll_categories;
 validation never adopts a replacement with the same name. Lifecycle occurrences
 are supplied facts, not report current-truth/event eligibility calculations.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from enum import IntEnum
 from decimal import Decimal
 from typing import Mapping, Iterable
 from .errors import DomainError
 from .time import ExactInstant, instant_key
-from .text import validate_title, validate_body, title_key, split_waiting
+from .text import validate_title, title_key, incoming_text
 from .time import (Attention, account_timezone, require_aware, attention_order,
                    validate_reminder_offsets, resolve_remote_due, same_attention)
 
@@ -71,8 +72,8 @@ class Item:
     """Task/step with own fields. None added_at is authoritative unknown.
 
     Priority uses product numbering (1 is highest), not Todoist wire numbering.
-    Empty description means absence. `waiting` is determined by the label, not
-    by a reason block. Comments/reminders are separate ID-owned collections.
+    Empty description means absence. `waiting` records the raw label; an own
+    policy also requires attention, independently of any reason block. Comments/reminders are separate ID-owned collections.
     """
     id: str
     category_id: str
@@ -256,16 +257,23 @@ def subtree_depths(snapshot: Snapshot, item_id: str) -> dict[str, int]:
     return {i.id: depths[i.id] for i in subtree(snapshot, item_id)}
 
 
-def validate_sibling_uniqueness(items: Iterable[Item]) -> None:
-    """Preflight all proposed active sibling sets; completed titles are ignored."""
-    seen = set()
+def validate_sibling_uniqueness(items: Iterable[Item], before: Iterable[Item] = ()) -> None:
+    """Reject new colliding ID pairs, allowing unchanged imported relationships.
+
+    With no before collection this is strict batch validation. Completion is
+    excluded; changing a sibling set or title key creates a new relationship.
+    """
+    def key(item):
+        owner = ('parent', item.parent_id) if item.parent_id is not None else ('category', item.category_id)
+        return owner, title_key(item.title)
+    original = {item.id: key(item) for item in before if not item.completed}
+    groups = {}
     for item in items:
-        if item.completed:
-            continue
-        key = (item.category_id, item.parent_id, title_key(item.title))
-        if key in seen:
+        if not item.completed:
+            groups.setdefault(key(item), []).append(item.id)
+    for relationship, identities in groups.items():
+        if len(identities) > 1 and any(original.get(identity) != relationship for identity in identities):
             raise DomainError('active sibling titles must be unique')
-        seen.add(key)
 
 
 def lookup_category(snapshot: Snapshot, name: str) -> Category:
@@ -341,34 +349,22 @@ def visibility(snapshot: Snapshot, item_id: str, now: datetime, hidden_names: It
     today = require_aware(now, 'now').astimezone(account_timezone(snapshot.account.timezone)).date()
     item = snapshot.items[item_id]
     def hidden(i):
-        if not i.waiting:
+        if not i.waiting or i.attention is None:
             return False
-        if i.attention is None:
-            raise DomainError('waiting label requires attention')
         return today < i.attention.day(snapshot.account.timezone)
     return Visibility(hidden(item), any(hidden(a) for a in ancestors(snapshot, item_id)),
                       snapshot.categories[item.category_id].name in hidden_names, item.completed)
 
 
 def validate_hiding(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> None:
-    hidden_names = frozenset(hidden_names)
     zone = snapshot.account.timezone
-    reminded = {r.item_id for r in snapshot.reminders.values()}
     for item in snapshot.items.values():
-        _, reason = split_waiting(item.description)
-        if reason is not None and not item.waiting:
-            raise DomainError('waiting reason block requires waiting label')
-        if item.waiting and item.attention is None:
-            raise DomainError('waiting label requires attention')
-        if snapshot.categories[item.category_id].name in hidden_names:
-            if item.attention is not None or item.waiting or item.id in reminded:
-                raise DomainError('hidden category forbids attention, reminders and own hiding policy')
         if item.completed:
             continue
         if item.attention is not None:
             day = item.attention.day(zone)
             for parent in ancestors(snapshot, item.id):
-                if parent.waiting and day < parent.attention.day(zone):
+                if parent.waiting and parent.attention is not None and day < parent.attention.day(zone):
                     raise DomainError('descendant attention day precedes waiting ancestor day')
 
 
@@ -428,8 +424,8 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
         category_names.add(key)
     hierarchy_depths(snapshot)
     for item in snapshot.items.values():
-        validate_title(item.title)
-        split_waiting(item.description)
+        incoming_text(item.title, title=True)
+        incoming_text(item.description, description=True)
         if type(item.priority) is not int or item.priority not in (1, 2, 3, 4):
             raise DomainError('item.priority must be P1 through P4')
         if type(item.completed) is not bool:
@@ -448,11 +444,10 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
             raise DomainError('recurring occurrence completion must leave the object open')
         if item.attention is not None:
             _validate_attention(item.attention, snapshot.account.timezone)
-    validate_sibling_uniqueness(snapshot.items.values())
     for comment in snapshot.comments.values():
         if comment.item_id not in snapshot.items:
             raise DomainError('comment.item_id outside managed items')
-        validate_body(comment.body)
+        incoming_text(comment.body)
         if comment.added_at is not None:
             _timestamp(comment.added_at, 'comment.added_at')
     offsets: dict[str, list[int]] = {}
@@ -472,6 +467,12 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
         if type(occurrence.recurring) is not bool or type(occurrence.undone) is not bool:
             raise DomainError('occurrence lifecycle flags must be booleans')
     validate_hiding(snapshot, hidden_names)
+    items = {k: replace(i, title=incoming_text(i.title, title=True),
+                        description=incoming_text(i.description, description=True))
+             for k, i in snapshot.items.items()}
+    comments = {k: replace(c, body=incoming_text(c.body)) for k, c in snapshot.comments.items()}
+    if items != snapshot.items or comments != snapshot.comments:
+        return replace(snapshot, items=items, comments=comments)
     return snapshot
 
 
@@ -621,7 +622,7 @@ def reopen_chain(snapshot: Snapshot, item_id: str) -> tuple[Item, ...]:
         raise DomainError('ordinary reopen requires a completed item')
     chain = tuple(i for i in (*ancestors(snapshot, item_id), selected) if i.completed)
     reopened = {i.id for i in chain}
-    validate_sibling_uniqueness(replace(i, completed=False) if i.id in reopened else i for i in snapshot.items.values())
+    validate_sibling_uniqueness((replace(i, completed=False) if i.id in reopened else i for i in snapshot.items.values()), snapshot.items.values())
     return chain
 
 

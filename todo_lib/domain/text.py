@@ -1,7 +1,8 @@
 """Text validation and the single canonical optional waiting-reason encoding.
 
-Validation returns edge-normalized user input. Snapshot validation never rewrites
-stored text. Unicode normalization is used only for matching.
+CLI validation returns edge-normalized user input. Inbound interpretation preserves
+nonblank content with permitted LF line endings. Unicode normalization is used
+only for matching.
 """
 import unicodedata
 from .errors import DomainError
@@ -40,7 +41,7 @@ def title_key(value: str) -> str:
     return unicodedata.normalize('NFC', unicodedata.normalize('NFC', value.strip()).casefold())
 
 
-def split_waiting(description: str) -> tuple[str, str | None]:
+def _split_waiting_strict(description: str) -> tuple[str, str | None]:
     """Return ordinary text and optional reason, rejecting noncanonical blocks.
 
     Empty description is valid. Exact marker *lines* are reserved; ordinary text
@@ -72,13 +73,65 @@ def split_waiting(description: str) -> tuple[str, str | None]:
     return ordinary, reason
 
 
+def incoming_text(value: str, *, title=False, description=False) -> str:
+    """Normalize permitted inbound line endings before checking controls/types."""
+    if not isinstance(value, str):
+        raise DomainError('text must be a string')
+    value = value.replace('\r\n', '\n')
+    _controls(value, True)
+    if title and not value.strip():
+        raise DomainError('title must be nonempty')
+    if description and not value.strip(' \n\t'):
+        return ''
+    return value
+
+
+def scalar_title(value: str) -> str:
+    """Display encoding only; selectors and comparison always use actual titles."""
+    return value.replace('\\', '\\\\').replace('\r\n', '\n').replace('\n', '\\n').replace('\t', '\\t')
+
+
+def split_waiting(description: str, active=True) -> tuple[str, str | None]:
+    """Read only canonical trailing blocks associated with a valid own policy.
+
+    Malformed and orphaned blocks remain literal description content.
+    """
+    description = incoming_text(description, description=True)
+    if active:
+        try:
+            return _split_waiting_strict(description)
+        except DomainError:
+            pass
+    return description, None
+
+
+def item_description(item):
+    return split_waiting(item.description, item.waiting and item.attention is not None)
+
+
+def convention_diagnostic(item):
+    """Safe, identifying diagnostics without echoing arbitrary description text."""
+    issues = []
+    if item.waiting and item.attention is None:
+        issues.append('waiting label inactive (no attention date)')
+    if any(line in (START, END) for line in item.description.split('\n')) and item_description(item)[1] is None:
+        issues.append('waiting reason convention is literal description text')
+    return '; '.join(issues)
+
+
 def with_waiting_reason(description: str, reason: str | None) -> str:
     """Replace/remove the optional reason; removal preserves ordinary text.
 
     Adding a block canonicalizes trailing LF separators to exactly one blank
     line. It never repairs an already malformed block.
     """
-    ordinary, _ = split_waiting(description)
+    description = incoming_text(description, description=True)
+    try:
+        ordinary, _ = _split_waiting_strict(description)
+    except DomainError:
+        if reason is None:
+            return description
+        raise DomainError('unsafe waiting reason rewrite: literal malformed block') from None
     if reason is None:
         return ordinary
     reason = validate_body(reason)

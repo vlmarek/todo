@@ -166,6 +166,17 @@ class MoveTests(unittest.TestCase):
             self.assertEqual(d.instant_text(comment.added_at), STAMP)
             self.assertEqual(d.instant_key(comment.added_at), d.instant_key(d.instant_from_wire(STAMP)))
 
+    def test_scheduled_subtree_can_move_to_hidden_category(self):
+        old = self.store.load_consistent_state().snapshot
+        after = self.after('A', None, 'hidden')
+        workflow, _ = self.workflow([r for r in after if r['id'] != 'E'],
+                                   {'id': 'A', 'project_id': 'hidden'}, archived=True)
+        result = workflow.execute(['move', 'A', 'hidden'])
+        self.assertEqual(result.selected.category_id, 'hidden')
+        self.assertEqual(result.snapshot.items['B'].attention, old.items['B'].attention)
+        self.assertEqual(result.snapshot.comments, old.comments)
+        self.assertNotIn('B', {i.id for i in d.now_queue(result.snapshot, d.instant_datetime(NOW), ['hidden'])})
+
     def test_nested_attachment_then_promotion_resets_to_zero(self):
         workflow, _ = self.workflow(self.after('C', 'Q', 'cat'), {'id':'C','parent_id':'Q'})
         result = workflow.execute(['move', 'C', '--task', 'Q'])
@@ -251,7 +262,7 @@ class MoveTests(unittest.TestCase):
         self.assertEqual(self.store.load_consistent_state().snapshot.items['D'].parent_id, 'C')
 
     def test_reject_cycles_depth_siblings_hiding_conflicts_and_noops(self):
-        for argv in (['move','A','B'], ['move','A','Q'], ['move','A','hidden'],
+        for argv in (['move','A','B'], ['move','A','Q'],
                      ['move','A','cat'], ['move','A',''], ['move','B','cat'],
                      ['move','B','--category','cat'], ['move','B','other'], ['move','B','--task','P','--to','other']):
             with self.subTest(argv=argv):

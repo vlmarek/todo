@@ -97,6 +97,7 @@ def _select(snapshot, completed, activities, start, end, hidden_names, *, now=No
             progress.append(ReportEvent(comment.item_id, event.event_date, 'comment',
                                         comment.body, event.id))
     hidden = [i for i in snapshot.items.values() if not i.completed
+              and snapshot.categories[i.category_id].name not in hidden_names
               and d.visibility(snapshot, i.id, d.instant_datetime(now if now is not None else end), hidden_names).own_hidden]
     return finished, progress, hidden
 

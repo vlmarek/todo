@@ -168,6 +168,7 @@ class CaptureWorkflow:
                         actions.append(_Action('complete', child_key, child_title))
                 if options.get('done'):
                     actions.append(_Action('complete', key, title))
+            d.validate_sibling_uniqueness(items.values(), snapshot.items.values())
             validate_proposals(replace(snapshot, items=items), proposals, hidden)
         else:
             item = (select_child(snapshot, request.parent, request.selector, now, streams=self.streams, color=color)
@@ -179,7 +180,8 @@ class CaptureWorkflow:
                           if request.command == 'priority' else {'title': d.validate_title(' '.join(request.destination))})
                 updated = replace(item, **kwargs)
                 if updated == item:
-                    raise d.DomainError(f'unchanged {request.command}: ' + str(next(iter(kwargs.values()))))
+                    raise d.DomainError(f'unchanged {request.command}: ' + d.scalar_title(str(next(iter(kwargs.values())))))
+                d.validate_sibling_uniqueness(({**snapshot.items, item.id: updated}).values(), snapshot.items.values())
                 d.validate(replace(snapshot, items={**snapshot.items, item.id: updated}), hidden)
                 actions.append(_Action('update_task', item.id, item.title, kwargs, updated, offsets(snapshot, item.id)))
             else:
@@ -337,7 +339,7 @@ class CaptureWorkflow:
             for action in actions[len(outcomes):]:
                 outcomes.append(OperationOutcome(action.method, action.title, 'unattempted'))
             labels = {'rejected': 'Failed', 'unattempted': 'Not attempted'}
-            lines = [f"{labels.get(o.outcome, o.outcome.capitalize())}: {o.operation.replace('_', ' ')} {o.title}"
+            lines = [f"{labels.get(o.outcome, o.outcome.capitalize())}: {o.operation.replace('_', ' ')} {d.scalar_title(o.title)}"
                      for o in outcomes]
             lines.append(str(failure))
             if any(o.outcome == 'unknown' for o in outcomes):
@@ -370,8 +372,8 @@ class CaptureWorkflow:
             return p.render_mutation(context, actual, 'Completed')
         changes = [('Title', old.title, actual.title),
                    ('Priority', f'P{old.priority}', f'P{actual.priority}'),
-                   ('Hiding', old.waiting, actual.waiting),
-                   ('Reason', d.split_waiting(old.description)[1], d.split_waiting(actual.description)[1])]
+                   ('Hiding', ('inactive' if old.waiting and old.attention is None else old.waiting), ('inactive' if actual.waiting and actual.attention is None else actual.waiting)),
+                   ('Reason', d.item_description(old)[1], d.item_description(actual)[1])]
         zone = snapshot.account.timezone
         if not d.same_attention(old.attention, actual.attention, zone):
             previous_due = p.actual_due(old.attention, zone) if old.attention else None
@@ -383,7 +385,7 @@ class CaptureWorkflow:
             changes.append(('Due', previous_due, actual_due))
         document = p.render_mutation(snapshot, actual, changes=changes)
         if not document.stdout and 'attention' in action.kwargs:
-            document = p.document(f'Accepted scheduling for {actual.role}: {actual.title}\n'
+            document = p.document(f'Accepted scheduling for {actual.role}: {d.scalar_title(actual.title)}\n'
                                   '  Due: ' + p.actual_due(actual.attention, zone))
         extra = []
         if action.retained:

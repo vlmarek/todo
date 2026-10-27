@@ -27,9 +27,11 @@ The five collections are ID-keyed mappings. All identities are strings.
   recurring completion leaves the current item open. Deleted objects and their
   contributions must be removed by producers; no undelete representation exists.
 
-`validate(snapshot, hidden_names=())` returns the same candidate, or raises
-`DomainError` identifying an invalid field/invariant. It never repairs, drops,
-normalizes or implicitly enrolls records. `bind_root` is for initial exact name
+`validate(snapshot, hidden_names=())` returns the candidate, or a copy with inbound
+CRLF normalized and whitespace-only descriptions represented as empty text. It
+raises `DomainError` for invalid fields/invariants and never writes or implicitly
+enrolls records. Imported task/step duplicate titles and scheduled hidden categories
+are valid. Category uniqueness, controls, identity and hierarchy remain strict. `bind_root` is for initial exact name
 matching only; `enroll_categories` explicitly returns a new binding from current
 valid child records, refusing retirement that could discard known work. Discovery
 must preserve evidence of moved/invalid bound projects rather than omit them.
@@ -65,7 +67,22 @@ compute report current-truth or report event eligibility.
 forbidden controls. Snapshot validation leaves stored Unicode unchanged.
 `title_key` is only a normalized case-insensitive comparison key.
 `split_waiting` / `with_waiting_reason` share the canonical trailing reason block.
-The reason is optional; only the `waiting` label enables an own policy.
+The reason is optional; a `waiting` label plus valid attention enables an own policy.
+`incoming_text(value, *, title=False, description=False)` validates incoming text
+without trimming nonblank content. `validate_title` and `validate_body` stay strict
+CLI validators. `scalar_title(value)` escapes backslash/LF/tab for scalar terminal
+output only; matching and collision keys use actual stored titles.
+`split_waiting(description, active=True)` returns literal text and no reason for
+malformed blocks or inactive policy. Consumers use `item_description(item)` to
+associate canonical reasons only with valid own policies. `convention_diagnostic`
+returns an issue fragment without echoing the description. `with_waiting_reason`
+refuses unsafe additions/replacements with `DomainError`; label removal preserves
+unparsed literal text.
+`validate_sibling_uniqueness(items, before=())` rejects new colliding active ID
+pairs relative to the before collection. Omit before for strict new batches.
+Mutation callers must compare complete before/after collections, including reopened
+ancestors. Existing collisions may persist or resolve. `visibility` treats an
+undated waiting label as inactive; valid ancestor suppression still applies.
 Provider length-limit failures must be translated to `DomainError` by the adapter.
 
 `parse_attention(expression, now, account_zone)` returns `Attention` of kind
