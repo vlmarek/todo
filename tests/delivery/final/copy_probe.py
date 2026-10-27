@@ -138,7 +138,9 @@ def phase(install, name):
     assert Path(shutil.which('todo')).resolve() == install / 'todo'
     store = StateStore()
 
-    def call(argv, steps=(), now=END, failure=None):
+    def call(argv, steps=(), now=END, failure=None, expected_status=0):
+        if name in ('tolerance', 'tolerance-read'):
+            now = FINAL
         boundary = Boundary(steps)
         wire = Transport(TOKEN, opener=boundary, sleep=lambda _: None)
         output, error = StringIO(), StringIO()
@@ -160,7 +162,7 @@ def phase(install, name):
                 status = result.code
             else:
                 raise AssertionError('launcher did not exit')
-        assert status == (1 if failure else 0), (argv, status, error.getvalue(), boundary.errors)
+        assert status == (1 if failure else expected_status), (argv, status, error.getvalue(), boundary.errors)
         boundary.done()
         return output.getvalue()
 
@@ -179,7 +181,87 @@ def phase(install, name):
         steps[-1] = (method, path, query, {'results': [], 'next_cursor': None})
         return steps + ([own('B', True)] if last else [own('B', True), own('B', True)]) + [own('A', True), own('D', True)]
 
-    if name == 'init':
+    if name in ('tolerance', 'tolerance-read'):
+        # Source: pinned api-v1.openapi.json NoteSyncView.content default and
+        # NotificationSyncView.due / Due dates / Sync Add a reminder. Synthetic
+        # dates, Spanish wording and ownership; no live recurrence assertion.
+        from todo_lib.workflows.comments import CommentWorkflow
+        row = item('E')
+        row['content'] = 'Amendment\nline\ttab'
+        blank = dict(id='blank', item_id='E', posted_at=EARLY, is_deleted=False)
+        text = dict(id='text', item_id='E', posted_at=LATE, is_deleted=False,
+                    content='Retained text')
+        comments = [blank, text, dict(text, file_attachment={
+            'file_type': 'file', 'file_url': 'https://example.invalid/synthetic'})]
+        schedule = dict(date='2026-10-30T08:00:00Z', timezone='Europe/Madrid',
+                        string='cada día a las 9', lang='es', is_recurring=True)
+        reminder = dict(id='absolute', item_id='E', type='absolute', due=schedule,
+                        notify_uid='u', is_urgent=False, is_deleted=False)
+        def accepted(kind, args, created=False):
+            def response(form):
+                assert set(form) == {'commands'}
+                commands = json.loads(form['commands'][0]); assert len(commands) == 1
+                op = commands[0]
+                assert set(op) == ({'type', 'uuid', 'args', 'temp_id'} if created else
+                                   {'type', 'uuid', 'args'})
+                UUID(op['uuid'])
+                assert (op['type'], op['args']) == (kind, args)
+                reply = {'sync_status': {op['uuid']: 'ok'}}
+                if created:
+                    UUID(op['temp_id']); assert op['temp_id'] != op['uuid']
+                    reply['temp_id_mapping'] = {op['temp_id']: 'absolute'}
+                return reply
+            return ('POST', '/sync', None, response)
+        def reconciled(**changes):
+            # Gateway reads actual outcome; Synchronizer independently publishes.
+            return [sync('delta-token', delta(**changes)), sync('delta-token', delta(**changes))]
+        if name == 'tolerance':
+            state = full([a(), item('D', 'A'), row], notes(True)[2:] + comments)
+            state['user_plan_limits']['current']['reminders'] = True
+            out = call(['task', 'Amendment', '--refresh'],
+                       [sync('delta-token', state), sync('full-token', delta())])
+            assert '[no text]' in out and out.count('Retained text') == 1
+            original = store.load_consistent_state().snapshot.comments
+            def unchanged(buffer):
+                assert '[id: blank posted:' in buffer and '[no text]' not in buffer
+                return buffer.replace('\n', '\r\n')
+            with patch.object(CommentWorkflow, '_edit', side_effect=unchanged):
+                call(['comment', '--edit', 'Amendment'], [sync('delta-token', delta())])
+            assert store.load_consistent_state().snapshot.comments == original
+            out = call(['schedule', 'Amendment', '--reminder-at', 'every day at nine'],
+                [sync('delta-token', delta()), accepted('reminder_add', {
+                    'item_id': 'E', 'type': 'absolute',
+                    'due': {'string': 'every day at nine', 'lang': 'en'}}, True),
+                 *reconciled(reminders=[reminder])])
+            assert 'cada día a las 9' in out and 'every day at nine' not in out
+            assert r'Amendment\nline\ttab' in out
+            assert store.load_consistent_state().snapshot.items['E'].attention is None
+        else:
+            # A new interpreter consumes only published files, with no HTTP read.
+            saved = store.load_consistent_state().snapshot
+            assert saved.reminders['absolute'].due.language == 'es'
+            out = call(['task', 'Amendment'])
+            assert '[no text]' in out and 'cada día a las 9' in out
+            out = call(['schedule', 'Amendment', '--reminder-at', 'every Monday at 9am'],
+                       [sync('delta-token', delta())], expected_status=1)
+            assert r'Reminder replacement for: Amendment\nline\ttab' in out
+            assert 'expression (Todoist): every Monday at 9am' in out
+            assert '--reminder-at keep' in out and '[y/N]' not in out
+            assert store.load_consistent_state().snapshot.reminders == saved.reminders
+            row['due'] = dict(date='2026-10-23', lang='en', string='tomorrow', is_recurring=False)
+            out = call(['schedule', 'Amendment', '--at', 'tomorrow', '--reminder-at', 'keep'],
+                [sync('delta-token', delta()), accepted('item_update', {
+                    'id': 'E', 'due': {'date': '2026-10-23', 'lang': 'en'}}),
+                 *reconciled(items=[row])])
+            assert 'Reminder replacement' not in out
+            assert store.load_consistent_state().snapshot.reminders == saved.reminders
+            out = call(['schedule', 'Amendment', '--reminder', 'clear'],
+                [sync('delta-token', delta()), accepted('reminder_delete', {'id': 'absolute'}),
+                 *reconciled(reminders=[{'id': 'absolute', 'is_deleted': True}])])
+            assert '[y/N]' not in out
+            state = store.load_consistent_state().snapshot
+            assert not state.reminders and state.items['E'].attention is not None
+    elif name == 'init':
         store.root.mkdir(mode=0o700)
         config = store.root / 'config'
         config.write_text('[main]\nproject=root\ndefault_sections=cat\nhidden_from_now=\n')
@@ -264,6 +346,6 @@ if __name__ == '__main__':
         phase(install, sys.argv[2])
     else:
         for name in ('init', 'mutation', 'repeat', 'external', 'read', 'rebuild', 'read',
-                     'preview', 'failure', 'final', 'cleanup'):
+                     'preview', 'failure', 'final', 'cleanup', 'tolerance', 'tolerance-read'):
             subprocess.run([sys.executable, '-I', '-B', __file__, str(install), name],
                            check=True, timeout=10)
