@@ -185,27 +185,42 @@ class Reports(unittest.TestCase):
         self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
 
     def test_consecutive_delta_reports_cover_empty_blank_deleted_and_unchanged_owners(self):
-        # Complete active Sync evidence is sufficient even for old posted_at,
-        # current blank text, an empty owner, and a deleted eligible comment.
-        first = self.requests(current_items=[item('A'), item('B', parent_id='A'),
-            *[item('extra' + str(k)) for k in range(12)]])
-        transport, http = self.boundary(first)
-        Reporter(transport, self.store, clock=lambda: NOW, streams=self.streams()).run()
-        self.assertEqual(len(http.requests), 4)  # full + freshness + completed + activity
-        for body in ('', 'Next command text'):
-            with self.subTest(body=body):
-                planned = self.requests(events=[event(1, LAST),
-                    event(2, LAST, owner='A', obj='absent'),
-                    event(3, LAST, owner='B', obj='deleted')])
-                steps = [self.sync('delta-token', delta(notes=[
-                    note('own', 'B', content=body, posted_at=CREATED),
-                    dict(id='deleted', is_deleted=True)])), *planned[2:4]]
+        # Saved setup baseline contains a live own note. These are actual deltas,
+        # including its eventual tombstone, rather than full responses at a token.
+        self.run_report(self.requests(current_items=[item('A'), item('B', parent_id='A'),
+            *[item('extra' + str(k)) for k in range(12)]]))
+        self.assertEqual(len(self.last_http.requests), 4)
+        cursor = (self.root / 'report-cursor').read_bytes()
+        previous = 12
+        for extras, body in ((12, ''), (3, 'Next command text'), (0, None)):
+            with self.subTest(active_owners=2 + extras):
+                planned = self.requests(events=[event(900, FIRST), event(1, LAST),
+                    event(2, LAST, owner='A', obj='absent')])
+                changed = ([dict(id='own', is_deleted=True)] if body is None else
+                           [note('own', 'B', content=body, posted_at=CREATED)])
+                steps = [self.sync('delta-token', delta(
+                    user_plan_limits=limits(), notes=changed,
+                    items=[dict(id='extra' + str(k), is_deleted=True)
+                           for k in range(extras, previous)])),
+                    *planned[2:4]]
                 streams = self.streams()
                 transport, http = self.boundary(steps)
                 Reporter(transport, self.store, clock=lambda: NOW, streams=streams).run()
+                http.assert_done()
                 self.assertEqual(len(http.requests), 3)
-                self.assertEqual(streams.stdout.getvalue().count(body or '[no text]'), 1)
-                self.assertEqual(len(self.store.load_consistent_state().current_snapshot.items), 14)
+                self.assertFalse(any(urlsplit(r.full_url).path.endswith('/comments')
+                                     for r, _ in http.requests))
+                text = streams.stdout.getvalue()
+                state = StateStore(self.root).load_consistent_state()
+                self.assertEqual(len(state.current_snapshot.items), 2 + extras)
+                if body is None:
+                    self.assertNotIn('own', state.current_snapshot.comments)
+                    self.assertNotIn('Next command text', text)
+                    self.assertIn('Progress\n  None.', text)
+                else:
+                    self.assertEqual(text.count(body or '[no text]'), 1)
+                self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
+                previous = extras
 
     def test_both_archived_reminder_types_survive_pending_only_report_publication(self):
         from tests.support.reminders import absolute
@@ -268,6 +283,13 @@ class Reports(unittest.TestCase):
                 self.assertIsNotNone(self.store.load_consistent_state().current_snapshot)
                 self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
                 self.assertIn('B', self.store.load_history().snapshot.items)
+                # Reload the hydrated cache and prove the very next report uses
+                # a delta only, preserving protected state and complete queries.
+                self.store = StateStore(self.root)
+                planned = self.requests()
+                self.run_report([self.sync('delta-token', delta()), *planned[2:4]])
+                self.assertEqual(len(self.last_http.requests), 3)
+                self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
                 # Invalid required history must still refuse without any HTTP.
                 refreshed_history = (self.root / 'history.json').read_bytes()
                 self.put('history.json', b'{broken')
@@ -275,6 +297,23 @@ class Reports(unittest.TestCase):
                     self.run_report([])
                 self.assertEqual((self.root / 'history.json').read_bytes(), b'{broken')
                 self.put('history.json', refreshed_history)
+
+    def test_saved_token_errors_refuse_replacement_and_protect_pending(self):
+        from tests.support.http import Response
+        for response in (Response(b'{"error":"invalid_token"}', status=401),
+                         Response(b'{"error":"INVALID_SYNC_TOKEN"}', status=400),
+                         TimeoutError('offline controlled timeout')):
+            with self.subTest(response=type(response).__name__):
+                before = {name: (self.root / name).read_bytes() for name in
+                          ('cache.json', 'binding.json', 'history.json', 'report-cursor')}
+                streams = self.streams()
+                with self.assertRaisesRegex(SyncError, 'automatic sync-token recognition unavailable'):
+                    self.run_report([self.sync('delta-token', response)], ['--final'], streams)
+                self.last_http.assert_done()
+                self.assertEqual(len(self.last_http.requests), 1)
+                self.assertEqual(streams.stdout.getvalue(), '')
+                for name, content in before.items():
+                    self.assertEqual((self.root / name).read_bytes(), content)
 
     def test_active_malformed_sync_notes_fail_before_output(self):
         for changes in ({'content': None}, {'posted_at': 'malformed'}):
@@ -721,7 +760,10 @@ else:
         first = self.requests(rows=[completed_b()], events=[event(1, LAST)],
                               current_items=[item('A')])
         self.run_report(first)
-        self.assertIn('B', self.store.load_history().snapshot.items)
+        self.store = StateStore(self.root)
+        state = self.store.load_consistent_state()
+        self.assertIn('B', state.history.snapshot.items)
+        self.assertNotIn('B', state.current_snapshot.items)
         from todo_lib.local import Coverage
         with exclusive_lock('retained coverage fixture', self.root):
             history = self.store.load_history()
@@ -729,6 +771,7 @@ else:
         cursor = (self.root / 'report-cursor').read_bytes()
         pending = (self.root / 'history.json').read_bytes()
         steps = self.requests(events=[event(1, LAST)], current_items=[item('A')])
+        steps = [self.sync('delta-token', delta()), *steps[2:]]
         streams = self.streams()
         with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
             self.run_report(steps, ['--final'], streams)
@@ -739,6 +782,7 @@ else:
         # retained owner must not make the occurrence silently disappear.
         steps = self.requests(events=[event(2, LAST, 'completed', obj='B', typ='item')],
                               current_items=[item('A')])
+        steps = [self.sync('delta-token', delta()), *steps[2:]]
         with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
             self.run_report(steps, ['--final'], streams)
         self.assertEqual(streams.stdout.getvalue(), '')
@@ -750,7 +794,8 @@ else:
         steps[-1] = (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
             {'results': [dict(id='own', content='still surviving', posted_at=CREATED,
                              is_deleted=False, file_attachment=None)], 'next_cursor': None})
-        self.run_report(steps)
+        self.run_report([self.sync('delta-token', delta()), *steps[2:]])
+        self.assertNotIn('B', StateStore(self.root).load_consistent_state().current_snapshot.items)
         pending = self.store.load_history()
         self.assertIn('B', pending.snapshot.items)
         self.assertEqual(pending.snapshot.comments['own'].body, 'still surviving')

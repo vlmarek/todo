@@ -667,3 +667,153 @@ saved sync time replaces fresh required archived evidence. No completion-query
 skipping, coverage schema, archive system, snapshot refresh or real-account access
 was introduced. The existing unresolved archived-owner and cross-endpoint
 concurrency limitations remain explicit.
+
+## T28 — revision-11 retrieval and finalization audit (2026-10-27)
+
+Subject: HEAD `ae4a85e0e8e1743d6e59fcdfd9a6afa5d013e097` plus the
+uncommitted changes to `tests/workflows/report/test_report.py` and
+`tests/delivery/final/copy_probe.py`. SHA-256 of
+`git diff --binary HEAD -- tests/workflows/report/test_report.py tests/delivery/final/copy_probe.py`:
+`60fb5306e6e14e7eebfc3f60ed7c0436c54e67f8aab688e856ba0ce7542a8ae4`.
+This appendix is excluded from that digest. No runtime changes were necessary;
+this closes distinguishing evidence gaps in the existing harnesses. All earlier
+evidence above remains historical and unchanged.
+
+Read T27's actual Reporter/_Evidence, current retrieval, provenance storage and
+coupled caller paths, report tests, copied probe and tiny delivery harness.
+Offline authority remains the accepted
+`docs/design/external/todoist/report-retrieval-notes.md` and its retained
+`upstream/api-v1.openapi.json`: Sync full/incremental resource semantics,
+NoteSyncView (REST ownership comes from task scope; content can be omitted),
+ActivityEvents optional parent/extra data, scoped completed and comments queries.
+Provider facts support complete merged active notes and command-local exhausted
+owner-response reuse. They do not guarantee fresh archived ancestry from old
+observations. Product required-data refusals remain deliberate. Fixtures below
+are synthetic, not captured provider examples or real-account verification.
+
+Strengthened existing cases:
+
+- `test_consecutive_delta_reports_cover_empty_blank_deleted_and_unchanged_owners`
+  first establishes a 14-owner baseline through full plus freshness, completed
+  and activity reads (4 HTTP). Consecutive saved-token **full_sync=false** reports
+  cover 14, 5 and 2 active owners; each issues exactly 3 actual Transport HTTP
+  requests (Sync, category-scoped completed, activities), with zero owner REST
+  reads. A persisted live comment becomes blank, is edited, then receives an
+  actual tombstone; item tombstones reduce owner count. The old posted time
+  remains unchanged, qualifying activity collapses to one current text, and the
+  deleted text disappears. Empty-owner activity adds no read or output. Cursor
+  bytes remain unchanged. Counts are not inferred from a mocked adapter method.
+- `test_legacy_and_invalid_disposable_provenance_hydrate_without_reset` now reloads
+  each hydrated cache and immediately proves 3-request delta reuse. The legacy
+  and invalid-provenance full/freshness paths still preserve cursor and required
+  history, and corrupt required history still refuses before HTTP.
+- `test_retained_archived_metadata_is_not_current_owner_evidence` now reloads
+  after publication and sends saved-token empty deltas for both missing-owner
+  negatives and recovery preview. B remains pending but absent from the proven
+  active baseline. Neither old metadata nor synthetic saved Coverage authorizes
+  current comment-role or completion resolution. Both final attempts produce no
+  normal output and preserve history/cursor bytes. Recovery preview can refresh
+  retained comment context without creating an active B row or advancing cursor.
+
+Added `test_saved_token_errors_refuse_replacement_and_protect_pending`: generic
+401 invalid_token, 400 INVALID_SYNC_TOKEN and controlled network timeout each
+make exactly one actual saved-token request, refuse guessed replacement, produce
+no normal final output, and preserve all cache/binding/history/cursor bytes.
+
+Reused T27's adequate `test_saved_baseline_reload_delta_and_shared_archived_comments`:
+real adapter refresh discovers external completion, publishes/reloads distinct
+active and retained archive state, then real Reporter consumes a saved-token delta
+with changed title and explicit item tombstone. Current parent/title and fresh
+active/archive text appear; unchanged D remains active; B stays pending and
+non-active. Exactly 4 HTTP requests include **one complete B comment response**
+shared by reconciliation and preparation. Reused extra-archive progress cases
+assert 14/16 requests, 10/12 actual comment pages, and the exact single
+`todo: loading comments: 10 pages` diagnostic, including filtered lookup pages.
+
+Reused report cases establish latest activity time rather than event-ID order,
+complete multipage archived responses, nested/current roles, recurring and
+nonrecurring reopen, current scope/departure, missing owner/ancestor metadata,
+malformed active notes and incomplete archived page refusal. The latter leaves
+normal output empty and pending/cursor bytes intact. Exact Finished/Progress/Hidden
+rendering, capability/retention warnings and refusal boundaries stay covered.
+The current adapter's 49 focused cases additionally retain necessary entry/new
+category hydration, bounded server-full/client replacement, explicit deletion and
+departure, and generic token/network failure with no guessed recovery.
+
+Finalization trace reused from `test_final_output_flush_cursor_cleanup_and_newer_pending_context`,
+`test_failures_before_finalization_preserve_cursor_and_pending`,
+`test_cleanup_failure_keeps_successful_output_cursor`, empty-final, pager,
+SIGINT, partial-publication and explicit-preview tests: preview publishes reusable
+current evidence but never calls prune or advances cursor; newer pending
+observations survive interval recovery. Complete direct output and flush precede
+cursor publication, which precedes cleanup. Retrieval, render, write, pipe,
+flush, cursor and interruption failures protect pending work. A later cleanup
+failure leaves successful output/cursor and safely retained history.
+
+The copied probe now supplies a fresh active D note through a saved-token delta
+and qualifying activity, asserts its current step role/text exactly once, excludes
+future pending text from the earlier interval, and checks the reloaded active
+baseline contains A/D but neither archived B nor its old comments. Strict encoded
+request expectations and an explicit path ledger reject redundant active-owner
+REST reads. Preview, injected cursor failure, successful final and subsequent
+cleanup each report **4 HTTP / 1 archived REST / 0 active REST**. Preview/failure
+preserve cursor and archived history; final preserves newer D context; later
+cleanup prunes it after cursor advancement. Each copied phase starts a new
+isolated interpreter with no source/test imports or network. Existing external
+server-full and explicit rebuild phases remain intentionally full-read evidence;
+the report phases are actual deltas, not server-full responses under a token.
+
+Focused commands/results on these executable bytes (all successful final runs
+exit 0, no skips):
+
+- t15-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v`
+  — 43 tests; `/tmp/t28-t15-final.log`.
+- t25-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_coexistence tests.delivery.final.test_verify -v`
+  — 8 tests; `/tmp/t28-t25.log`. Self-tests launch only tiny synthetic suites.
+- Current adapter: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/current -p 'test_*.py' -v`
+  — 49 tests; `/tmp/t28-current.log`.
+- Distinct copy-only probe — 13 successful phase processes;
+  `/tmp/t28-copy.log`. Exact Python wrapper below, run from repository root;
+  this does not invoke an application suite or claim the runner final gate:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY' > /tmp/t28-copy.log 2>&1
+from pathlib import Path
+import os, shutil, subprocess, tempfile
+root=Path.cwd()
+with tempfile.TemporaryDirectory(prefix='t28-copy-') as temp:
+    base=Path(temp)
+    home, install, outside=(base/n for n in ('home','bin','outside'))
+    for p in (home,install,outside): p.mkdir(mode=0o700)
+    shutil.copy2(root/'todo',install/'todo')
+    shutil.copytree(root/'todo_lib',install/'todo_lib')
+    probe=outside/'copy_probe.py'
+    shutil.copy2(root/'tests/delivery/final/copy_probe.py',probe)
+    env=dict(HOME=str(home), PATH=str(install)+':/usr/local/bin:/usr/bin:/bin',TMPDIR=str(outside),LANG='C.UTF-8',TERM='xterm',PYTHONDONTWRITEBYTECODE='1',TODOIST_TOKEN='synthetic-delivery-token')
+    subprocess.run(['python3.11','-I','-B',str(probe),str(install)],cwd=outside,env=env,check=True,timeout=60)
+    for source in [root/'todo',*(root/'todo_lib').rglob('*')]:
+        if source.is_file(): assert source.read_bytes()==(install/source.relative_to(root)).read_bytes()
+PY
+```
+
+Initial t15 audit run (`/tmp/t28-t15.log`, 42 tests) exposed an incorrect new
+fixture expectation: newly entering owners correctly require hydration to obtain
+unchanged resources. The revised distinguishing fixture establishes all owners
+first and reduces membership with explicit tombstones; it passed 42 tests in
+`/tmp/t28-t15-fixed.log` before the additional generic-failure case brought the
+final total to 43. No runtime workaround weakened necessary hydration.
+
+No additional whole-suite invocation was made. `git diff --check` passed.
+Matching future runner t15/t25/final-delivery result references are unavailable
+at worker submission. The inherited runner passes recorded in
+`/cml-evidence/inherited.md` concern the HEAD subject before these edits and are
+provenance only. The unchanged runner `./scripts/verify-clean` must still perform
+one `scripts/check` complete suite and its distinct unchanged-copy/PATH/real-less
+probes on the settled integrated subject; that gate is **not recorded as passed
+here**. The copy-only observation above does not substitute for it.
+
+Completion queries remain complete and category scoped on every report; no
+cross-command completion caching, new framework, telemetry or storage design was
+added. Unknown archived metadata and cross-endpoint concurrency limitations remain.
+All current evidence is offline/synthetic: no production credentials, real-account,
+latency or notification-delivery claim.
