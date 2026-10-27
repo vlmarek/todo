@@ -32,6 +32,19 @@ Relevant initial pointers in the retained object:
   Planning must check each consumed operation; names or prior application
   assumptions do not prove a contract.
 
+## Activity-filter serialization clarification
+
+Re-inspected the retained snapshot offline on 2026-10-27. Under
+`paths["/api/v1/activities"].get`, the `object_event_types` parameter describes an
+array of strings, while `x-codeSamples` (including "Multiple event types") sends
+one JSON-encoded array query value. The schema has no explicit serialization
+style; do not infer repeated scalar parameters from the array type alone.
+The application's selected encoding and the preceding diagnosis's limited live
+observation are documented separately in
+[request-conformance.md](../../request-conformance.md), REQ-SYNC-032. The retained
+bytes, manifest checksums and retrieval dates are unchanged. No new upstream
+snapshot or authenticated response fixture is added.
+
 The initial snapshot establishes an offline reference and supports focused
 contract investigation. It is not a complete audit, successful live-account smoke,
 or proof of uncertain cursor-omission, DST, precision or operation-specific replay

@@ -1,9 +1,36 @@
 # todo-3 product specification
 
-Design revision: **9 — accept superseded historical reminder-contradiction limitation, 2026-10-27**.
-State: **confirmed scoped product agreement; committed Design handoff records its Git revision**.
+Design revision: **10 — activity-filter encoding and waiting-label request conformance, 2026-10-27**.
+State: **accepted scoped clarification; subsequent Planning records the committed baseline**.
 
-## Current revision 9
+## Current revision 10
+
+Read [request-conformance.md](request-conformance.md) first. REQ-SYNC-032 makes
+the existing activity-retrieval contract explicit: send `object_event_types` as
+one JSON-encoded array query value. REQ-SYNC-033 clarifies that the read-only
+waiting-label check must call the real HTTP boundary with its required arguments,
+including local operation metadata. REQ-VERIFY-028 identifies representative
+evidence that distinguishes both defects from successful request construction.
+No command grammar, scope, report eligibility, hiding policy or recovery behavior
+changes.
+
+The operator requested: "$cml-design I want to update the design documentation
+to cover that change", after disclosure of both concrete defects and their
+corrections. This applies that already-described scope; no new product choice is
+introduced. Actual instruction, interpretation, evidence and limitations are
+retained separately in the external Design handoff. Existing runtime/test edits
+from the earlier report fix are preserved, not accepted or adopted by this Design
+pass. The waiting-label implementation defect remains follow-up work.
+
+All earlier requirement definitions, retained upstream bytes and accepted
+effective assignments remain unchanged. The existing 25 accepted tasks are
+historical; Planning must assess the current edits and prepare supported successor
+work rather than reopen them. This pass edits documentation only and authorizes
+no commit, Plan, runner adoption or execution. Its complete Design handoff was
+explicitly uncommitted; subsequent Planning records the committed baseline. Prior
+committed revision-9 provenance remains below.
+
+## Preserved revision 9
 
 Read [historical-reminder-contradiction.md](historical-reminder-contradiction.md)
 first. REQ-SYNC-031 supersedes only REQ-SYNC-013's duty to remember earlier
@@ -233,8 +260,9 @@ duplicate anonymous activity entries are accepted; omitted work is not.
     [open-questions.md](open-questions.md): source navigation and remaining technical evidence.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
-The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped successor
-precedence in historical-reminder-contradiction.md, todoist-tolerance.md,
+The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped clarification
+and successor precedence in request-conformance.md,
+historical-reminder-contradiction.md, todoist-tolerance.md,
 project-sharing-field.md, partial-initialization-failure.md,
 command-time-precision.md and
 publication-failure.md governing

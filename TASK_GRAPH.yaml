@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-008
-predecessor_revision_id: TODO3-PLAN-007
+revision_id: TODO3-PLAN-009
+predecessor_revision_id: TODO3-PLAN-008
 contract_sources:
+- docs/design/request-conformance.md
 - docs/design/historical-reminder-contradiction.md
 - docs/design/todoist-tolerance.md
 - docs/design/external/todoist/planning-contracts.md
@@ -4629,6 +4630,201 @@ tasks:
   - Append exact observed current amendment evidence to docs/implementation/acceptance-evidence.md; every
     REQ-VERIFY-027 bullet has representative existing/new evidence, limitations and no unsupported live
     claim.
+- id: T26
+  title: Correct activity filters and waiting-label calls through the real HTTP boundary
+  origin_stage_ref: request-conformance
+  observable_outcome: Reports and bounded lifecycle retrieval send one JSON-array activity filter;
+    valid hiding reaches authoritative mutation and missing-label/read failures refuse before mutation
+    through the production transport.
+  dependencies:
+  - task_ref: T22
+    kind: interface
+    interface_ref: tolerant-history
+    reason: Reuse HistoryAdapter activities/comments and its current Retrieval records, complete pagination
+      and relevance-first mapping.
+  - task_ref: T24
+    kind: interface
+    interface_ref: complete-reminder-scheduling
+    reason: Reuse completed CaptureWorkflow hiding/creation/scheduling and reminder preservation;
+      operation metadata correction must preserve the current shared lookup and mutation path.
+  - task_ref: T04
+    kind: interface
+    interface_ref: http-transport
+    reason: Use the actual Transport.request keyword-only operation/replay contract and encoded Request
+      boundary.
+  - task_ref: T16
+    kind: interface
+    interface_ref: routine-check
+    reason: Reuse scripts/check and the public CLI composition used by existing source/copy probes.
+  - task_ref: T25
+    kind: repository_state
+    interface_ref: null
+    reason: Start after accepted composed/copied coexistence verification so its concrete final runtime
+      and probe fixtures are the baseline.
+  goal: 'Implement Design revision 10 in docs/design/request-conformance.md against the existing integrated
+    application, preserving all historical accepted assignments. Own both small request-construction
+    repairs and their directly affected consumer fixtures/evidence together; no consumer API changes
+    or second implementation path are needed.
+
+
+    In todo_lib/adapter/history.py, HistoryAdapter.activities(start, end, scope=None) currently builds
+    the five _EVENTS filters as repeated scalar query keys. Encode that same event set as one JSON-array
+    string query value. Preserve the existing scope, widened date_from/date_to, limit, cursor handling,
+    precise local eligibility, stable-ID deduplication and anonymous order; the shared method also
+    serves report and bounded lifecycle reconciliation. Its Retrieval(records, pages, start, end)
+    and HistoryError behavior stay usable unchanged. Use the retained api-v1.openapi.json paths["/api/v1/activities"].get.parameters[name="object_event_types"]
+    and x-codeSamples label "Multiple event types" as independent wire evidence. Preserve note:deleted
+    and separate Sync JSON-in-form and comments/completed scalar encoding.
+
+
+    In todo_lib/workflows/capture.py, _require_waiting_label calls transport.request(''POST'', ''/sync'',
+    replay=Replay.READ, form=...) without required local operation. Supply a safe nonempty diagnostic
+    operation string to both existing full/delta reads. Transport.request in todo_lib/adapter/transport.py
+    requires keyword-only operation and replay, returns decoded JSON, and raises safe HTTPFailure
+    subclasses for HTTP/protocol failures. Keep operation out of the form/query. Preserve the labels-only
+    resource_types JSON string, full read plus freshness delta, missing/deleted-label checks, pre-mutation
+    failure and todo init guidance. CaptureWorkflow.execute uses this one lookup when _plan reports
+    adding_hiding; reuse it for direct hide, creation --hide and schedule --hide. Do not alter grammar,
+    future-day/ancestor/descendant preflight, unrelated commands, unhide or authoritative result/retry
+    semantics.
+
+
+    Update all directly affected request expectations together: tests/adapter/history/test_history.py
+    ACTIVITY_QUERY/Expected, tests/workflows/report/test_report.py Reports scenario, tests/workflows/lifecycle/test_lifecycle.py
+    AdapterLifecycleTests, tests/workflows/sync/test_sync.py bounded lifecycle activity query, and
+    tests/delivery/final/copy_probe.py reports. Search for remaining repeated-scalar activity assumptions.
+    Keep meaningful assertions on unrelated keys and outcomes; do not accept both encodings. The prior
+    report draft has been assessed as a useful minimal implementation suggestion, not accepted code
+    or provider evidence; the runner baseline remains authoritative.
+
+
+    Establish REQ-VERIFY-028 using existing fixtures. HistoryTests.boundary already composes real
+    HistoryAdapter -> Transport -> tests.support.http.ControlledHTTP and decoded Request query assertions.
+    Adapt its existing multipage activity case to assert exactly one filter query value on each page,
+    JSON-decoding to the independent five-event list, with invariant scalar bounds/scope/limit and
+    only cursor continuation. Existing anonymous/deduplication/precise-bound tests and malformed/repeated-cursor
+    negatives remain. Existing report tests establish current surviving comment text, nonempty output,
+    required-history failure and unchanged cursor/files; reuse them after fixture migration instead
+    of a new report harness.
+
+
+    The capture Boundary.request fake accepts **kwargs and previously hid the missing argument. Add
+    a representative valid hide workflow using the production Transport with ControlledHTTP/Response
+    (or an equally small existing controlled opener), including actual label full/delta reads and
+    successful mutation/authoritative result. Assert the reported/stored hiding state, not only absence
+    of TypeError. Independent expected HTTP fields exclude operation. Add/reuse missing-label refusal
+    before any mutation with todo init advice and failed/malformed label-read refusal; use the real
+    signature on this exercised path. Existing shared lookup evidence can cover add/schedule/direct
+    hide; inspect their _plan/execute routing and reuse existing creation/schedule tests rather than
+    exhaustive aliases. Do not weaken Transport by making operation optional or build generic signature
+    enforcement.
+
+
+    Run existing t06-focused and t12-focused while implementing. Run directed affected consumer modules
+    tests.workflows.report.test_report, tests.workflows.lifecycle.test_lifecycle and tests.workflows.sync.test_sync
+    when migrating their fixtures; these are bounded feedback, not another complete suite. The runner''s
+    existing final-delivery check supplies complete offline regression and unchanged copied-runtime/PATH/real-less
+    evidence once on the settled integrated subject. Adapt the existing copy_probe reports expectation
+    so it independently rejects repeated scalar activity encoding. Keep scripts/verify-clean''s one
+    scripts/check execution and test_verify''s miniature synthetic suites; no new wrapper or repeated
+    broad worker run is required.
+
+
+    Append observed subject, focused commands/results, reused/new distinguishing cases, copied-boundary
+    evidence when available and remaining live-provider limits to docs/implementation/acceptance-evidence.md.
+    Preserve historical evidence bytes; do not claim future runner checks already passed. No real
+    account, credentials, uncontrolled network, new dependency, provider snapshot refresh or notification-delivery
+    guarantee. Recover after interruption from retained code, focused results and supported runner
+    evidence, never conversational context.'
+  failure_domain: Endpoint-specific request construction and compatibility of directly affected workflow/copy
+    fixtures.
+  verification_rationale: One coherent task keeps the shared request fixes, caller fixtures and distinguishing
+    real-boundary evidence consistent before integrated gates. Reuse t06-focused for real HistoryAdapter/Transport
+    pagination and t12-focused for shared hiding semantics plus new real-signature regression. Both
+    prerequisite tasks are accepted and the suites already exist. The directed report/lifecycle/sync
+    modules test changed consumers early; final-delivery then establishes current full regression
+    and separate byte-identical copied/PATH/real-less behavior. It runs scripts/check once, and its
+    self-tests use tiny synthetic suites, so no nested complete-suite execution is introduced. Use
+    independent retained examples, assert one query value and decoded JSON rather than JSON whitespace,
+    and prove pre-mutation refusal and actual authoritative hiding success. No new check ID or framework
+    is necessary.
+  correction_instructions: Current Design revision 10 clarifies request construction only. Retain
+    all revision-9 and earlier accepted limitations and current code behavior outside this scope,
+    including relevance-first metadata handling, both reminder types, provider-parsed expressions,
+    ordinary command-time precision and per-file publication/manual-recovery boundaries.
+    REQ-CACHE-009/010 and REQ-LOCAL-007 control failed-publication promises in older selected requirements.
+    Earlier accepted
+    assignments are historical evidence, not instructions to reintroduce repeated scalar activity
+    filters. Do not edit protected inputs or import sibling/abandoned candidates. A new provider contradiction
+    or protected-input defect must be reported rather than silently changing product policy or weakening
+    tests.
+  requirement_refs:
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
+  constraint_refs:
+  - REQ-SYNC-025
+  - REQ-SCHED-011
+  - REQ-SCHED-014
+  - REQ-CREATE-008
+  - REQ-NET-001
+  - REQ-REPORT-003
+  - REQ-REPORT-011
+  - REQ-REPORT-014
+  - REQ-SYNC-026
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-013
+  exclusion_refs:
+  - OUT-TEST-001
+  - OUT-REPORT-001
+  - OUT-PRIVACY-001
+  - OUT-LOCAL-001
+  - OUT-TIME-002
+  component_refs:
+  - adapter
+  - workflows
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - tolerant-history
+  - complete-reminder-scheduling
+  - http-transport
+  - routine-check
+  - public-cli
+  expected_paths:
+  - todo_lib/adapter/history.py
+  - todo_lib/workflows/capture.py
+  - tests/adapter/history/**
+  - tests/workflows/capture/**
+  - tests/workflows/report/**
+  - tests/workflows/lifecycle/**
+  - tests/workflows/sync/**
+  - tests/support/**
+  - tests/delivery/final/copy_probe.py
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t06-focused
+  - t12-focused
+  required_evidence:
+  - t06-focused
+  - t12-focused
+  - Directed report/lifecycle/sync consumer-module results after fixture migration; append exact subject
+    and commands to docs/implementation/acceptance-evidence.md.
+  - Distinguishing multipage real encoded activity query and production-Transport hide success plus
+    missing-label/read-failure refusal; preserve existing complete-report/current-text/cursor negatives.
+  - Existing final-delivery shared gate must pass on the settled integrated subject; no task-owned
+    duplicate whole-suite gate.
 stages:
 - id: release-1
   final_project: false
@@ -4764,6 +4960,9 @@ stages:
   - REQ-DOM-018
   - REQ-OUT-022
   - REQ-VERIFY-027
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -4900,10 +5099,13 @@ stages:
   - REQ-DOM-018
   - REQ-OUT-022
   - REQ-VERIFY-027
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
   check_refs:
   - final-delivery
 - id: todoist-coexistence
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-SYNC-031
   - REQ-SYNC-029
@@ -5035,6 +5237,148 @@ stages:
   - REQ-SYNC-028
   - REQ-INIT-010
   - REQ-VERIFY-026
+  deferred_requirement_refs:
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
+  check_refs:
+  - final-delivery
+- id: request-conformance
+  final_project: true
+  active_requirement_refs:
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
+  satisfied_requirement_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  - REQ-INIT-009
+  - REQ-VERIFY-025
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
+  - REQ-SYNC-031
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-027
   deferred_requirement_refs: []
   check_refs:
   - final-delivery

@@ -1,6 +1,11 @@
 # Prepared ownership and evidence
 
-The accepted design revision 9 is authoritative, including only the scoped REQ-SYNC-031 precedence over superseded historical reminder contradictions. The cumulative graph preserves 116 satisfied requirements and all 20 historical owners. The todoist-coexistence stage activates 13 successor requirements under T21–T25; none are deferred. This protected ledger records planned coverage, not observed acceptance. Execution appends observations to acceptance-evidence.md.
+The accepted Design revision 10 is authoritative for activity-filter encoding and
+waiting-label request conformance. The request-conformance stage retains all 129
+previously accepted requirements as satisfied, preserving T01–T25 and their checks.
+T26 owns the three new clarifications and directly affected consumer repairs.
+This frozen ledger records planned coverage; observed subject-bound results append
+to `docs/implementation/acceptance-evidence.md`. No requirement is deferred.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -97,8 +102,8 @@ requirements:
     planned_evidence:
     - t16-focused
   REQ-CLI-037:
-    stage_status: active
-    primary_owner: T24
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: &id014
     - t24-focused
   REQ-COMMENT-006:
@@ -115,8 +120,8 @@ requirements:
     primary_owner: null
     planned_evidence: *id005
   REQ-COMMENT-009:
-    stage_status: active
-    primary_owner: T22
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: &id017
     - t22-focused
   REQ-COMP-005:
@@ -187,21 +192,21 @@ requirements:
     primary_owner: null
     planned_evidence: *id009
   REQ-DOM-015:
-    stage_status: active
-    primary_owner: T21
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: &id010
     - t21-focused
   REQ-DOM-016:
-    stage_status: active
-    primary_owner: T21
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id010
   REQ-DOM-017:
-    stage_status: active
-    primary_owner: T21
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id010
   REQ-DOM-018:
-    stage_status: active
-    primary_owner: T21
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id010
   REQ-INIT-002:
     stage_status: satisfied
@@ -308,8 +313,8 @@ requirements:
     primary_owner: null
     planned_evidence: *id013
   REQ-OUT-022:
-    stage_status: active
-    primary_owner: T24
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id014
   REQ-PLAT-001:
     stage_status: satisfied
@@ -389,12 +394,12 @@ requirements:
     primary_owner: null
     planned_evidence: *id008
   REQ-SCHED-015:
-    stage_status: active
-    primary_owner: T24
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id014
   REQ-SCHED-016:
-    stage_status: active
-    primary_owner: T24
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id014
   REQ-SEC-004:
     stage_status: satisfied
@@ -450,16 +455,16 @@ requirements:
     - t20-focused
     - final-delivery
   REQ-SYNC-029:
-    stage_status: active
-    primary_owner: T22
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id017
   REQ-SYNC-030:
-    stage_status: active
-    primary_owner: T22
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence: *id017
   REQ-SYNC-031:
-    stage_status: active
-    primary_owner: T23
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t23-focused
     - final-delivery
@@ -559,9 +564,30 @@ requirements:
     - t20-focused
     - final-delivery
   REQ-VERIFY-027:
-    stage_status: active
-    primary_owner: T25
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t25-focused
+    - final-delivery
+  REQ-SYNC-032:
+    stage_status: active
+    primary_owner: T26
+    planned_evidence:
+    - t06-focused
+    - t12-focused
+    - final-delivery
+  REQ-SYNC-033:
+    stage_status: active
+    primary_owner: T26
+    planned_evidence:
+    - t06-focused
+    - t12-focused
+    - final-delivery
+  REQ-VERIFY-028:
+    stage_status: active
+    primary_owner: T26
+    planned_evidence:
+    - t06-focused
+    - t12-focused
     - final-delivery
 ```

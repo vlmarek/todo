@@ -1,3 +1,20 @@
+# Current continuation: TODO3-PLAN-009
+
+Reuse the completed application at `f3d6bd20daddf35bb955e86649d0ace093cfe3dc`.
+Confirmed Design revision 10 in `docs/design/request-conformance.md` clarifies only
+activity-filter encoding and valid waiting-label transport calls. T26 owns both
+repairs, directly affected fixtures and distinguishing offline evidence. All 25
+accepted effective assignments remain unchanged. The request-conformance stage
+activates three successor requirements; all 129 earlier obligations are satisfied
+and remain applicable where coupled. No product scope is deferred.
+
+T26 uses the existing shared APIs and verification scripts. The runner performs
+final-delivery on the settled integrated subject; workers use focused/directed
+feedback rather than mandatory duplicate broad runs. Historical continuation
+sections below describe earlier baselines and assignments. Current revision-10
+instructions control only their stated scope. No execution is authorized by this
+prepared plan. Stop before additional product or plan scope changes.
+
 # Current continuation: TODO3-PLAN-008
 
 Confirmed Design revision 9 in `docs/design/historical-reminder-contradiction.md`
