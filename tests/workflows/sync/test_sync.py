@@ -151,6 +151,131 @@ else:
             self.assertEqual(c.body, 'Surviving own comment')
         return state
 
+    def reminder_hydration(self, final, *, resolved=True):
+        # Synthetic Sync NotificationSyncView due shapes from pinned upstream
+        # api-v1.openapi.json. C is absent from current and not yet scope-resolved.
+        from tests.support.reminders import absolute
+        first = absolute('historical', item_id='C')
+        conflicting = absolute('historical', {'date': '2025-02-12T10:00:00',
+            'lang': 'en', 'timezone': 'Europe/Madrid'}, item_id='C')
+        steps = [self.sync('delta-token', delta(items=[item('entrant')],
+                    reminders=[first, conflicting])),
+                 self.sync('*', full(items=[item('A', added_at=CREATED), item('entrant')],
+                                      reminders=final)),
+                 self.sync('full-token', delta()),
+                 self.completed([completed_b()] + ([item('C', checked=True,
+                    completed_at=DONE, added_at=CREATED)] if resolved else [])),
+                 self.comments()]
+        if resolved:
+            steps.append((Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
+                          {'results': [], 'next_cursor': None}))
+        return steps
+
+    def test_authoritative_reminder_replacement_before_history_owner_resolution(self):
+        from tests.support.reminders import absolute, MINIMAL
+        replacement = absolute('historical', item_id='C')
+        workflow, _ = self.workflow(self.reminder_hydration([replacement]))
+        workflow.refresh()
+        state = self.store.load_consistent_state()
+        for snapshot in (state.snapshot, state.history.snapshot):
+            self.assertTrue(snapshot.items['C'].completed)
+            self.assertEqual(snapshot.reminders['historical'].due.raw_due, MINIMAL)
+            self.assertEqual(snapshot.reminders['historical'].notify_uid, 'recipient')
+        offline, _ = self.workflow()
+        self.assertEqual(offline.read_local().snapshot.reminders, state.snapshot.reminders)
+
+    def test_deferred_reminder_duplicates_normalize_optional_defaults(self):
+        from tests.support.reminders import absolute
+        minimal = {'date': '2026-10-30T09:00:00', 'lang': 'en'}
+        explicit = {**minimal, 'timezone': None, 'is_recurring': False}
+        workflow, _ = self.workflow(self.reminder_hydration([
+            absolute('historical', explicit, item_id='C'),
+            absolute('historical', minimal, item_id='C')]))
+        workflow.refresh()
+        offline, _ = self.workflow()
+        result = offline.read_local()
+        for snapshot in (result.snapshot, result.history.snapshot):
+            self.assertEqual(snapshot.reminders['historical'].due.raw_due, minimal)
+            self.assertTrue(snapshot.items['C'].completed)
+
+    def test_reminder_final_invalid_contradictory_or_unresolved_owner_preserves_state(self):
+        from tests.support.reminders import absolute
+        cases = [([absolute('historical', {'date': '2025-02-12'}, item_id='C')], True),
+                 ([absolute('historical', item_id='C'), absolute('historical',
+                    {'date': '2025-02-12T10:00:00', 'timezone': 'Europe/Madrid'}, item_id='C')], True),
+                 ([absolute('historical', item_id='C')], False)]
+        for final, resolved in cases:
+            with self.subTest(final=final, resolved=resolved):
+                before = self.bytes()
+                workflow, _ = self.workflow(self.reminder_hydration(final, resolved=resolved))
+                with self.assertRaisesRegex(SyncError, 'exact time|contradictory|unresolved reminder owner'):
+                    workflow.refresh()
+                self.assertEqual(self.bytes(), before)
+
+    def test_reminder_delta_update_delete_and_full_omission_after_history_resolution(self):
+        from tests.support.reminders import absolute, MINIMAL
+        workflow, _ = self.workflow(self.reminder_hydration([absolute('historical', item_id='C')]))
+        workflow.refresh()
+        workflow, _ = self.workflow([self.sync('delta-token', delta())])
+        workflow.refresh()
+        self.assertIn('historical', self.store.load_consistent_state().snapshot.reminders)
+        update = {**MINIMAL, 'date': '2025-02-12T11:00:00'}
+        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[absolute('historical', update, item_id='C')]))])
+        workflow.refresh()
+        self.assertEqual(self.store.load_history().snapshot.reminders['historical'].due.raw_due, update)
+        # Full omission of the now-known completed owner's reminder is authoritative.
+        steps = [self.sync('delta-token', full(items=[item('A', added_at=CREATED), item('entrant')])),
+                 self.sync('full-token', delta()),
+                 self.completed([completed_b(), item('C', checked=True, completed_at=DONE, added_at=CREATED)]),
+                 self.comments(), (Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
+                                   {'results': [], 'next_cursor': None})]
+        workflow, _ = self.workflow(steps)
+        workflow.refresh()
+        self.assertNotIn('historical', self.store.load_history().snapshot.reminders)
+        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[absolute('historical', item_id='C')]))])
+        workflow.refresh()
+        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[{'id': 'historical', 'is_deleted': True}]))])
+        workflow.refresh()
+        self.assertNotIn('historical', self.store.load_history().snapshot.reminders)
+
+    def test_floating_reminder_tombstone_with_timezone_change_retains_pending_history(self):
+        from tests.support.reminders import absolute, FLOATING
+        workflow, _ = self.workflow(self.reminder_hydration([absolute('historical', FLOATING, item_id='C')]))
+        workflow.refresh()
+        before = self.store.load_history()
+        workflow, _ = self.workflow([self.sync('delta-token', delta(
+            reminders=[{'id': 'historical', 'is_deleted': True}],
+            user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}}))])
+        workflow.refresh()
+        for snapshot in (self.store.load_consistent_state().snapshot, self.store.load_history().snapshot):
+            self.assertNotIn('historical', snapshot.reminders)
+            self.assertEqual(set(snapshot.items), set(before.snapshot.items))
+            self.assertEqual(snapshot.account.timezone, 'America/New_York')
+        self.assertEqual(self.store.load_history().coverage, before.coverage)
+        workflow, _ = self.workflow([self.sync('delta-token', delta())])
+        workflow.refresh()
+        self.assertNotIn('historical', self.store.load_history().snapshot.reminders)
+
+    def test_absolute_reminder_through_external_completion_and_reopen(self):
+        from tests.support.reminders import absolute
+        raw = absolute('absolute', item_id='B')
+        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[raw]))], now=INITIAL)
+        workflow.refresh()
+        original = self.store.load_history().snapshot.reminders
+        steps = self.external()
+        steps[0][1]['reminders'] = [raw]
+        workflow, _ = self.workflow(steps)
+        workflow.refresh()
+        state = self.store.load_consistent_state()
+        self.assertTrue(state.snapshot.items['B'].completed)
+        self.assertEqual(state.history.snapshot.reminders, original)
+        workflow, _ = self.workflow([self.sync('delta-token', delta(items=[item('B', parent_id='A', added_at=CREATED)]))])
+        workflow.refresh()
+        state = self.store.load_consistent_state()
+        self.assertFalse(state.snapshot.items['B'].completed)
+        self.assertEqual(state.snapshot.reminders, original)
+        self.assertEqual(state.history.snapshot.reminders, original)
+
     def test_external_completion_restart_refresh_and_clear_rebuild_precise(self):
         workflow, _ = self.workflow([self.sync('delta-token', delta())], now=INITIAL)
         workflow.refresh()  # protected open observations, not completed history

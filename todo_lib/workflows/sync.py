@@ -188,14 +188,36 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
             if latest is not None:
                 occurrences[latest.id] = replace(latest, undone=True)
     reminders = {k: r for k, r in known.reminders.items()
-                 if r.item_id in items and r.item_id not in s.items}
+                 if r.item_id in items and r.item_id not in s.items
+                 and (current.reminder_ids is None or k in current.reminder_ids)}
     reminders.update(s.reminders)
     reminders = {k: r for k, r in reminders.items() if r.item_id in items}
+    # Resolve final active reminder records against authoritative historical owners.
+    from todo_lib.adapter.current import _reminder, _signature
+    for raw in current.unresolved_reminders:
+        owner = raw['item_id']
+        if owner in removed:
+            continue
+        if owner not in items:
+            raise d.DomainError('unresolved reminder owner ' + owner)
+        for left, right in current.reminder_duplicates:
+            if right['id'] == raw['id'] and _signature(left, 'reminders') != _signature(right, 'reminders'):
+                raise d.DomainError('contradictory live reminders representations ' + raw['id'])
+        reminders[raw['id']] = _reminder(raw, s.account.timezone)
+    if known.account.timezone != s.account.timezone:
+        reminders = {k: replace(r, due=d.resolve_reminder_due(r.due.raw_due, s.account.timezone))
+            if r.type == 'absolute' and r.due.kind == 'floating' else r
+            for k, r in reminders.items()}
     snapshot = d.validate(replace(s, items=items, comments=comments,
         reminders=reminders, occurrences=occurrences), hidden_names)
     incoming = History(snapshot, {k: end for k in items})
     removed_comments = set(history.snapshot.comments) - comments.keys()
-    pending = merge_history(history, incoming, removed_item_ids=removed,
+    # Resolve removals and rebase the entire retained context before merge's
+    # validation. Unioning old reminders here would resurrect tombstones in the
+    # old timezone, even though the final candidate already supersedes them.
+    base = replace(history, snapshot=snapshot,
+                   observations={k: v for k, v in history.observations.items() if k in items})
+    pending = merge_history(base, incoming, removed_item_ids=removed,
                             removed_comment_ids=removed_comments)
     # Both stores must carry authoritative current values, including known-to-null.
     # The candidate covers every retained identity. Collection omissions for its

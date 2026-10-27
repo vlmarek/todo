@@ -22,7 +22,18 @@ The five collections are ID-keyed mappings. All identities are strings.
   Known timestamps accept `ExactInstant` or aware `datetime` and retain full
   supplied precision. `completed_at` is required when `completed=True`.
   Role derives from the current parent: no parent means task, otherwise step.
-- `Comment` and `Reminder` belong to an item ID. `Reminder.minutes=0` is present.
+- `Comment` and `Reminder` belong to an item ID. `Reminder(id, item_id, minutes)`
+  remains the relative constructor (`type='relative'`); zero is present and
+  requires timed task attention. `Reminder(id, item_id, type='absolute', due=a)`
+  carries independent exact `Attention`, even on undated/date-only tasks.
+  `resolve_reminder_due(raw, account_zone)` maps the reminder-specific open due
+  object through shared fixed/floating resolution. It accepts omitted rule/flag
+  and named-zone wall time; supplied scheduling fields remain validated. Known
+  recurrence without wording displays `recurring`, without a local parser.
+  `due.raw_due` retains absolute scheduling/language/recurrence/zone; `raw_due`
+  preserves a relative reminder's unused due without interpreting it. Optional
+  `notify_uid` and `is_urgent` retain supplied metadata. Reminder scheduling never
+  contributes task urgency. Old stored relative records use these defaults.
 - `Occurrence` records a completion fact separately from the current item. A
   recurring completion leaves the current item open. Deleted objects and their
   contributions must be removed by producers; no undelete representation exists.
@@ -160,3 +171,10 @@ serialization rather than exposing internal slots. Local malformed required
 stored timestamps raise `LocalError` without resetting bytes. No projection is
 an authority for persistence, delta seeding, equality or ordering. Attention's
 existing raw due/epoch_seconds API and reconciliation tolerance are unchanged.
+
+`rebase_attention(value, account_zone, reminder=False)` resolves retained floating
+raw due in current account authority; fixed values retain their instant.
+`preserves_reminder(previous, actual, account_zone)` compares exact retained
+identity, type, scheduling and known metadata without comparing raw encodings.
+`preserves_item(previous, actual, account_zone)` checks owner scalar/lifecycle
+preservation with equivalent due under that same account authority.

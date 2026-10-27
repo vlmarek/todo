@@ -50,7 +50,7 @@ class _Action:
 def _same_item(left, right, zone):
     return (left.title, left.priority, left.description, left.labels) == (
         right.title, right.priority, right.description, right.labels) and d.same_attention(
-        left.attention, right.attention, zone)
+        d.rebase_attention(left.attention, zone), right.attention, zone)
 
 
 def _require_waiting_label(transport):
@@ -186,7 +186,8 @@ class CaptureWorkflow:
                 actions.append(_Action('update_task', item.id, item.title, kwargs, updated, offsets(snapshot, item.id)))
             else:
                 proposal = propose(request, snapshot, item, now)
-                if _same_item(item, proposal.item, snapshot.account.timezone) and set(offsets(snapshot, item.id)) == set(proposal.reminders):
+                removes_absolute = not proposal.retain_absolute and any(r.item_id == item.id and r.type == 'absolute' for r in snapshot.reminders.values())
+                if _same_item(item, proposal.item, snapshot.account.timezone) and set(offsets(snapshot, item.id)) == set(proposal.reminders) and not removes_absolute:
                     raise d.DomainError('unchanged attention, hiding and reminders (complete no-op)')
                 validate_proposals(snapshot, [proposal], hidden)
                 adding_hiding = proposal.item.waiting and not item.waiting
@@ -198,12 +199,12 @@ class CaptureWorkflow:
                         kwargs[name] = new
                 # Explicit clear may remove reminders before changing to date-only/none.
                 markers = 'reminder' in options or options.get('clear')
-                if markers and set(offsets(snapshot, item.id)) != set(proposal.reminders):
+                if markers and (set(offsets(snapshot, item.id)) != set(proposal.reminders) or removes_absolute):
                     self._reminders(actions, snapshot, item.id, item.title, (), delete_only=True)
                 if kwargs:
                     actions.append(_Action('update_task', item.id, item.title, kwargs, proposal.item,
                         offsets(snapshot, item.id) if not markers or set(offsets(snapshot, item.id)) == set(proposal.reminders) else ()))
-                if markers and set(offsets(snapshot, item.id)) != set(proposal.reminders):
+                if markers and (set(offsets(snapshot, item.id)) != set(proposal.reminders) or removes_absolute):
                     self._reminders(actions, replace(snapshot, reminders={}), item.id, item.title, proposal.reminders)
         return actions, adding_hiding
 
@@ -279,6 +280,8 @@ class CaptureWorkflow:
                         issues.append('accepted item is absent from reconciled state')
                     else:
                         attention = expected.attention
+                        if 'attention' not in kwargs:
+                            attention = d.rebase_attention(attention, snapshot.account.timezone)
                         if attention is not None and attention.kind == 'unresolved':
                             valid_due = actual.attention is not None
                         else:
@@ -302,13 +305,19 @@ class CaptureWorkflow:
                     owner_id = target if action.method == 'create_reminder' else before.snapshot.reminders[target].item_id
                     owner_before = before.snapshot.items[owner_id]
                     owner_after = snapshot.items.get(owner_id)
-                    if owner_after is None or not _same_item(owner_before, owner_after, snapshot.account.timezone):
+                    if owner_after is None or not d.preserves_item(owner_before, owner_after, snapshot.account.timezone):
                         issues.append('reminder operation changed the owner attention/scalar state')
                 if action.method == 'provision_category':
                     if actual is None or (actual.name, actual.parent_id) != (kwargs['name'], target):
                         issues.append('accepted category differs from reconciled name/parent')
-                if action.retained is not None and set(offsets(snapshot, target)) != set(action.retained):
-                    issues.append('accepted attention changed the preserved reminder set')
+                if action.retained is not None:
+                    retained = {k: r for k, r in before.snapshot.reminders.items() if r.item_id == target}
+                    returned = {k: r for k, r in snapshot.reminders.items() if r.item_id == target}
+                    if (set(offsets(snapshot, target)) != set(action.retained)
+                            or retained.keys() != returned.keys()
+                            or any(not d.preserves_reminder(r, returned.get(k), snapshot.account.timezone)
+                                   for k, r in retained.items())):
+                        issues.append('accepted attention changed the preserved reminder set')
                 outcomes[-1] = replace(outcomes[-1], actual=actual, issues=tuple(issues))
                 documents.append(self._document(action, old, actual, snapshot, now, before.snapshot))
                 rendered = True

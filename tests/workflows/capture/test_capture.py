@@ -679,6 +679,66 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(result.status, 0, result.document.stderr)
         self.assertIn('Created category: New category', result.document.stdout)
 
+    def test_absolute_reminders_preserved_across_rename_and_date_only_reschedule(self):
+        from tests.support.reminders import absolute, FLOATING
+        self.wire_reminders = [absolute('absolute', FLOATING, item_id='parent')]
+        self.seed()
+        original = self.store.load_consistent_state().snapshot.reminders
+        self.refresh()
+        state = self.state(items=[dict(i, content='Renamed') if i['id'] == 'parent' else i for i in self.wire_items])
+        self.operation('item_update', {'id': 'parent', 'content': 'Renamed'}, state, 'parent')
+        result = self.run_request(['rename', 'Parent', '--to', 'Renamed'])
+        self.assertEqual(result.status, 0, result.document.stderr)
+        self.assertEqual(result.snapshot.reminders, original)
+        self.wire_items = state['items']
+        self.refresh()
+        state = self.state(items=[dict(i, due=due('2026-10-25')) if i['id'] == 'parent' else i for i in self.wire_items])
+        self.operation('item_update', {'id': 'parent', 'due': {'date': '2026-10-25', 'lang': 'en'}}, state, 'parent')
+        result = self.run_request(['schedule', 'Renamed', '--at', '2026-10-25'])
+        self.assertEqual(result.status, 0, result.document.stderr)
+        self.assertEqual(self.store.load_history().snapshot.reminders, original)
+
+    def test_rename_preserves_semantics_across_reminder_encoding_and_account_zone(self):
+        from tests.support.reminders import absolute, FLOATING, FIXED
+        # Task floats independently from its fixed and floating reminders.
+        self.wire_items[0]['due'] = due('2026-10-30T09:00:00', timezone=None)
+        floating = {k: v for k, v in FLOATING.items() if k != 'timezone'}
+        self.wire_reminders = [absolute('floating', floating, item_id='parent'),
+                               absolute('fixed', FIXED, item_id='parent')]
+        self.seed()
+        for zone, title in (('UTC', 'First'), ('America/New_York', 'Second')):
+            self.refresh()
+            self.account_zone = zone
+            returned = [absolute('floating', {**floating, 'timezone': None}, item_id='parent'),
+                        absolute('fixed', FIXED, item_id='parent')]
+            state = self.state(items=[dict(i, content=title) if i['id'] == 'parent' else i for i in self.wire_items],
+                               reminders=returned)
+            self.operation('item_update', {'id': 'parent', 'content': title}, state, 'parent')
+            old_title = self.wire_items[0]['content']
+            result = self.run_request(['rename', old_title, '--to', title])
+            self.assertEqual(result.status, 0, result.document.stderr)
+            self.wire_items, self.wire_reminders = state['items'], returned
+            for snapshot in (self.store.load_consistent_state().snapshot, self.store.load_history().snapshot):
+                self.assertEqual(snapshot.items['parent'].title, title)
+                self.assertEqual(snapshot.reminders['floating'].due.raw_due, returned[0]['due'])
+                self.assertEqual(snapshot.reminders['fixed'].due.raw_due, FIXED)
+                self.assertEqual(snapshot.items['parent'].attention.instant.hour, 9 if zone == 'UTC' else 13)
+
+    def test_scalar_update_rebases_floating_task_with_unchanged_fixed_reminder(self):
+        from tests.support.reminders import absolute, FIXED
+        self.wire_items[0]['due'] = due('2026-10-30T09:00:00', timezone=None)
+        self.wire_reminders = [absolute('fixed', FIXED, item_id='parent')]
+        self.seed()
+        self.refresh()
+        self.account_zone = 'America/New_York'
+        state = self.state(items=[dict(i, content='Renamed') if i['id'] == 'parent' else i for i in self.wire_items])
+        self.operation('item_update', {'id': 'parent', 'content': 'Renamed'}, state, 'parent')
+        result = self.run_request(['rename', 'Parent', '--to', 'Renamed'])
+        self.assertEqual(result.status, 0, result.document.stderr)
+        for snapshot in (self.store.load_consistent_state().snapshot, self.store.load_history().snapshot):
+            self.assertEqual(snapshot.items['parent'].attention.instant.hour, 13)
+            self.assertEqual(snapshot.reminders['fixed'].due.raw_due, FIXED)
+
     def test_reminder_capability_checked_before_creation(self):
         state = self.state(user_plan_limits={'current': {'activity_log': False,
             'activity_log_limit': 0, 'reminders': False}})

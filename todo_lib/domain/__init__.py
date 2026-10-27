@@ -47,3 +47,10 @@ __all__ += ("ExactInstant", "instant_from_wire", "instant_key", "instant_text", 
 
 from .text import incoming_text, scalar_title, item_description, convention_diagnostic
 __all__ += ("incoming_text", "scalar_title", "item_description", "convention_diagnostic")
+
+from .time import resolve_reminder_due
+__all__ += ('resolve_reminder_due',)
+
+from .time import rebase_attention
+from .model import preserves_reminder, preserves_item
+__all__ += ('rebase_attention', 'preserves_reminder', 'preserves_item')

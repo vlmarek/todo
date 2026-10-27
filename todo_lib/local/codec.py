@@ -81,6 +81,15 @@ def snapshot_from(data, zone):
             raise ValueError('second timezone authority')
         binding = d.Binding(**{**data['binding'], 'category_ids': frozenset(data['binding']['category_ids'])})
         account = d.Account(data['account']['id'], zone, d.Capabilities(**data['account']['capabilities']))
+        def attention_from(raw):
+            a = dict(raw)
+            if a.get('date_value') is not None:
+                a['date_value'] = date.fromisoformat(a['date_value'])
+            if a.get('instant') is not None:
+                a['instant'] = d.instant_datetime(parse_instant(a['instant']))
+            if a.get('epoch_seconds') is not None:
+                a['epoch_seconds'] = Decimal(a['epoch_seconds'])
+            return d.Attention(**a)
         items = {}
         for key, raw in data['items'].items():
             value = dict(raw)
@@ -89,14 +98,7 @@ def snapshot_from(data, zone):
                     value[name] = parse_instant(value[name])
             value['labels'] = frozenset(value['labels'])
             if value.get('attention') is not None:
-                a = dict(value['attention'])
-                if a.get('date_value') is not None:
-                    a['date_value'] = date.fromisoformat(a['date_value'])
-                if a.get('instant') is not None:
-                    a['instant'] = d.instant_datetime(parse_instant(a['instant']))
-                if a.get('epoch_seconds') is not None:
-                    a['epoch_seconds'] = Decimal(a['epoch_seconds'])
-                value['attention'] = d.Attention(**a)
+                value['attention'] = attention_from(value['attention'])
             items[key] = d.Item(**value)
         def timed(records, cls, field):
             if cls is d.Comment:
@@ -107,7 +109,7 @@ def snapshot_from(data, zone):
         return d.validate(d.Snapshot(binding, account, d.Project(**data['root']),
             {k: d.Project(**v) for k, v in data['categories'].items()}, items,
             timed(data['comments'], d.Comment, 'added_at'),
-            {k: d.Reminder(**v) for k, v in data['reminders'].items()},
+            {k: d.Reminder(**{**v, 'due': attention_from(v['due']) if v.get('due') is not None else None}) for k, v in data['reminders'].items()},
             timed(data['occurrences'], d.Occurrence, 'completed_at')))
     except (ValueError, TypeError, KeyError, AttributeError, ArithmeticError):
         raise LocalError('invalid stored managed snapshot') from None

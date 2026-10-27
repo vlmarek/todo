@@ -356,7 +356,7 @@ def validate_reminder_offsets(offsets: tuple[int, ...] | list[int]) -> None:
         raise DomainError('duplicate reminder offsets')
 
 
-def resolve_remote_due(raw_due: Mapping[str, Any] | None, account_zone: str | ZoneInfo) -> Attention | None:
+def resolve_remote_due(raw_due: Mapping[str, Any] | None, account_zone: str | ZoneInfo, *, reminder=False) -> Attention | None:
     """Interpret a supplied due object, not an HTTP response or wire request.
 
     Only `date` carries an occurrence. Unknown metadata is retained unchanged;
@@ -375,7 +375,7 @@ def resolve_remote_due(raw_due: Mapping[str, Any] | None, account_zone: str | Zo
     rule, lang, named_zone = raw.get('string'), raw.get('lang'), raw.get('timezone')
     if type(recurring) is not bool or any(v is not None and not isinstance(v, str) for v in (rule, lang, named_zone)):
         raise DomainError('due recurrence/language/timezone fields invalid')
-    if recurring and (not rule or not rule.strip()):
+    if recurring and not reminder and (not rule or not rule.strip()):
         raise DomainError('recurring due requires a rule')
     if named_zone is not None:
         account_timezone(named_zone)
@@ -387,10 +387,10 @@ def resolve_remote_due(raw_due: Mapping[str, Any] | None, account_zone: str | Zo
         elif ISO.fullmatch(value):
             dt = datetime.fromisoformat(value.replace('Z', '+00:00').replace('z', '+00:00'))
             floating = dt.tzinfo is None
-            if floating and named_zone is not None:
+            if floating and named_zone is not None and not reminder:
                 raise DomainError('floating due timezone must be null')
-            instant = resolve_wall(dt, zone, remote=True) if floating else dt.astimezone(UTC)
-            result = Attention('floating' if floating else 'fixed', instant=instant,
+            instant = resolve_wall(dt, named_zone or zone, remote=True) if floating else dt.astimezone(UTC)
+            result = Attention('floating' if floating and named_zone is None else 'fixed', instant=instant,
                                epoch_seconds=_precise_epoch(instant, value))
         else:
             raise ValueError
@@ -441,3 +441,27 @@ def retain_recurrence(proposal: Attention, previous: Attention | None) -> Attent
     if previous is None or not previous.recurring or proposal.kind == 'unresolved':
         return proposal
     return replace(proposal, recurring=True, rule=previous.rule, language=previous.language, zone=previous.zone)
+
+
+def resolve_reminder_due(raw_due, account_zone):
+    """Reminder open due object, including the pinned named-zone wall example.
+
+    Missing recurrence wording/flag is allowed; supplied fields remain meaningful.
+    Task due validation stays unchanged. No recurrence text is parsed locally.
+    """
+    if not isinstance(raw_due, Mapping):
+        raise DomainError('absolute reminder requires due object')
+    for name in ('string', 'lang', 'timezone'):
+        if name in raw_due and raw_due[name] is None and name != 'timezone':
+            raise DomainError('reminder due.' + name + ' must be text')
+    result = resolve_remote_due(raw_due, account_zone, reminder=True)
+    if not result.exact:
+        raise DomainError('absolute reminder requires exact time')
+    return result
+
+
+def rebase_attention(value, account_zone, *, reminder=False):
+    """Resolve retained floating wall time under current account authority."""
+    if value is not None and value.kind == 'floating':
+        return resolve_remote_due(value.raw_due, account_zone, reminder=reminder)
+    return value

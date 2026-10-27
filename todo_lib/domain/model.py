@@ -23,7 +23,7 @@ from .errors import DomainError
 from .time import ExactInstant, instant_key
 from .text import validate_title, title_key, incoming_text
 from .time import (Attention, account_timezone, require_aware, attention_order,
-                   validate_reminder_offsets, resolve_remote_due, same_attention)
+                   validate_reminder_offsets, resolve_remote_due, resolve_reminder_due, same_attention)
 
 
 @dataclass(frozen=True)
@@ -112,7 +112,12 @@ class Comment:
 class Reminder:
     id: str
     item_id: str
-    minutes: int
+    minutes: int | None = None
+    type: str = 'relative'
+    due: Attention | None = None
+    notify_uid: str | None = None
+    is_urgent: bool | None = None
+    raw_due: Mapping | None = None
 
 
 @dataclass(frozen=True)
@@ -455,9 +460,22 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
         if reminder.item_id not in snapshot.items:
             raise DomainError('reminder.item_id outside managed items')
         item = snapshot.items[reminder.item_id]
-        if not caps.reminders or item.attention is None or not item.attention.exact:
-            raise DomainError('reminders require account capability and exact attention')
-        offsets.setdefault(item.id, []).append(reminder.minutes)
+        if not caps.reminders:
+            raise DomainError('reminders require account capability')
+        if reminder.notify_uid is not None:
+            _id(reminder.notify_uid, 'reminder.notify_uid')
+        if reminder.is_urgent is not None and type(reminder.is_urgent) is not bool:
+            raise DomainError('reminder.is_urgent must be boolean')
+        if reminder.type == 'relative':
+            if item.attention is None or not item.attention.exact:
+                raise DomainError('relative reminders require exact attention')
+            offsets.setdefault(item.id, []).append(reminder.minutes)
+        elif reminder.type == 'absolute':
+            _validate_attention(reminder.due, snapshot.account.timezone, reminder=True)
+            if not reminder.due.exact:
+                raise DomainError('absolute reminder requires exact time')
+        else:
+            raise DomainError('managed reminder type unsupported')
     for values in offsets.values():
         validate_reminder_offsets(values)
     for occurrence in snapshot.occurrences.values():
@@ -476,7 +494,7 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
     return snapshot
 
 
-def _validate_attention(value: Attention, zone: str) -> None:
+def _validate_attention(value: Attention, zone: str, *, reminder=False) -> None:
     if not isinstance(value, Attention) or value.kind not in ('date', 'fixed', 'floating'):
         raise DomainError('snapshot attention must be a resolved due value')
     if value.kind == 'date':
@@ -492,12 +510,12 @@ def _validate_attention(value: Attention, zone: str) -> None:
             raise DomainError('attention precision inconsistent with instant')
     if any(v is not None and not isinstance(v, str) for v in (value.rule, value.language, value.zone)):
         raise DomainError('attention rule/language/zone must be strings or null')
-    if type(value.recurring) is not bool or (value.recurring and (not value.rule or not value.rule.strip())):
+    if type(value.recurring) is not bool or (not reminder and value.recurring and (not value.rule or not value.rule.strip())):
         raise DomainError('recurring attention requires a rule')
     if value.zone is not None:
         account_timezone(value.zone)
     if value.raw_due is not None:
-        resolved = resolve_remote_due(value.raw_due, zone)
+        resolved = (resolve_reminder_due if reminder else resolve_remote_due)(value.raw_due, zone)
         if not same_attention(value, resolved, zone):
             raise DomainError('attention raw due disagrees with resolved value/account timezone')
 
@@ -630,3 +648,32 @@ def require_editable(item: Item) -> None:
     """Ordinary mutation precondition; completed items are immutable."""
     if item.completed:
         raise DomainError('completed item is immutable; use eligible reopen or deletion')
+
+
+def preserves_reminder(previous, actual, account_zone):
+    """Exact retained scheduling and known metadata, allowing raw normalization.
+
+    Unknown recipient/urgency may become known. Raw due encoding is retained by
+    the caller, but omitted and null timezone have the same scheduling meaning.
+    """
+    from .time import rebase_attention, same_attention
+    if actual is None or (previous.id, previous.item_id, previous.type) != (actual.id, actual.item_id, actual.type):
+        return False
+    for name in ('notify_uid', 'is_urgent'):
+        value = getattr(previous, name)
+        if value is not None and value != getattr(actual, name):
+            return False
+    if previous.type == 'relative':
+        return previous.minutes == actual.minutes
+    if not same_attention(rebase_attention(previous.due, account_zone, reminder=True), actual.due, account_zone):
+        return False
+    return all(actual.due.raw_due.get(k) == v for k, v in (previous.due.raw_due or {}).items()
+               if k in ('string', 'lang', 'is_recurring'))
+
+
+def preserves_item(previous, actual, account_zone):
+    """Task identity/scalars/lifecycle with equivalent due in current timezone."""
+    from .time import rebase_attention, same_attention
+    return (actual is not None
+            and replace(previous, attention=None) == replace(actual, attention=None)
+            and same_attention(rebase_attention(previous.attention, account_zone), actual.attention, account_zone))

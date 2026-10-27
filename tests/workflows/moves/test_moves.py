@@ -106,7 +106,7 @@ class MoveTests(unittest.TestCase):
             token = '*' if destination_category != source.category_id else 'delta-token'
             initial = [r for r in self.rows if r['id'] != 'E'] if active_delta else after
             steps += [(expected, Receipt()), self.sync(token, full(
-                projects=self.projects, items=initial, notes=[n for n in self.notes
+                projects=self.projects, items=initial, reminders=getattr(self, 'returned_reminders', getattr(self, 'reminders', [])), notes=[n for n in self.notes
                     if not archived or n['item_id'] != 'E']))]
             steps += [self.sync('full-token', delta(items=after) if active_delta else delta())]
             if archived and outcome == 'ok':
@@ -165,6 +165,32 @@ class MoveTests(unittest.TestCase):
         for comment in saved.snapshot.comments.values():
             self.assertEqual(d.instant_text(comment.added_at), STAMP)
             self.assertEqual(d.instant_key(comment.added_at), d.instant_key(d.instant_from_wire(STAMP)))
+
+    def test_absolute_reminder_identity_metadata_survive_category_move(self):
+        from tests.support.reminders import absolute, FIXED
+        self.reminders = [absolute('absolute', FIXED, item_id='C')]
+        transport, _ = self.boundary([self.sync('*', full(projects=self.projects,
+            items=self.rows, notes=self.notes, reminders=self.reminders)), self.sync('full-token', delta())])
+        observed = retrieve(transport, BINDING)
+        with exclusive_lock('seed', self.root):
+            self.store.publish_snapshot(prepare_candidates(observed.snapshot,
+                empty_history(observed.snapshot), account_display='Person',
+                sync_token=observed.sync_token, synced_at=NOW))
+        old = observed.snapshot.reminders
+        workflow, _ = self.workflow(self.after('A', None, 'other'), {'id': 'A', 'project_id': 'other'})
+        result = workflow.execute(['move', 'A', 'other'])
+        self.assertEqual(result.status, 0)
+        self.assertEqual(self.store.load_consistent_state().snapshot.reminders, old)
+        self.assertEqual(self.store.load_history().snapshot.reminders, old)
+        # The next real full read authoritatively drops a descendant reminder.
+        self.rows = self.after('A', None, 'other')
+        self.returned_reminders = []
+        workflow, _ = self.workflow(self.after('A', None, 'cat'), {'id': 'A', 'project_id': 'cat'})
+        with self.assertRaisesRegex(SyncError, 'accepted move changed preserved reminders') as caught:
+            workflow.execute(['move', 'A', 'cat'])
+        self.assertEqual(caught.exception.remote_outcome, 'accepted')
+        self.assertIn('Read-only recovery', str(caught.exception))
+        self.assertEqual(self.store.load_history().snapshot.reminders, old)
 
     def test_scheduled_subtree_can_move_to_hidden_category(self):
         old = self.store.load_consistent_state().snapshot
