@@ -80,7 +80,7 @@ class ReadsTests(unittest.TestCase):
         with exclusive_lock('test', self.root):
             self.store.publish_snapshot(prepare_candidates(snapshot,
                 history or empty_history(snapshot), account_display='Person',
-                sync_token='full-token', synced_at=synced_at, initial_cursor=None if (self.root / 'binding.json').exists() else CURSOR))
+                current_snapshot=snapshot, sync_token='full-token', synced_at=synced_at, initial_cursor=None if (self.root / 'binding.json').exists() else CURSOR))
 
     def edit(self, **items):
         self.snapshot = replace(self.snapshot, items={**self.snapshot.items, **items})
@@ -465,6 +465,13 @@ class ReadsTests(unittest.TestCase):
         self.discover_completed_branch()
         before = {name: (self.root / name).read_bytes() for name in ('history.json', 'binding.json', 'report-cursor')}
         self.wire('delta-token', delta(items=[item('A', content='Changed root')]))
+        self.http.steps.extend([
+            (Expected('/tasks/completed/by_completion_date', [('project_id', 'cat'),
+                ('since', '2026-10-20T00:00:00Z'), ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]),
+                Response(b'{"items":[]}')),
+            (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
+                Response(json.dumps({'results': [{'id': 'survivor', 'content': 'Retained owner comment',
+                    'posted_at': d.instant_text(OLD), 'is_deleted': False}], 'next_cursor': None}).encode()))])
         real_replace = os.replace
 
         def fail_history(source, destination):

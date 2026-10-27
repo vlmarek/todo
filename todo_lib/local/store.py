@@ -9,6 +9,11 @@ synced_at, model and history timestamps are ExactInstant; nullable fields retain
 None. Schema-1 UTC strings preserve all fraction digits. Invalid required stored
 times raise LocalError without repairing files. write_cursor additionally requires
 UTC for datetime inputs; ExactInstant is intrinsically UTC.
+Optional cache current_resources stores only proven item/reminder membership,
+paired with that cache's token. Active owners' own comments come from the same
+validated merged snapshot; archived context never supplies active membership.
+Legacy caches omit membership and remain usable offline, requiring hydration
+before online incremental retrieval.
 """
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone, timedelta
@@ -40,6 +45,9 @@ class LocalState:
     history: History
     sync_token: str | None
     synced_at: d.ExactInstant | datetime | None
+    # Reconstructed Sync resources only; None on compatible legacy caches.
+    current_snapshot: d.Snapshot | None = None
+    current_reminder_ids: frozenset[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -100,7 +108,7 @@ def _snapshot_matches(snapshot, binding):
         raise LocalError('snapshot differs from authoritative binding')
 
 
-def _cache(content, binding):
+def _cache(content, binding, context=None):
     try:
         raw = loads(content)
         _envelope(raw, binding, 'cache')
@@ -109,8 +117,32 @@ def _cache(content, binding):
             raise LocalError('cache.sync_token: nonempty string required')
         s = snapshot_from(raw['snapshot'], binding.last_synced_account_timezone)
         _snapshot_matches(s, binding)
-        return s, token, parse_instant(raw['synced_at'])
-    except (TypeError, KeyError):
+        baseline = reminder_ids = None
+        if 'current_resources' in raw:
+            members = raw['current_resources']
+            names = ('items', 'reminders')
+            if not isinstance(members, dict) or set(members) != set(names):
+                raise LocalError('invalid current-resource provenance')
+            resources = {}
+            for name in names:
+                ids = members[name]
+                collection = getattr(s, name)
+                if name == 'reminders' and context is not None:
+                    collection = {**{k: r for k, r in context.reminders.items()
+                        if r.item_id not in members['items']}, **collection}
+                if (not isinstance(ids, list) or any(not isinstance(k, str) or k not in collection for k in ids)
+                        or len(set(ids)) != len(ids)):
+                    raise LocalError('invalid current-resource provenance')
+                resources[name] = {k: collection[k] for k in ids}
+            reminder_ids = frozenset(resources['reminders'])
+            resources['reminders'] = {k: r for k, r in resources['reminders'].items()
+                                     if r.item_id in resources['items']}
+            active = resources['items']
+            baseline = d.validate(replace(s, **resources,
+                comments={k: c for k, c in s.comments.items() if c.item_id in active},
+                occurrences={}))
+        return s, token, parse_instant(raw['synced_at']), baseline, reminder_ids
+    except (TypeError, KeyError, d.DomainError):
         raise LocalError('invalid cache; use --refresh') from None
 
 
@@ -142,7 +174,8 @@ def _cursor(content):
 
 
 def prepare_candidates(snapshot, history, *, account_display, sync_token, synced_at,
-                       initial_cursor=None, publication=None, hidden_names=()):
+                       initial_cursor=None, publication=None, hidden_names=(),
+                       current_snapshot=None, current_reminder_ids=None):
     """Pure complete validation for init/sync, before publication or HTTP mutation.
 
     Repeat init/sync supplies merged existing history and omits initial_cursor.
@@ -150,9 +183,16 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
     must differ from the existing binding; publish_snapshot checks this under
     the caller's lock before replacing any file.
     Tokens here are opaque incremental Sync tokens, never API credentials.
+    current_snapshot is the actual merged Sync view paired with sync_token.
+    current_reminder_ids also covers Sync reminders with archived owners, whose
+    bodies may live only in protected pending context after report selection.
+    Omission invalidates disposable provenance; combined history is never inferred
+    to be current. Membership only is stored beside the token in cache.json.
     """
     try:
         d.validate(snapshot, hidden_names)
+        if current_snapshot is not None:
+            d.validate(current_snapshot, hidden_names)
     except d.DomainError as error:
         raise LocalError(str(error)) from None
     validate_history(history)
@@ -162,8 +202,24 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
     _snapshot_matches(history.snapshot, binding)
     assoc = _association(binding)
     b = dumps(_binding_data(binding))
-    cache = dumps(dict(schema=1, association=assoc, snapshot=snapshot_data(snapshot),
-                      sync_token=sync_token, synced_at=instant(synced_at)))
+    cache_data = dict(schema=1, association=assoc, snapshot=snapshot_data(snapshot),
+                      sync_token=sync_token, synced_at=instant(synced_at))
+    if current_snapshot is not None:
+        _snapshot_matches(current_snapshot, binding)
+        members = {}
+        for name in ('items', 'comments', 'reminders'):
+            collection = getattr(current_snapshot, name)
+            if any(getattr(snapshot, name).get(k) != v for k, v in collection.items()):
+                raise LocalError('current baseline differs from published resource')
+            if name != 'comments':
+                members[name] = sorted(collection)
+        if {k: c for k, c in snapshot.comments.items() if c.item_id in current_snapshot.items} != current_snapshot.comments:
+            raise LocalError('current baseline differs from published comments')
+        if current_reminder_ids is not None:
+            members['reminders'] = sorted(set(current_reminder_ids) &
+                (snapshot.reminders.keys() | history.snapshot.reminders.keys()))
+        cache_data['current_resources'] = members
+    cache = dumps(cache_data)
     h = dumps(dict(schema=1, association=assoc, snapshot=snapshot_data(history.snapshot),
         observations=history.observations, coverage=[dict(start=c.start, end=c.end) for c in history.coverage], complete=history.complete))
     cursor = None
@@ -176,8 +232,8 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
 
 def validate_candidates(candidates):
     binding = _binding(candidates.binding)
-    _cache(candidates.cache, binding)
-    _history(candidates.history, binding)
+    history = _history(candidates.history, binding)
+    _cache(candidates.cache, binding, history.snapshot)
     if candidates.cursor is not None:
         _cursor(candidates.cursor)
     return candidates
@@ -211,15 +267,15 @@ class StateStore:
         binding = _binding(before)
         history = self.load_history(binding)
         cursor = self.load_cursor()
-        snapshot = token = synced = None
+        snapshot = token = synced = baseline = reminder_ids = None
         if require_cache:
             try:
-                snapshot, token, synced = _cache(read_bytes(self.root / 'cache.json'), binding)
+                snapshot, token, synced, baseline, reminder_ids = _cache(read_bytes(self.root / 'cache.json'), binding, history.snapshot)
             except LocalError as error:
                 raise LocalError(f'{error}; use --refresh') from None
         if before != read_bytes(self.root / 'binding.json'):
             raise LocalError('publication changed while reading; retry')
-        return LocalState(binding, cursor, snapshot, history, token, synced)
+        return LocalState(binding, cursor, snapshot, history, token, synced, baseline, reminder_ids)
 
     def publish_snapshot(self, candidates):
         """Caller holds the lock. Revalidate before any write; binding is last."""
@@ -258,7 +314,7 @@ class StateStore:
             elif candidates.cursor is None:
                 raise LocalError('initial publication requires a report cursor')
         for name, data, validator in (
-            ('cache.json', candidates.cache, lambda c: _cache(c, binding)),
+            ('cache.json', candidates.cache, lambda c: _cache(c, binding, _history(candidates.history, binding).snapshot)),
             ('history.json', candidates.history, lambda c: _history(c, binding)),
             ('report-cursor', candidates.cursor, _cursor),
             ('binding.json', candidates.binding, _binding),

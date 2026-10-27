@@ -169,7 +169,7 @@ def phase(install, name):
     def report_steps(last=False):
         lower = '2026-10-22T12:00:00Z' if last else CURSOR
         upper = '2026-10-22T12:00:02Z' if last else '2026-10-22T12:00:01Z'
-        return [sync('*', full([a(), item('D', 'A')], notes(True)[2:])), sync('full-token', delta()),
+        return [sync('delta-token', delta()),
             completed(lower, upper), rest('/activities', dict(date_from=lower, date_to=upper,
                 limit='200', object_event_types='unused'), {})]
 
@@ -179,7 +179,7 @@ def phase(install, name):
         method, path, query, _ = steps[-1]
         query['object_event_types'] = ['["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]']
         steps[-1] = (method, path, query, {'results': [], 'next_cursor': None})
-        return steps + ([own('B', True)] if last else [own('B', True), own('B', True)]) + [own('A', True), own('D', True)]
+        return steps + [own('B', True)]
 
     if name in ('tolerance', 'tolerance-read'):
         # Source: pinned api-v1.openapi.json NoteSyncView.content default and

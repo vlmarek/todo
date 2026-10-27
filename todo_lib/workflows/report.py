@@ -103,10 +103,23 @@ def _select(snapshot, completed, activities, start, end, hidden_names, *, now=No
 
 
 class _Evidence:
-    """Reuse already exhausted endpoint evidence during sync reconciliation."""
-    def __init__(self, adapter, completed, activities):
+    """Command-local complete evidence, shared by reconciliation and preparation.
+
+    Fresh merged Sync covers every active owner, including empty comment sets.
+    Filtered unknown-owner reads establish relevance only and are never cached.
+    """
+    def __init__(self, adapter, completed, activities, current=None):
         self.adapter, self.done, self.events = adapter, completed, activities
         self.own = {}
+        # Endpoint-wide progress spans reconciliation, preparation and filtered
+        # relevance reads. Only actual, successfully validated REST pages count.
+        self.comment_pages = [0]
+        if current is not None:
+            by_owner = {owner: [] for owner in current.items}
+            for comment in current.comments.values():
+                by_owner[comment.item_id].append(comment)
+            self.own = {owner: Retrieval(tuple(comments), ())
+                        for owner, comments in by_owner.items()}
 
     def completed(self, start, end, scope=None):
         records = tuple(r for r in self.done.records
@@ -119,9 +132,11 @@ class _Evidence:
             and (scope is None or (e.object_type == scope['object_type'] and e.object_id == scope['object_id'])))
         return Retrieval(records, self.events.pages, start, end)
 
-    def comments(self, owner):
+    def comments(self, owner, *, required_ids=None):
+        if owner not in self.own and required_ids is not None:
+            return self.adapter._comments(owner, self.comment_pages, required_ids=required_ids)
         if owner not in self.own:
-            self.own[owner] = self.adapter.comments(owner)
+            self.own[owner] = self.adapter._comments(owner, self.comment_pages)
         return self.own[owner]
 
 
@@ -239,10 +254,10 @@ class Reporter:
         sync = Synchronizer(self.transport, self.store)
         try:
             known = _known(state)
-            # A full current read avoids seeding retained archived metadata into
-            # an incremental Sync view and then mistaking it for current evidence.
-            current = retrieve(self.transport, known.binding, prior=known, sync_token=state.sync_token,
-                replace=True, hidden_names=config.hidden_from_now)
+            current = retrieve(self.transport, known.binding,
+                prior=state.current_snapshot or known, sync_token=state.sync_token,
+                replace=state.current_snapshot is None, hidden_names=config.hidden_from_now,
+                known=known, reminder_ids=state.current_reminder_ids)
             zone = current.account.timezone
             start = self._boundary(options['since'], now, zone) if 'since' in options else state.cursor
             end = self._boundary(options['until'], now, zone) if 'until' in options else now
@@ -271,7 +286,7 @@ class Reporter:
                 pages.extend(result.pages)
             self.completed = Retrieval(tuple(records), tuple(pages), lower, now)
             self.activities = adapter.activities(lower, now)
-            evidence = _Evidence(adapter, self.completed, self.activities)
+            evidence = _Evidence(adapter, self.completed, self.activities, current.snapshot)
             snapshot, pending = _reconcile(current, known, state.history, evidence,
                 lower, now, state.cursor, config.hidden_from_now)
             removed = set(current.deleted_ids | current.departed_ids)
@@ -300,7 +315,8 @@ class Reporter:
                                      '; completed/current evidence is insufficient')
             qualifying = replace(activities, records=tuple(e for e in activities.records
                 if _within(e.event_date, start, end)))
-            comments = adapter.required_comments(current.snapshot.items, self.completed, qualifying)
+            comments = adapter.required_comments(current.snapshot.items, self.completed, qualifying,
+                complete_comments=evidence.comments)
             items = dict(comments.owners)
             snapshot = d.validate(replace(snapshot, items=items, comments=comments.comments,
                 reminders={k: v for k, v in snapshot.reminders.items() if v.item_id in items},
@@ -309,9 +325,23 @@ class Reporter:
             pending = merge_history(pending, incoming,
                 removed_comment_ids={k for k, c in pending.snapshot.comments.items()
                     if c.item_id in items and k not in snapshot.comments})
+            # Current reminders can outlive an archived owner's report interval.
+            # Keep their necessary context in disposable cache as well as pending
+            # history: final cleanup may prune the latter after cursor publication.
+            cache_ids = set(items)
+            for identity, reminder in pending.snapshot.reminders.items():
+                if current.reminder_ids is not None and identity in current.reminder_ids:
+                    cache_ids.add(reminder.item_id)
+                    cache_ids.update(i.id for i in d.ancestors(pending.snapshot, reminder.item_id))
+            cached = replace(pending.snapshot,
+                items={k: i for k, i in pending.snapshot.items.items() if k in cache_ids},
+                **{name: {k: value for k, value in getattr(pending.snapshot, name).items()
+                          if value.item_id in cache_ids}
+                   for name in ('comments', 'reminders', 'occurrences')})
             phase = 'candidate preparation'
-            candidates = prepare_candidates(snapshot, pending, account_display=state.binding.account_display,
-                sync_token=current.sync_token, synced_at=now, hidden_names=config.hidden_from_now)
+            candidates = prepare_candidates(cached, pending, account_display=state.binding.account_display,
+                sync_token=current.sync_token, synced_at=now, current_snapshot=current.snapshot,
+                current_reminder_ids=current.reminder_ids, hidden_names=config.hidden_from_now)
             before = sync._bytes(('cache.json', 'history.json', 'binding.json'))
             phase = 'local publication'
             self.store.publish_snapshot(candidates)

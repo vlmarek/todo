@@ -100,6 +100,8 @@ def _recent_snapshot(synchronizer, result, hidden_names):
         candidates = prepare_candidates(snapshot, replace(history, snapshot=snapshot),
             account_display=result.state.binding.account_display,
             sync_token=result.state.sync_token, synced_at=result.state.synced_at,
+            current_snapshot=result.state.current_snapshot,
+            current_reminder_ids=result.state.current_reminder_ids,
             hidden_names=hidden_names)
         _publish_discoveries(synchronizer.store, candidates)
     return snapshot
@@ -254,7 +256,8 @@ class LifecycleWorkflow:
         for index, operation in enumerate(operations):
             result = None
             try:
-                result = self.gateway.execute(operation, before=Current(snapshot, state.state.sync_token),
+                result = self.gateway.execute(operation, before=Current(snapshot, state.state.sync_token, current_snapshot=state.state.current_snapshot,
+                reminder_ids=state.state.current_reminder_ids),
                     known_owners=snapshot.items, start=state.state.cursor)
                 outcomes.append(LifecycleOperation(operation, result.outcome.value, result))
                 if result.accepted:

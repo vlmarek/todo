@@ -274,9 +274,9 @@ class Synchronizer:
             d.instant_key(now)
             known = _known(state)
             phase = 'current retrieval'
-            current = retrieve(self.transport, known.binding, prior=known,
-                sync_token=state.sync_token, replace=clear_cache or state.snapshot is None,
-                hidden_names=config.hidden_from_now)
+            current = retrieve(self.transport, known.binding, prior=state.current_snapshot or known,
+                sync_token=state.sync_token, replace=clear_cache or state.current_snapshot is None,
+                hidden_names=config.hidden_from_now, known=known, reminder_ids=state.current_reminder_ids)
             phase = 'lifecycle reconciliation'
             adapter = HistoryAdapter(self.transport, timezone=current.account.timezone)
             start = min((state.cursor, state.synced_at or state.cursor), key=d.instant_key)
@@ -285,7 +285,8 @@ class Synchronizer:
             phase = 'candidate preparation'
             candidates = prepare_candidates(snapshot, history,
                 account_display=state.binding.account_display,
-                sync_token=current.sync_token, synced_at=now,
+                sync_token=current.sync_token, synced_at=now, current_snapshot=current.snapshot,
+                current_reminder_ids=current.reminder_ids,
                 hidden_names=config.hidden_from_now)
             # Observe actual destinations: publisher supplies per-file atomicity,
             # not a transaction. This also distinguishes first replacement failure.

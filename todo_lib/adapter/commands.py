@@ -349,8 +349,10 @@ class Gateway:
         after, actual, records, restored = None, None, (), ()
         try:
             if before is not None:
-                after = self.retrieve(observed, before.binding, prior=before.snapshot,
-                                      sync_token=before.sync_token)
+                after = self.retrieve(observed, before.binding, prior=before.current_snapshot or before.snapshot,
+                                      sync_token=before.sync_token,
+                                      replace=before.sync_token == '*' or before.current_snapshot is None,
+                                      known=before.snapshot, reminder_ids=before.reminder_ids)
             else:
                 # Provisioning before a root binding exists: only project/label
                 # resources, full plus one bounded freshness delta.

@@ -62,7 +62,8 @@ class FakeSync:
 
     def value(self):
         return SimpleNamespace(snapshot=self.snapshot, now=END,
-            state=SimpleNamespace(cursor=CURSOR, sync_token='token'))
+            state=SimpleNamespace(cursor=CURSOR, sync_token='token',
+                current_snapshot=None, current_reminder_ids=None))
 
     def refresh_locked(self, **kwargs):
         self.calls.append(('refresh', kwargs))
@@ -399,7 +400,7 @@ class AdapterLifecycleTests(unittest.TestCase):
         with exclusive_lock('setup', self.store.root):
             self.store.publish_snapshot(prepare_candidates(observed.snapshot,
                 empty_history(observed.snapshot), account_display='Person',
-                sync_token=observed.sync_token, synced_at=fixtures.INITIAL))
+                current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=fixtures.INITIAL))
             self.store.write_cursor(cursor)
 
     def workflow(self, steps, *, now=fixtures.NOW):
@@ -434,9 +435,9 @@ class AdapterLifecycleTests(unittest.TestCase):
             f.sync('full-token', delta()), f.completed([fixtures.completed_b()]),
             *f.external(),
             comment1.step(), f.sync('delta-token', delta()), self.comments('B', rest),
-            f.sync('delta-token', delta(notes=[current_note])),
+            f.sync('delta-token', delta(notes=[current_note])), f.completed([]), self.comments('B', rest),
             comment2.step(), f.sync('delta-token', delta()), self.comments('B', rest),
-            f.sync('delta-token', delta())])
+            f.sync('delta-token', delta()), f.completed([]), self.comments('B', rest)])
         result = wf.execute(['done', 'B', '--comment', 'first body', 'second body', 'third body'])
         self.assertEqual(result.status, 1)
         self.assertEqual([o.outcome for o in result.operations], ['accepted', 'accepted', 'rejected', 'unattempted'])

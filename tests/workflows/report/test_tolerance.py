@@ -56,7 +56,8 @@ class ToleranceTests(unittest.TestCase):
 
     def test_blank_report_incomplete_page_keeps_cursor_and_no_output(self):
         blank = dict(id='own', posted_at=base.CREATED, is_deleted=False)
-        steps = self.requests(events=[base.event(1, base.LAST)], comments=[blank])
+        steps = self.requests(events=[base.event(1, base.LAST)], comments=[blank],
+            current_items=[item('A')], rows=[base.completed_b()])
         steps[-1][1].pop('next_cursor')
         streams = self.streams()
         before = (self.root / 'report-cursor').read_bytes()

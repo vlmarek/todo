@@ -142,7 +142,7 @@ class WorkflowTests(unittest.TestCase):
         observed = retrieve(self.wire, BINDING)
         with exclusive_lock('init', self.root):
             self.store.publish_snapshot(prepare_candidates(observed.snapshot,
-                empty_history(observed.snapshot), account_display='Person', sync_token=observed.sync_token,
+                empty_history(observed.snapshot), account_display='Person', current_snapshot=observed.snapshot, sync_token=observed.sync_token,
                 synced_at=NOW, initial_cursor=CURSOR))
         self.wire.lock_root = self.root
         self.streams = p.OriginalStreams(StringIO(), StringIO(), StringIO())

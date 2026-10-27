@@ -62,7 +62,7 @@ class SyncTests(unittest.TestCase):
         with exclusive_lock('init', self.root):
             self.store.publish_snapshot(prepare_candidates(observed.snapshot,
                 empty_history(observed.snapshot), account_display='Person',
-                sync_token=observed.sync_token, synced_at=INITIAL, initial_cursor=CURSOR))
+                current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=INITIAL, initial_cursor=CURSOR))
 
     def put(self, name, data):
         path = self.root / name
@@ -95,6 +95,13 @@ class SyncTests(unittest.TestCase):
     def external(self):
         return [self.sync('delta-token', full(items=[item('A', added_at=CREATED)])),
                 self.sync('full-token', delta()), self.completed([completed_b()]), self.comments()]
+
+    def retained(self, *, c=False):
+        steps = [self.completed([]), self.comments()]
+        if c:
+            steps.append((Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
+                          {'results': [], 'next_cursor': None}))
+        return steps
 
     def bytes(self):
         return {name: (self.root / name).read_bytes() for name in
@@ -216,11 +223,11 @@ else:
         from tests.support.reminders import absolute, MINIMAL
         workflow, _ = self.workflow(self.reminder_hydration([absolute('historical', item_id='C')]))
         workflow.refresh()
-        workflow, _ = self.workflow([self.sync('delta-token', delta())])
+        workflow, _ = self.workflow([self.sync('delta-token', delta()), *self.retained(c=True)])
         workflow.refresh()
         self.assertIn('historical', self.store.load_consistent_state().snapshot.reminders)
         update = {**MINIMAL, 'date': '2025-02-12T11:00:00'}
-        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[absolute('historical', update, item_id='C')]))])
+        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[absolute('historical', update, item_id='C')])), *self.retained(c=True)])
         workflow.refresh()
         self.assertEqual(self.store.load_history().snapshot.reminders['historical'].due.raw_due, update)
         # Full omission of the now-known completed owner's reminder is authoritative.
@@ -232,9 +239,9 @@ else:
         workflow, _ = self.workflow(steps)
         workflow.refresh()
         self.assertNotIn('historical', self.store.load_history().snapshot.reminders)
-        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[absolute('historical', item_id='C')]))])
+        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[absolute('historical', item_id='C')])), *self.retained(c=True)])
         workflow.refresh()
-        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[{'id': 'historical', 'is_deleted': True}]))])
+        workflow, _ = self.workflow([self.sync('delta-token', delta(reminders=[{'id': 'historical', 'is_deleted': True}])), *self.retained(c=True)])
         workflow.refresh()
         self.assertNotIn('historical', self.store.load_history().snapshot.reminders)
 
@@ -245,14 +252,14 @@ else:
         before = self.store.load_history()
         workflow, _ = self.workflow([self.sync('delta-token', delta(
             reminders=[{'id': 'historical', 'is_deleted': True}],
-            user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}}))])
+            user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}})), *self.retained(c=True)])
         workflow.refresh()
         for snapshot in (self.store.load_consistent_state().snapshot, self.store.load_history().snapshot):
             self.assertNotIn('historical', snapshot.reminders)
             self.assertEqual(set(snapshot.items), set(before.snapshot.items))
             self.assertEqual(snapshot.account.timezone, 'America/New_York')
         self.assertEqual(self.store.load_history().coverage, before.coverage)
-        workflow, _ = self.workflow([self.sync('delta-token', delta())])
+        workflow, _ = self.workflow([self.sync('delta-token', delta()), *self.retained(c=True)])
         workflow.refresh()
         self.assertNotIn('historical', self.store.load_history().snapshot.reminders)
 
@@ -269,7 +276,8 @@ else:
         state = self.store.load_consistent_state()
         self.assertTrue(state.snapshot.items['B'].completed)
         self.assertEqual(state.history.snapshot.reminders, original)
-        workflow, _ = self.workflow([self.sync('delta-token', delta(items=[item('B', parent_id='A', added_at=CREATED)]))])
+        workflow, _ = self.workflow([self.sync('delta-token', delta(items=[item('B', parent_id='A', added_at=CREATED)])),
+            self.sync('*', open_tree(reminders=[raw])), self.sync('full-token', delta())])
         workflow.refresh()
         state = self.store.load_consistent_state()
         self.assertFalse(state.snapshot.items['B'].completed)
@@ -284,7 +292,7 @@ else:
         workflow.refresh()
         self.assert_precise()
         self.assertIn('coherent', self.child_process())
-        workflow, _ = self.workflow([self.sync('delta-token', delta())])
+        workflow, _ = self.workflow([self.sync('delta-token', delta()), *self.retained()])
         workflow.refresh()
         self.assert_precise()
         workflow, _ = self.workflow([self.sync('*', full(items=[item('A', added_at=CREATED)])),
@@ -318,7 +326,9 @@ else:
         workflow, _ = self.workflow(self.external())
         workflow.refresh()
         workflow, _ = self.workflow([self.sync('delta-token', delta(items=[
-            item('B', parent_id='A', added_at=None)], notes=[note('own', 'B', posted_at=None)]))])
+            item('B', parent_id='A', added_at=None)], notes=[note('own', 'B', posted_at=None)])),
+            self.sync('*', full(items=[item('A', added_at=CREATED), item('B', parent_id='A', added_at=None)],
+                notes=[note('own', 'B', posted_at=None)])), self.sync('full-token', delta())])
         workflow.refresh()
         state = self.store.load_consistent_state()
         for s in (state.snapshot, state.history.snapshot):
@@ -379,7 +389,7 @@ else:
             if Path(destination).name == 'history.json':
                 raise OSError('controlled later history failure')
             return real_replace(source, destination)
-        workflow, _ = self.workflow([self.sync('delta-token', delta())])
+        workflow, _ = self.workflow([self.sync('delta-token', delta()), *self.retained()])
         with patch('todo_lib.local.safety.os.replace', side_effect=fail_history):
             with self.assertRaises(SyncError) as caught:
                 workflow.refresh()
@@ -585,7 +595,13 @@ else:
             content='Reopened and promoted', added_at=None)],
             notes=[note('own', 'A', content='Now belongs to parent', posted_at=None)],
             projects=[project(name='Renamed')],
-            user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}}))])
+            user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}})),
+            self.sync('*', full(items=[item('A', added_at=CREATED), item('B', parent_id=None,
+                content='Reopened and promoted', added_at=None)],
+                notes=[note('own', 'A', content='Now belongs to parent', posted_at=None)],
+                projects=[project('root', None), project(name='Renamed')],
+                user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}})),
+            self.sync('full-token', delta())])
         workflow.refresh()
         state = self.store.load_consistent_state()
         self.assertEqual(state.binding.last_synced_account_timezone, 'America/New_York')
@@ -638,7 +654,8 @@ else:
             self.assertEqual(attention.kind, old_attention.kind)
         self.child_process()  # Fresh interpreter, consistent saved state, zero HTTP.
         # A subsequent delta must seed from the preserved floating representation.
-        workflow, _ = self.workflow([self.sync('delta-token', delta())], now=later)
+        workflow, _ = self.workflow([self.sync('delta-token', delta()),
+            (Expected('/tasks/completed/by_completion_date', query), {'items': []}), self.comments()], now=later)
         workflow.refresh()
         self.assertEqual(d.instant_text(self.store.load_history().snapshot.items['B'].attention.instant),
                          expected)
@@ -675,7 +692,7 @@ else:
         with exclusive_lock('mutation', self.root):
             state = self.store.load_consistent_state()
             result = Gateway(transport, clock=lambda: datetime(2026, 10, 22, tzinfo=timezone.utc)).execute(
-                operation, before=Current(state.snapshot, state.sync_token))
+                operation, before=Current(state.snapshot, state.sync_token, current_snapshot=state.current_snapshot))
             self.assertEqual(result.outcome, Outcome.ACCEPTED)
             self.assertFalse(result.issues)
             with patch('todo_lib.local.safety.os.replace', side_effect=fail_binding):

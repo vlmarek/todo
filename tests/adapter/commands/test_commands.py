@@ -44,7 +44,7 @@ def before(*items, comments=(), occurrences=()):
         'other': Project('other', 'Other', 'root')},
         {i.id: i for i in items or (Item('task', 'cat', 'Original', added_at=stamp(AT)),)},
         {c.id: c for c in comments}, {}, {o.id: o for o in occurrences})
-    return Current(validate(snapshot), 'prior-token')
+    return Current(validate(snapshot), 'prior-token', current_snapshot=snapshot)
 
 
 class Wire:
