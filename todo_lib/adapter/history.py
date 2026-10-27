@@ -26,8 +26,7 @@ import sys
 
 from todo_lib.domain import (
     Comment, DomainError, ExactInstant, Item, Occurrence, instant_datetime, instant_from_wire,
-    instant_key, instant_text, resolve_remote_due, split_waiting, validate_body,
-    validate_title,
+    instant_key, instant_text, resolve_remote_due, incoming_text,
 )
 from .transport import HTTPFailure, Replay
 
@@ -224,10 +223,10 @@ class HistoryAdapter:
             if parent is not None:
                 _id(parent, 'item.parent_id')
             title = _required(raw, 'content')
-            validate_title(title)
+            title = incoming_text(title, title=True)
             description = raw.get('description')
             description = '' if description is None else description
-            split_waiting(description)
+            description = incoming_text(description, description=True)
             priority = _required(raw, 'priority')
             if type(priority) is not int or priority not in (1, 2, 3, 4):
                 raise HistoryError('item.priority must be 1 through 4')
@@ -299,7 +298,7 @@ class HistoryAdapter:
             if _required(raw, 'file_attachment') is not None:
                 raise HistoryError('managed comment attachments are unsupported')
             body = raw.get('content', '')  # documented default, domain still requires text
-            validate_body(body)
+            body = incoming_text(body)
             return identity, Comment(identity, owner_id, body, posted)
 
         for values, page in self._pages('/comments', (('task_id', owner_id), ('limit', '200')), map_comment, count=count):

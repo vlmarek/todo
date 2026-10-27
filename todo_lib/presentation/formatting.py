@@ -1,11 +1,12 @@
 """Shared pure display helpers. Exact keys order; datetime projections display."""
+from todo_lib.domain import scalar_title, item_description, convention_diagnostic
 from dataclasses import dataclass, field
 from datetime import date
 from fractions import Fraction
 import os
 import re
 from todo_lib.domain import (account_timezone, ancestors, instant_datetime,
-                             instant_key, split_waiting, attention_order)
+                             instant_key, attention_order)
 from todo_lib.local.config import SOLARIZED
 
 
@@ -51,17 +52,17 @@ def actual_due(value, zone):
 
 
 def ancestor_path(snapshot, item):
-    return ' > '.join(i.title for i in ancestors(snapshot, item.id))
+    return ' > '.join(scalar_title(i.title) for i in ancestors(snapshot, item.id))
 
 
 def owner_title(snapshot, item, *, deep_only=False):
     path = ancestors(snapshot, item.id)
-    return item.title + (' — ' + ' > '.join(i.title for i in path) if path and (not deep_only or len(path) > 1) else '')
+    return scalar_title(item.title) + (' — ' + ' > '.join(scalar_title(i.title) for i in path) if path and (not deep_only or len(path) > 1) else '')
 
 
 def waiting_reason(item, now, zone):
     """Interpret optional Since metadata without changing the canonical body."""
-    _, body = split_waiting(item.description)
+    _, body = item_description(item)
     if body is None:
         return None, None
     original = edge(body)
@@ -159,3 +160,8 @@ def time_block(value, reminders, now, zone, color=Color(), *, detail=False):
         return 'none' if detail else 'due:none'
     text = actual_due(value, zone) + ' · ' + relative if detail else 'due:' + relative
     return color.paint(text, 'red' if overdue else 'blue')
+
+
+def convention_warnings(snapshot, items):
+    return '\n'.join('todo: ' + owner_title(snapshot, item) + ': ' + issue
+                     for item in items if (issue := convention_diagnostic(item)))

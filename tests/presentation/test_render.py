@@ -266,7 +266,7 @@ class WaitingTests(unittest.TestCase):
                  ('Reason: Reason: approval', ('Reason: approval', None)), ('ordinary', ('ordinary', None))]
         for body, expected in cases:
             with self.subTest(body=body):
-                row = Item('r', 'w', 'R', description=waiting(body))
+                row = Item('r', 'w', 'R', attention=day('2026-10-23'), labels=frozenset({'waiting'}), description=waiting(body))
                 self.assertEqual(waiting_reason(row, NOW, 'Europe/Prague'), expected)
 
     def test_exact_waiting_recursive_context_reasonless_and_multiline(self):

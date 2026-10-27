@@ -174,7 +174,7 @@ def search_candidates(snapshot, query, *, all_items=False):
     for item in snapshot.items.values():
         if item.completed and not all_items:
             continue
-        ordinary, reason = d.split_waiting(item.description)
+        ordinary, reason = d.item_description(item)
         fields = (item.title, ordinary, reason or '', *comments.get(item.id, ()))
         if any(matches(field, query) for field in fields):
             result.append(item)

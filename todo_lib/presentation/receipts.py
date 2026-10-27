@@ -1,4 +1,5 @@
 """Receipts consume accepted outcomes only; never infer remote acceptance."""
+from todo_lib.domain import scalar_title
 from dataclasses import dataclass
 from todo_lib.domain import ancestors
 from .formatting import actual_due, compact, multiline, owner_title, edge
@@ -16,6 +17,8 @@ def _scalar(value):
 
 
 def _change_line(field, before, after):
+    if field == 'Title':
+        before, after = scalar_title(before), scalar_title(after)
     return multiline(_scalar(before) + ' -> ' + _scalar(after), f'  {field}: ', '    ')
 
 
@@ -47,7 +50,7 @@ def render_move(before_snapshot, before, after_snapshot, after):
         if item.parent_id is None:
             return None
         parent = snapshot.items[item.parent_id]
-        return ' > '.join(a.title for a in (*ancestors(snapshot, parent.id), parent))
+        return ' > '.join(scalar_title(a.title) for a in (*ancestors(snapshot, parent.id), parent))
     # Display paths and names are context, not identity: different parents can
     # render identically, and the same parent can be renamed between snapshots.
     changes = []

@@ -50,7 +50,7 @@ class LifecycleResult:
 def _preview(snapshot, root, included):
     depths = d.subtree_depths(snapshot, root.id)
     offset = depths[root.id]
-    return '\n'.join('  ' * (depths[i.id] - offset) + i.title +
+    return '\n'.join('  ' * (depths[i.id] - offset) + d.scalar_title(i.title) +
                      (' [completed]' if i.completed else '')
                      for i in d.subtree(snapshot, root.id) if i.id in included)
 

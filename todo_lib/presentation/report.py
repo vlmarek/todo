@@ -1,7 +1,8 @@
 """Report presentation only. Callers own interval selection and finalization."""
+from todo_lib.domain import scalar_title, item_description
 from dataclasses import dataclass
-from todo_lib.domain import instant_key, root_task, split_waiting
-from .formatting import absolute, multiline, owner_title
+from todo_lib.domain import instant_key, root_task
+from .formatting import absolute, multiline, owner_title, convention_warnings
 from .render import document, _population, _list_due
 
 
@@ -28,6 +29,7 @@ def render_report(snapshot, start, until, *, finished=(), progress=(), hidden=()
     current visibility eligibility is inferred here. Stable input order breaks
     otherwise identical source ties.
     """
+    finished, progress, hidden = tuple(finished), tuple(progress), tuple(hidden)
     zone = snapshot.account.timezone
     sections = [f'Report\nFrom (exclusive): {absolute(start, zone)}\nUntil (inclusive): {absolute(until, zone)}\nTimezone: {zone}']
     def events_section(name, events, is_finished):
@@ -49,9 +51,9 @@ def render_report(snapshot, start, until, *, finished=(), progress=(), hidden=()
                 events = sorted(roots[root_id], key=_event_key)
                 if is_finished:
                     for event in events:
-                        lines.append('    ' + absolute(event.instant, zone) + ' — ' + snapshot.items[root_id].title)
+                        lines.append('    ' + absolute(event.instant, zone) + ' — ' + scalar_title(snapshot.items[root_id].title))
                     continue
-                lines.append('    ' + snapshot.items[root_id].title)
+                lines.append('    ' + scalar_title(snapshot.items[root_id].title))
                 for event in events:
                     item = snapshot.items[event.item_id]
                     context = owner_title(snapshot, item, deep_only=True)
@@ -73,10 +75,10 @@ def render_report(snapshot, start, until, *, finished=(), progress=(), hidden=()
         def visit(parent_id, category_id, depth):
             for item in sorted((i for i in population.values() if i.parent_id == parent_id and i.category_id == category_id), key=lambda i: (i.title.lower(), i.id)):
                 indent = '  ' * depth
-                lines.append(indent + item.title + ('  [context]' if item.id not in selected else ''))
+                lines.append(indent + scalar_title(item.title) + ('  [context]' if item.id not in selected else ''))
                 if item.id in selected:
                     lines.append(indent + '  Until: ' + _list_due(item, zone))
-                    _, reason = split_waiting(item.description)
+                    _, reason = item_description(item)
                     if reason is not None:
                         lines.append(multiline(reason, indent + '  Reason: ', indent + '    '))
                 visit(item.id, category_id, depth + 1)
@@ -85,4 +87,5 @@ def render_report(snapshot, start, until, *, finished=(), progress=(), hidden=()
                 lines.append('  ' + category.name)
                 visit(None, category.id, 2)
         sections.append('\n'.join(lines))
-    return document('\n\n'.join(sections))
+    shown = {event.item_id for event in (*finished, *progress)} | set(population)
+    return document('\n\n'.join(sections), convention_warnings(snapshot, (snapshot.items[k] for k in sorted(shown))))

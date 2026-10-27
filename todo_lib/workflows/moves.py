@@ -78,7 +78,7 @@ class MoveReceiptError(MoveError):
         self.publication_completed = True
         self.saved_state_available = True
         self.refresh_permitted = True
-        path = ' > '.join(i.title for i in (*d.ancestors(snapshot, selected.id), selected))
+        path = ' > '.join(d.scalar_title(i.title) for i in (*d.ancestors(snapshot, selected.id), selected))
         super().__init__(f'{phase} failed: {cause}. Remote operation outcome: accepted '
             f'for {selected.role} {path} in {snapshot.categories[selected.category_id].name}; '
             'local snapshot publication completed. Do not replay the mutation. '
@@ -115,6 +115,7 @@ def moved_snapshot(snapshot, source, parent_id, category_id, hidden_names=()):
         item = items[identity]
         items[identity] = replace(item, category_id=category_id,
             parent_id=parent_id if identity == source.id else item.parent_id)
+    d.validate_sibling_uniqueness(items.values(), snapshot.items.values())
     return d.validate(replace(snapshot, items=items), hidden_names)
 
 
@@ -222,7 +223,7 @@ class MoveWorkflow:
 
     @staticmethod
     def _item_context(snapshot, item):
-        path = ' > '.join(i.title for i in (*d.ancestors(snapshot, item.id), item))
+        path = ' > '.join(d.scalar_title(i.title) for i in (*d.ancestors(snapshot, item.id), item))
         return f'{item.role} {path} in {snapshot.categories[item.category_id].name}'
 
     def _publish(self, operation, result, original, candidate, source, settings):

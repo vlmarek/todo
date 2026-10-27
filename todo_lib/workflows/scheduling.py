@@ -6,6 +6,7 @@ remote facts. All replacements preserve the model's precise unrelated fields.
 """
 from dataclasses import dataclass, replace
 from todo_lib import domain as d
+from todo_lib.domain.text import START, END
 
 
 def offsets(snapshot, item_id):
@@ -54,11 +55,17 @@ def propose(request, snapshot, item, now):
         labels = labels | {'waiting'}
     description = item.description
     if clear or unhide:
-        description = d.with_waiting_reason(description, None)
+        if d.item_description(item)[1] is not None:
+            description = d.with_waiting_reason(description, None)
     elif 'reason' in options:
         if not enable:
             raise d.DomainError('reason requires explicit hiding')
-        description = d.with_waiting_reason(description, options['reason'] or None)
+        try:
+            if d.convention_diagnostic(item) and any(line in (START, END) for line in description.split('\n')):
+                raise d.DomainError('unsafe waiting reason rewrite: literal block')
+            description = d.with_waiting_reason(description, options['reason'] or None)
+        except d.DomainError as error:
+            raise d.DomainError(d.scalar_title(item.title) + ': ' + str(error)) from None
     markers = options.get('reminder')
     reminders = offsets(snapshot, item.id)
     if markers is not None:
@@ -69,7 +76,7 @@ def propose(request, snapshot, item, now):
     unresolved = attention is not None and attention.kind == 'unresolved'
     if enable and attention is None:
         raise d.DomainError('hiding requires an attention day; use --due tomorrow')
-    if unresolved and ('waiting' in labels or any(a.waiting for a in d.ancestors(snapshot, item.id))):
+    if unresolved and ('waiting' in labels or any(a.waiting and a.attention is not None for a in d.ancestors(snapshot, item.id))):
         attention.day(snapshot.account.timezone)  # specific expression + ISO advice
     if enable and attention.day(snapshot.account.timezone) <= now.astimezone(
             d.account_timezone(snapshot.account.timezone)).date():
@@ -100,8 +107,6 @@ def validate_proposals(snapshot, proposals, hidden_names=()):
             for j, minutes in enumerate(proposal.reminders):
                 key = f'proposal-reminder-{index}-{j}'
                 reminders[key] = d.Reminder(key, item.id, minutes)
-        elif snapshot.categories[item.category_id].name in hidden_names:
-            raise d.DomainError('hidden category forbids attention')
     return d.validate(replace(snapshot, items=items, reminders=reminders), hidden_names)
 
 

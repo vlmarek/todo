@@ -218,7 +218,7 @@ class HistoryTests(unittest.TestCase):
 
     def test_malformed_current_comment_data(self):
         for changes in ({'posted_at': 'bad'}, {'posted_at': False}, {'id': None},
-                        {'is_deleted': 0}, {'content': ''}, {'content': {'text': 'bad'}}):
+                        {'is_deleted': 0}, {'content': '\r'}, {'content': {'text': 'bad'}}):
             with self.subTest(changes=changes):
                 adapter, _ = self.boundary([('/comments', comments_query('task'),
                     {'results': [comment(**changes)], 'next_cursor': None})])

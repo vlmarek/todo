@@ -200,9 +200,8 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual([op.type for op, _ in gateway.calls], ['item_complete', 'item_update_date_complete'])
         self.assertEqual(gateway.calls[-1][0].args, {'id': 'R', 'is_forward': 1, 'reset_subtasks': 0})
         wf, _, gateway, _ = self.workflow(s, hidden=['Category'])
-        with self.assertRaises(d.DomainError):
-            wf.execute(['done', 'R'])
-        self.assertFalse(gateway.calls)
+        self.assertEqual(wf.execute(['done', 'R']).status, 0)
+        self.assertEqual(len(gateway.calls), 2)
 
     def test_waiting_recurring_parent_predicts_completed_ordinary_children(self):
         parent = recurring(labels=['waiting'])

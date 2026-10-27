@@ -44,3 +44,6 @@ __all__ = (
 from .time import ExactInstant, instant_from_wire, instant_key, instant_text, instant_datetime
 
 __all__ += ("ExactInstant", "instant_from_wire", "instant_key", "instant_text", "instant_datetime")
+
+from .text import incoming_text, scalar_title, item_description, convention_diagnostic
+__all__ += ("incoming_text", "scalar_title", "item_description", "convention_diagnostic")

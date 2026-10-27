@@ -578,13 +578,16 @@ class CaptureTests(unittest.TestCase):
         self.assertIsNone(result.snapshot.items['child'].attention)
         self.assertEqual(result.snapshot.items['child'].description, 'Ordinary')
 
-    def test_hidden_category_descendant_blocks_before_mutation(self):
+    def test_hidden_category_scheduling_allows_unrelated_mutation(self):
         state = self.state(projects=[project('root', None), project(name='Later')],
             items=self.wire_items + [item('child', parent_id='parent', due=due('2026-10-23'))])
         self.refresh(state)
-        with self.assertRaisesRegex(SyncError, 'hidden category'):
-            self.run_request(['priority', 'Parent', 'P1'])
-        self.assertTrue(all('commands' not in c for c in self.http.calls))
+        changed = deepcopy(state)
+        changed['items'][0]['priority'] = 4
+        self.operation('item_update', {'id': 'parent', 'priority': 4}, changed, 'parent')
+        result = self.run_request(['priority', 'Parent', 'P1'])
+        self.assertEqual(result.status, 0)
+        self.assertIsNotNone(result.snapshot.items['child'].attention)
 
     def test_parser_expression_normalization_preserves_zero_or_reports_loss(self):
         self.wire_items[0]['due'] = due('2026-10-23T10:00:00Z')

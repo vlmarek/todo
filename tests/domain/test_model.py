@@ -104,8 +104,9 @@ class ModelTests(unittest.TestCase):
     def test_active_uniqueness_unicode_and_completed_reuse(self):
         a = Item('a', 'c', 'École')
         b = Item('b', 'c', 'e\u0301COLE')
+        validate(snap(a, b))
         with self.assertRaises(DomainError):
-            validate(snap(a, b))
+            validate_sibling_uniqueness((a, b))
         done = replace(b, completed=True, completed_at=NOW)
         validate(snap(a, done, replace(done, id='d')))
         validate(snap(a, replace(b, parent_id='a')))
@@ -192,13 +193,11 @@ class ModelTests(unittest.TestCase):
         validate(snap(parent, Item('c1', 'c', 'c1', 'p', attention=due('2026-10-24T01:00:00Z'))))
         for item in (Item('a', 'c', 'a', labels=frozenset({'waiting'})),
                      Item('a', 'c', 'a', description='[todo waiting]\nreason\n[/todo waiting]')):
-            with self.assertRaises(DomainError):
-                validate(snap(item))
+            validate(snap(item))
         s = snap(parent)
         self.assertTrue(visibility(s, 'p', NOW, ['Work']).category_hidden)
         self.assertFalse(visibility(s, 'p', NOW, ['work']).category_hidden)
-        with self.assertRaisesRegex(DomainError, 'hidden category'):
-            validate(s, ['Work'])
+        validate(s, ['Work'])
         validate(s, [])
         validate(snap(Item('a', 'c', 'a')), ['Work'])
 
@@ -355,8 +354,10 @@ class TextTests(unittest.TestCase):
                      '[todo waiting]\nwhy\n[/todo waiting]\nother',
                      '[todo waiting]\n[todo waiting]\nwhy\n[/todo waiting]',
                      '[todo waiting]\n why \n[/todo waiting]'):
-            with self.subTest(text=text), self.assertRaises(DomainError):
-                split_waiting(text)
+            with self.subTest(text=text):
+                self.assertEqual(split_waiting(text), (text, None))
+                with self.assertRaises(DomainError):
+                    with_waiting_reason(text, 'new')
         for reason in ('[todo waiting]', 'x\n[/todo waiting]', ''):
             with self.assertRaises(DomainError):
                 with_waiting_reason('', reason)
