@@ -254,3 +254,124 @@ and integrated runner gates remain CML responsibilities at their eligible
 boundaries. Existing subsecond and per-file publication/manual-recovery limits
 remain unchanged; no migration, compatibility fallback or recovery mechanism was
 added.
+
+### T25 complete coexistence audit (2026-10-27, offline)
+
+Subject: launch HEAD `d2be33b026c6c5790a040602d51754adf698edc6` plus the
+uncommitted T25 deliverables: `tests/cli/test_coexistence.py`,
+`tests/delivery/final/copy_probe.py`, `todo_lib/syntax/help.py`, `README.md`,
+and this appended record. Historical records above are preserved. The tested
+runtime/scripts/tests SHA256 is
+`31d6a7f564daeb49827efdb1675c7a6441f449038ca8437aeb2feb810477f8ad`,
+using the sorted-relative-path/NUL/bytes/NUL procedure described above. Only
+documentation was finalized after the successful delivery run; no commit was made.
+
+Authority inspected: confirmed revision 8's successor table and complete
+REQ-VERIFY-027, `docs/design/external/todoist/planning-contracts.md`, and confirmed
+revision 9 in `docs/design/historical-reminder-contradiction.md`. Revision 9 changes
+only superseded historical reminder contradictions before owner resolution.
+The existing T23 `SyncTests.test_authoritative_reminder_replacement_before_history_owner_resolution`
+already demonstrates permissible consistent replacement and persisted reload.
+Its adjacent invalid-final/contradictory-final/unresolved-owner cases preserve
+protected bytes; update, tombstone and full-omission cases retain actual authority.
+These were run in the complete suite. Historical rejected evidence is not relabeled
+as a verified fix. No new historical contradiction tracker or protected-input edit
+was needed, and no consequential unresolved protected-input contradiction was found.
+
+Actual predecessor source was followed through current `_signature`, `_merge`,
+duplicate/scope mapping, history pagination/scoped comments/activities, reminder
+time mapping, shared scheduling proposals, capture preflight and execution,
+comment buffer identity, codec reload, public CLI composition and pure receipts.
+Existing behavior supplies these shared paths; T25 adds composition evidence and
+clarifies help rather than implementing a parallel model, parser or transport.
+
+Pinned-contract application conformance (not live observations): retained
+`docs/design/external/todoist/upstream/api-v1.openapi.json` was inspected directly.
+`ItemSyncView.properties.due.examples[0]` omits timezone;
+`NoteSyncView.properties.content` defaults to empty string; GET `/api/v1/comments`
+returns `PaginatedList_NoteSyncView_`; `NotificationSyncView.properties.due.examples[0]`
+has date/lang/named zone without recurrence string/flag. Existing independently
+retained `tests/support/reminders.py` cites these and the Due dates tag, separating
+unchanged MINIMAL from synthetic valid floating/fixed recurrence dates/wording.
+New raw comment examples cite the pinned source rather than mapper output.
+Named-zone local reminder time follows the bounded planning interpretation,
+distinct from task-due validation and account-floating semantics; the retained
+source inconsistency is not a newly established provider guarantee.
+
+REQ-VERIFY-027 distinguishing evidence, in definition order:
+
+| Distinction | Representative current evidence and result |
+| --- | --- |
+| Text with absent/website-preview/file metadata; same-ID update | New `PublicText.test_refresh_reload_editor_current_text_report_and_incomplete_cursor` maps nonblank text with absent versus website metadata identically through public refresh/report. Copied tolerance adds actual-file metadata versus absence. Existing current/history tolerance and comments `test_blank_unchanged_crlf_then_fill_same_id_omits_attachment` cover ignored metadata, same-ID text update and exact attachment-free command args. |
+| Empty/default/whitespace comments and strict edits | New public refresh -> protected reload -> unchanged CRLF editor -> qualifying current-text report keeps blank identity and `[no text]`; no mutation expectation exists for unchanged edit. Existing workflow report tolerance, comments tolerance/codec/workflow cases distinguish whitespace, explicit empty creation, emptying nonblank, unused starter and deletion by removed ID (including cancel/confirmation). |
+| Due omission, invalid consumed values, unused annotation, original language | `tests.adapter.current.test_tolerance` uses unchanged official task due without timezone and rejects invalid supplied zone/date/required fields; its real Gateway wrappers/strict Wire retain German recurrence language. History tolerance ignores annotation shapes and asserts no annotate_notes request. |
+| Relative zero, independent absolute, fixed/floating, DST and actual result | New `PublicSets` adds zero to a mixed imported set, reloads kept metadata, creates absolute recurrence on an undated task and preserves it through rename. Existing reminder current/local/domain suites cover legacy codec, minimal omissions, fixed versus floating account-zone changes and undated/date-only independence. Capture reminder cases cover DST refusal, relative eligibility, task rescheduling, retained recurrence and two-second actual normalization; gateway reminder cases enforce kind/day/zone/rule/language and date-only partial failure. |
+| Mixed whole-set keep, preview, cancel, both clears | New public mixed keep/read/cancel/noninteractive/clear case checks no commands on refusal, escaped titles, retention hint and unchanged IDs. Existing `ReminderWorkflowTests` covers confirmed replacement ordering before task writes, no prompt for retained additions and both explicit clear forms (reminder-only versus all scheduling). No fabricated timestamp reconstruction of kept metadata. |
+| Unresolved expressions, pre-write consent and equivalent new IDs | Existing capture reminder `test_unknown_equivalent_normalization_can_have_new_identity` sends only after consent, removes old ID, accepts actual equivalent Spanish normalized schedule under a new ID. Cancel/EOF/noninteractive and omitted-recurrence-flag cases preserve all unretained existing reminders without submitting the expression. New public/copy preview asserts expression and keep hint. Locally fixed matches and explicit keep remain separate from unknown expressions. |
+| Relevance, required-data failures, pagination and report cursor | Current/history tolerance cases discard demonstrably private/deleted/out-of-window unused text and reject unknown scope, required identity/time/control faults. New public incomplete scoped-comment page returns status 1, no normal report and unchanged cursor bytes; preview also leaves cursor unchanged. Existing report/history suites retain capability/event-ID/cursor, archived-owner/privacy and full pagination negatives. Revision-9 replacement exception does not weaken these final-record protections. |
+| Imported duplicates versus new CLI collisions | New public case imports duplicate titles and inactive literal waiting text, exercises ordinary ambiguity, unrelated rename/reload and strict new collision with no command. Existing domain/capture coexistence cases cover task/step resolving rename/create/reopen and category uniqueness. Hidden moves, category rename/filter changes and overdue exclusion from normal now reuse domain/capture/presentation coexistence cases. |
+| Waiting conventions and safe text/title output | Domain/capture/presentation coexistence cases retain missing-date inactive labels, malformed/orphaned reason text, valid reasonless hiding, unsafe rewrite refusal and earlier-child/hidden-ancestor refusal. New public mixed case checks escaped newline/tab titles in receipt and interactive/noninteractive removal preview; copied phases check receipt/preview/view. Existing presentation surfaces, domain control negatives and comment editor cases preserve CRLF/blank text, backslash escaping and forbidden-control refusal. |
+
+Synthetic operation outcomes are supplied independently of requests. The existing
+strict transport boundaries reject wrong forms, queries, UUID/temp-ID attribution
+and operation arguments. New public cases use those boundaries without extra
+production hooks. The copied test's strict opener asserts real origin/auth/method,
+Sync argument sets and UUID/temp-ID proof; actual Spanish recurrence/date comes
+from an independently supplied authoritative delta, not a local recurrence parser.
+
+Copied-entry evidence: existing `copy_probe.py` now adds `tolerance` and
+`tolerance-read`, each in a new interpreter. The unchanged PATH launcher/module
+tree outside the source/tests runs refresh, absent/file metadata and blank text,
+stored reload, unchanged CRLF editing, new absolute recurrence on undated work,
+actual normalized receipt, next-process cached read, removal-expression refusal,
+date-only rescheduling with absolute keep and reminder-only clear. An independent
+imported item E preserves Alpha/D and the existing long-comment pager fixture.
+Controlled clock never moves backwards after final report cleanup. HOME/PATH are
+isolated, credentials synthetic, socket connections forbidden, no tests installed,
+and copied runtime bytes compared before/after. The original report precision,
+cursor/failure/cleanup phases and both real-less PTY cases remain intact.
+
+Observed commands/results:
+
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_coexistence tests.delivery.final.test_verify -v`:
+  final exit 0, 8 tests, no skips; complete output `/tmp/t25-focused.log`.
+  Initial development failures were fixture-only: task view must select a parent
+  for nested B, and mixed deletion expectations must follow relative-offset order.
+  Imported TestCase discovery duplication was removed by importing its module.
+- A disposable copied-only run with `python3.11 -I -B <outside>/copy_probe.py <install>`
+  under `verify_clean.environment(...)`: 13 phases passed, exit 0
+  (`/tmp/t25-copy.log`), after correcting the synthetic phase clock to follow the
+  final report cursor. This developmental observation predates the item-E repair.
+- First `./scripts/verify-clean`: complete suite 640/640 passed and all copied
+  phases passed, but exit 1 at real less because the new fixture had overwritten
+  Alpha/D's expected pager content (`/tmp/t25-final-delivery.log`). This was a real
+  cross-consumer fixture defect, not a successful final-delivery result.
+- Repaired `./scripts/verify-clean`: exit 0; 640 tests in 14.628 seconds, no skips;
+  all 13 copied phases plus real-less short fit and long G/q truecolor passed;
+  byte identity, unchanged entry/end porcelain and artifact hygiene passed
+  (`/tmp/t25-final-delivery-repaired.log`). Each invocation calls `scripts/check`
+  exactly once. Harness self-tests still use tiny synthetic suites, never recurse
+  into the application suite. Scripts and packaging were not changed.
+- `git diff --check`: exit 0. No generated state, real credentials, live account
+  use or protected planning changes were introduced. Logs above are ephemeral
+  worker diagnostics, not installed deliverables.
+
+The first broad run addressed the concrete delivery composition gap: focused
+tests cannot establish the copied amendment together with byte identity, real
+less, full discovery and hygiene. The second broad run was justified by the
+demonstrated pager fixture failure and subsequent shared-fixture repair, not by
+another runner role. No further broad loop or new gate was added. Retained runner
+final-delivery/integrated-complete evidence in `/cml-evidence/inherited.md` covers
+launch HEAD only; it does not certify these uncommitted edits. The existing
+runner final-delivery and combined independent runtime review remain required
+on the settled integrated subject; this author audit is not independent review.
+
+Remaining uncertainty/evidence limits: all new operation results are controlled
+synthetic outcomes against the pinned contract. No live attachment preservation,
+notification delivery, recurring advancement/delivery, provider deduplication,
+real account or newer upstream behavior was verified. No exhaustive matrix,
+stress claim, live gate, dependency installation, generic compatibility framework
+or recovery command was added. Earlier per-file publication, historical coverage,
+platform and live-smoke limits remain. README and public help now teach imported
+duplicates, blank editor identity and the established tolerance behavior; existing
+reminder help continues to explain keep/clear/confirmation and provider resolution.

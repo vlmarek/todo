@@ -72,3 +72,19 @@ attention, recurrence and hiding. `--reminder-at clear` is invalid. Rescheduling
 task preserves absolute reminders independently; moving to a date-only task due
 requires explicitly clearing/replacing surviving relative reminders, optionally
 using `--reminder-at keep`.
+
+Imported task/step titles may duplicate siblings; ordinary ambiguity selection
+still applies. New CLI title collisions are rejected. Imported line breaks and
+tabs in titles are escaped in views, prompts and receipts. Hidden-category work
+stays out of normal `now`, even when overdue. A waiting label without an attention
+date is inactive; malformed or orphaned reason text is preserved literally.
+Valid hiding needs no reason, and a child cannot become actionable before its
+hidden ancestor.
+
+Incoming blank/default comments display `[no text]` and can qualify as report
+activity. Leaving them unchanged in the editor preserves their IDs; deleting a
+block deletes that comment. New empty comments and emptying existing nonblank
+text are rejected; the unused final starter is harmless. Attachment/preview
+metadata is ignored, and text updates send the comment ID and text only. Offline
+verification does not establish live attachment preservation, notification
+delivery or recurring reminder advancement.

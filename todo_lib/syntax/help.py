@@ -66,7 +66,7 @@ DESCRIPTIONS = {
     'hide': 'Hide until a future attention day, with an optional reason. Inherited hiding applies to steps.',
     'unhide': 'Remove own hiding while preserving attention and reminders; parent hiding may still apply.',
     'priority': 'Set task or step priority P1 through P4. A new step copies its immediate parent priority once; later priority changes are independent.',
-    'rename': 'Rename selected work; duplicate sibling names are rejected.',
+    'rename': 'Rename selected work; new sibling-title collisions are rejected. Imported duplicates use ordinary ambiguity selection.',
     'move': 'Move work to a category or parent, or promote a step to a task. Cycles and excessive depth are rejected.',
     'report': 'Preview categorized progress since the report cursor. --final writes and flushes output before advancing the cursor.',
     'init': 'Initialize the configured personal root and categories, preserving populated configuration.',
@@ -128,6 +128,10 @@ def render_help(command=None):
         result += f'Joined: {prefix} a b; split: {prefix} "a b" c; single-word batch: {prefix} \'a \' b.\n'
         result += ('Creation groups: a b joins to "a b"; "a b" c creates two values; '
                    "'a ' b creates a and b. Each --step/--comment group is independent.\n")
+    if command == 'comment':
+        result += ('Incoming blank comments display [no text] and survive an unchanged editor buffer. '
+                   'Removing a block deletes by ID; new empty text and emptying nonblank text are rejected. '
+                   'The unused final [new] starter is harmless. Attachment/preview metadata is ignored.\n')
     if command in ('task', 'step'):
         result += ('Leading scalar actions take VALUE immediately: todo task --due "tomorrow 10:00" '
                    '"Release plan"; todo step --due tomorrow "Release plan" "Write summary".\n'
