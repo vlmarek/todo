@@ -119,10 +119,27 @@ def reminder_text(minutes):
             return f'{minutes // divisor}{unit} before'
 
 
+def reminders_text(reminders, zone):
+    """Relative offsets, then exact absolute occurrences and original rules."""
+    reminders = tuple(reminders)
+    relative = sorted(r.minutes if hasattr(r, 'minutes') else r for r in reminders
+                      if getattr(r, 'type', 'relative') == 'relative')
+    absolute = sorted((r for r in reminders if getattr(r, 'type', None) == 'absolute'),
+                      key=lambda r: (attention_order(r.due, zone), r.id))
+    values = [reminder_text(m) for m in relative]
+    for r in absolute:
+        text = 'at ' + r.due.instant.astimezone(account_timezone(zone)).strftime('%Y-%m-%d %H:%M:%S') + ' ' + zone
+        if r.due.recurring:
+            text += ' ↻ ' + (r.due.rule if r.due.rule and r.due.rule.strip() else 'recurring')
+        values.append(text)
+    return ', '.join(values)
+
+
 def timing(value, reminders, now, zone):
     """Return relative text and overdue state, using exact rational arithmetic."""
     if value is None:
-        return 'none', False
+        text = reminders_text(reminders, zone)
+        return 'none' + (' reminders:' + text if text else ''), False
     if not value.exact:
         days = (value.date_value - instant_datetime(now).astimezone(account_timezone(zone)).date()).days
         core = 'today' if days == 0 else f'in {days}d' if days > 0 else f'{-days}d overdue'
@@ -148,16 +165,17 @@ def timing(value, reminders, now, zone):
             core = magnitude + (' overdue' if overdue else ' left')
     if value.recurring:
         core += ' ↻ ' + (value.rule if value.rule and value.rule.strip() else 'recurring')
-    offsets = sorted(r.minutes if hasattr(r, 'minutes') else r for r in reminders)
-    if offsets:
-        core += ' reminders:' + ', '.join(reminder_text(m) for m in offsets)
+    text = reminders_text(reminders, zone)
+    if text:
+        core += ' reminders:' + text
     return core, overdue
 
 
 def time_block(value, reminders, now, zone, color=Color(), *, detail=False):
     relative, overdue = timing(value, reminders, now, zone)
     if value is None:
-        return 'none' if detail else 'due:none'
+        text = ('none' if detail else 'due:none') + relative.removeprefix('none')
+        return color.paint(text, 'blue') if ' reminders:' in relative else text
     text = actual_due(value, zone) + ' · ' + relative if detail else 'due:' + relative
     return color.paint(text, 'red' if overdue else 'blue')
 

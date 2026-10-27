@@ -346,7 +346,7 @@ class CurrentTests(unittest.TestCase):
             transport, _ = self.boundary([('*', full(items=[item(due=due())], reminders=[raw])), ('full-token', delta())])
             with self.assertRaisesRegex(DomainError, 'minute_offset'):
                 retrieve(transport, BINDING)
-        for kind in ('absolute', 'location', None):
+        for kind in ('location', None):
             transport, _ = self.boundary([('*', full(reminders=[reminder(type=kind, minute_offset='bad')])), ('full-token', delta())])
             with self.assertRaisesRegex(DomainError, 'type unsupported'):
                 retrieve(transport, BINDING)

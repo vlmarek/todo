@@ -717,6 +717,14 @@ class AdapterLifecycleTests(unittest.TestCase):
     def test_recurring_latest_exact_undo_through_real_adapter(self):
         f = self.fixture
         recurrence = self.recurrence_seed()
+        from tests.support.reminders import absolute, FIXED
+        before_reminder = self.store.load_consistent_state().snapshot
+        reminder = d.Reminder('absolute', 'B', type='absolute',
+            due=d.resolve_reminder_due(FIXED, before_reminder.account.timezone), notify_uid='recipient', is_urgent=True)
+        # Add via actual Sync, then round-trip the pending model before undo.
+        seed = full(items=[item('A', added_at=fixtures.CREATED), item('B', parent_id='A', due=recurrence, added_at=fixtures.CREATED)],
+                    notes=[note('own', 'B', posted_at=fixtures.CREATED)], reminders=[absolute('absolute', FIXED, item_id='B')])
+        self.seed(seed)
         older = {**fixtures.completed_b(), 'checked': False, 'due': recurrence,
                  'completed_at': '2026-10-21T12:00:00.123456789012348Z'}
         newer = {**older, 'completed_at': fixtures.DONE}
@@ -731,6 +739,7 @@ class AdapterLifecycleTests(unittest.TestCase):
             f.sync('delta-token', delta(items=[restored])), f.completed([newer, older]), self.activity(records=[event])])
         result = wf.execute(['reopen', 'B'])
         self.assertEqual(result.status, 0)
+        self.assertEqual(self.store.load_history().snapshot.reminders['absolute'], reminder)
         occurrences = list(self.store.load_consistent_state().snapshot.occurrences.values())
         self.assertEqual(len(occurrences), 2)
         self.assertEqual({d.instant_text(o.completed_at): o.undone for o in occurrences},

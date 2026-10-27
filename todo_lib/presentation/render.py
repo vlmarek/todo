@@ -61,6 +61,9 @@ def render_now(snapshot, now, *, items=None, hidden_names=(), all_items=False, c
             text = '  ' + color.priority(item.priority) + ' ' + scalar_title(item.title)
             if item.attention is not None:
                 text += '  ' + time_block(item.attention, _reminders(snapshot, item), now, zone, color)
+            elif _reminders(snapshot, item):
+                from .formatting import reminders_text
+                text += '  ' + color.paint('reminders:' + reminders_text(_reminders(snapshot, item), zone), 'blue')
             reason, _ = waiting_reason(item, now, zone) if item.waiting else (None, None)
             if reason is not None:
                 text += multiline(reason, ' (', '    ') + ')'

@@ -301,9 +301,20 @@ def _observe(catalogue, root, history, hidden, now):
     occurrences = {k: o for k, o in history.snapshot.occurrences.items()
                    if o.item_id in retained and (retained[o.item_id].completed or retained[o.item_id].recurring)}
     occurrences.update(snapshot.occurrences)
-    reminders = {k: r for k, r in history.snapshot.reminders.items()
-                 if r.item_id in retained and r.item_id not in snapshot.items}
-    reminders.update(snapshot.reminders)
+    # Discovery always starts with a full resource and applies freshness deltas.
+    # Its final reminder truth supersedes old reminders even for pending-only
+    # owners; retaining their observations does not retain omitted reminders.
+    reminders = dict(snapshot.reminders)
+    for value in live.unresolved_reminders:
+        owner = value['item_id']
+        if owner in removed:
+            continue
+        if owner not in retained:
+            raise d.DomainError('unresolved reminder owner ' + owner)
+        reminders[value['id']] = current._reminder(value, snapshot.account.timezone)
+    reminders = {k: replace(r, due=d.rebase_attention(r.due, snapshot.account.timezone, reminder=True))
+                 if r.type == 'absolute' else r for k, r in reminders.items()}
+
     joined = d.validate(replace(snapshot, items=retained, comments=comments,
                                reminders=reminders, occurrences=occurrences), hidden)
     # Both arguments to merge_history must already have complete ancestor context

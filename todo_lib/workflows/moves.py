@@ -251,6 +251,13 @@ class MoveWorkflow:
                     continue  # only authoritative deletion/scope departure removes known work
                 if (actual.parent_id, actual.category_id) != (item.parent_id, item.category_id):
                     raise MoveError('accepted move differs from requested subtree hierarchy')
+            surviving = {i.id for i in d.subtree(candidate, source.id) if i.id in snapshot.items}
+            retained = {k: r for k, r in original.reminders.items() if r.item_id in surviving}
+            returned = {k: r for k, r in snapshot.reminders.items() if r.item_id in surviving}
+            if (retained.keys() != returned.keys()
+                    or any(not d.preserves_reminder(r, returned.get(k), snapshot.account.timezone)
+                           for k, r in retained.items())):
+                raise MoveError('accepted move changed preserved reminders')
             phase = 'candidate preparation'
             candidates = prepare_candidates(snapshot, history,
                 account_display=state.binding.account_display, sync_token=current.sync_token,

@@ -22,7 +22,7 @@ import json
 from todo_lib.domain import (
     Account, Binding, Capabilities, Comment, DomainError, Item, Project, Reminder,
     Snapshot, account_timezone, enroll_categories, instant_from_wire, instant_key, instant_text,
-    resolve_remote_due, validate, incoming_text,
+    resolve_remote_due, resolve_reminder_due, validate, incoming_text,
 )
 from .transport import HTTPFailure, Replay
 
@@ -35,7 +35,7 @@ _FIELDS = {
     'items': ('id', 'project_id', 'parent_id', 'content', 'description', 'priority',
               'checked', 'labels', 'due', 'added_at', 'completed_at', 'is_deleted'),
     'notes': ('id', 'item_id', 'content', 'posted_at', 'is_deleted'),
-    'reminders': ('id', 'item_id', 'type', 'minute_offset', 'is_deleted'),
+    'reminders': ('id', 'item_id', 'type', 'minute_offset', 'due', 'notify_uid', 'is_urgent', 'is_deleted'),
     'labels': ('id', 'name', 'is_deleted'),
 }
 _DUE_FIELDS = ('date', 'timezone', 'string', 'lang', 'is_recurring')
@@ -47,11 +47,22 @@ class CurrentError(DomainError):
 
 @dataclass(frozen=True)
 class Current:
+    """Mapped active truth plus final reminder facts awaiting lifecycle owners.
+
+    unresolved_reminders/reminder_duplicates are transient provider evidence for
+    Synchronizer; they are never stored without scope and model validation.
+    reminder_ids distinguishes authoritative omission/deletion from a legacy
+    caller's unspecified reminder resource. Full hydration replaces all these
+    facts; no superseded historical contradiction tracker is maintained.
+    """
     snapshot: Snapshot
     sync_token: str
     disappeared_ids: frozenset[str] = frozenset()
     deleted_ids: frozenset[str] = frozenset()
     departed_ids: frozenset[str] = frozenset()
+    unresolved_reminders: tuple = ()
+    reminder_duplicates: tuple = ()
+    reminder_ids: frozenset[str] | None = None
 
     @property
     def account(self):
@@ -191,14 +202,32 @@ def _seed(snapshot):
         state['notes'][c.id] = dict(id=c.id, item_id=c.item_id, content=c.body,
             posted_at=stamp(c.added_at), is_deleted=False)
     for r in snapshot.reminders.values():
-        state['reminders'][r.id] = dict(id=r.id, item_id=r.item_id, type='relative',
-                                      minute_offset=r.minutes, is_deleted=False)
+        state['reminders'][r.id] = dict(id=r.id, item_id=r.item_id, type=r.type,
+            minute_offset=r.minutes, due=deepcopy(r.due.raw_due if r.type == 'absolute' else r.raw_due), is_deleted=False)
+        if r.type == 'absolute' and r.due.raw_due is None:
+            if r.due.kind == 'floating':
+                raise CurrentError('prior floating reminder requires original wire due metadata')
+            from .commands import due_arguments
+            state['reminders'][r.id]['due'] = due_arguments(r.due)
+            if r.due.zone is not None:
+                state['reminders'][r.id]['due']['timezone'] = r.due.zone
+        for name in ('notify_uid', 'is_urgent'):
+            if getattr(r, name) is not None:
+                state['reminders'][r.id][name] = getattr(r, name)
     return state
 
 
 def _signature(raw, name):
     """Compare consumed wire values without bool/int coercion or time rounding."""
     normalized = {k: v for k, v in raw.items() if k in _FIELDS[name]}
+    if name == 'reminders':
+        normalized.pop('due' if raw.get('type') == 'relative' else 'minute_offset', None)
+        if raw.get('type') == 'absolute' and isinstance(raw.get('due'), dict):
+            normalized['due'] = {k: v for k, v in raw['due'].items() if k in _DUE_FIELDS}
+            # Match the reminder mapper's supported defaults without changing
+            # retained wire data or treating supplied invalid values as absent.
+            normalized['due'].setdefault('timezone', None)
+            normalized['due'].setdefault('is_recurring', False)
     if name == 'notes':
         normalized['content'] = incoming_text(raw.get('content', ''))
     if name == 'items' and isinstance(raw.get('due'), dict):
@@ -285,6 +314,27 @@ def _projects(state, binding, known_items):
     return root, categories, binding
 
 
+def _reminder(raw, zone):
+    """Map only the actual type's schedule, preserving retained ID metadata."""
+    owner = _id(_required(raw, 'item_id'), 'reminder.item_id')
+    _bool(_required(raw, 'is_deleted'), 'reminder.is_deleted')
+    metadata = {}
+    if 'notify_uid' in raw:
+        metadata['notify_uid'] = _id(raw['notify_uid'], 'reminder.notify_uid')
+    if 'is_urgent' in raw:
+        metadata['is_urgent'] = _bool(raw['is_urgent'], 'reminder.is_urgent')
+    kind = _required(raw, 'type')
+    if kind == 'relative':
+        minutes = _required(raw, 'minute_offset')
+        if type(minutes) is not int or minutes < 0:
+            raise CurrentError('minute_offset must be a nonnegative integer')
+        return Reminder(raw['id'], owner, minutes, raw_due=deepcopy(raw.get('due')), **metadata)
+    if kind == 'absolute':
+        return Reminder(raw['id'], owner, type=kind,
+                        due=resolve_reminder_due(_required(raw, 'due'), zone), **metadata)
+    raise CurrentError('managed reminder type unsupported: ' + str(kind))
+
+
 def _map(state, binding, account, prior, hidden_names):
     known_items = prior.items if prior else {}
     root, categories, binding = _projects(state, binding, known_items)
@@ -321,13 +371,7 @@ def _map(state, binding, account, prior, hidden_names):
                 except DomainError as error:
                     raise CurrentError(f'comment {raw["id"]} owner {owner}: {error}') from error
             else:
-                kind = _required(raw, 'type')
-                if kind != 'relative':
-                    raise CurrentError('managed reminder type unsupported; requires relative')
-                minutes = _required(raw, 'minute_offset')
-                if type(minutes) is not int or minutes < 0:
-                    raise CurrentError('minute_offset must be a nonnegative integer')
-                reminders[raw['id']] = Reminder(raw['id'], owner, minutes)
+                reminders[raw['id']] = _reminder(raw, account.timezone)
     _check_duplicates(state, {root.id, *categories}, set(items))
     occurrences = {k: o for k, o in (prior.occurrences.items() if prior else ())
                    if o.item_id in items}
@@ -445,4 +489,13 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     snapshot, missing, deleted, departed = _map(state, binding, account, prior, hidden_names)
     departed = departed | (earlier_departures - state['items'].keys())
     missing = missing - departed
-    return Current(snapshot, token, missing, deleted, departed)
+    # Owners absent from active Sync need lifecycle scope resolution before their
+    # live reminder bodies can be consumed. A full hydration replaces this state,
+    # including its duplicate evidence (REQ-SYNC-031).
+    unresolved = tuple(raw for raw in state['reminders'].values()
+        if raw.get('is_deleted') is not True and raw['item_id'] not in state['items'])
+    unresolved_ids = {r['id'] for r in unresolved}
+    duplicates = tuple((left, right) for name, left, right in state.get('_duplicates', ())
+        if name == 'reminders' and right['id'] in unresolved_ids)
+    return Current(snapshot, token, missing, deleted, departed, unresolved, duplicates,
+                   frozenset(k for k, raw in state['reminders'].items() if raw.get('is_deleted') is not True))

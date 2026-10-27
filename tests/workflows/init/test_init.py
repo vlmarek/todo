@@ -538,6 +538,80 @@ class InitTests(unittest.TestCase):
         self.run_init(Boundary([removed, empty]))
         self.assertFalse(self.store.load_history().snapshot.comments)
 
+    def test_repeat_init_applies_final_full_reminders_to_pending_only_owners(self):
+        from tests.support.reminders import absolute, FLOATING, FIXED
+        initial = full(labels=[LABEL], items=[item(added_at=CREATED)],
+            notes=[note(posted_at=POSTED)], reminders=[
+                absolute('floating', FLOATING, item_id='task'),
+                absolute('fixed', FIXED, item_id='task'),
+                absolute('omitted', FIXED, item_id='task'),
+                absolute('deleted', FIXED, item_id='task')])
+        self.initialize_existing(initial)
+        before = self.store.load_consistent_state()
+        cursor = (self.root / 'report-cursor').read_bytes()
+        pending_only = full(labels=[LABEL], items=[], reminders=[
+            absolute('floating', FLOATING, item_id='task'),
+            absolute('fixed', FIXED, item_id='task'),
+            {'id': 'deleted', 'is_deleted': True}],
+            user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}})
+        # Both full discovery reads omit one prior reminder. Empty freshness
+        # deltas must preserve those actually present in each full resource.
+        self.run_init(Boundary([pending_only, pending_only]), now=LATER)
+        from todo_lib.workflows import Synchronizer
+        class NoHTTP:
+            def request(self, *args, **kwargs):
+                raise AssertionError('offline HTTP')
+        state = Synchronizer(NoHTTP(), StateStore(self.root), clock=lambda: LATER).read_local()
+        self.assertFalse(self.store.load_consistent_state().snapshot.items)
+        self.assertEqual(set(state.history.snapshot.reminders), {'floating', 'fixed'})
+        self.assertEqual(d.instant_text(state.history.snapshot.reminders['floating'].due.instant),
+                         '2026-10-30T13:00:00.123456Z')
+        self.assertEqual(state.history.snapshot.reminders['floating'].due.raw_due, FLOATING)
+        self.assertEqual(state.history.snapshot.reminders['fixed'].due.raw_due, FIXED)
+        self.assertEqual(state.history.observations, before.history.observations)
+        self.assertEqual(state.history.snapshot.comments, before.history.snapshot.comments)
+        self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
+
+        updated = {**FLOATING, 'date': '2026-11-01T09:00:00.123456789012345'}
+        changed = deepcopy(pending_only)
+        changed['reminders'][0] = absolute('floating', updated, item_id='task', notify_uid='new-recipient')
+        self.run_init(Boundary([pending_only, (pending_only, delta(reminders=changed['reminders']))]), now=LATER)
+        pending = self.store.load_history().snapshot
+        self.assertEqual(pending.reminders['floating'].due.raw_due, updated)
+        self.assertEqual(pending.reminders['floating'].notify_uid, 'new-recipient')
+        self.assertEqual(pending.reminders['fixed'].due.raw_due, FIXED)
+        self.assertEqual(self.store.load_history().observations, before.history.observations)
+
+        # A later authoritative full omission removes every reminder while
+        # preserving unreported owners, comments, observation times and cursor.
+        empty = deepcopy(pending_only)
+        empty['reminders'] = []
+        self.run_init(Boundary([changed, empty]), now=LATER)
+        state = StateStore(self.root).load_consistent_state()
+        self.assertFalse(state.history.snapshot.reminders)
+        self.assertEqual(set(state.history.snapshot.items), {'task'})
+        self.assertEqual(state.history.snapshot.comments, before.history.snapshot.comments)
+        self.assertEqual(state.history.observations, before.history.observations)
+        self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
+        # Subsequent repeat initialization must not resurrect removed reminders.
+        self.run_init(Boundary([empty, empty]), now=LATER)
+        self.assertFalse(self.store.load_history().snapshot.reminders)
+        offline = Synchronizer(NoHTTP(), StateStore(self.root), clock=lambda: LATER).read_local()
+        self.assertFalse(offline.snapshot.reminders)
+        self.assertEqual(offline.history.observations, before.history.observations)
+
+    def test_invalid_final_pending_only_reminder_preserves_state(self):
+        from tests.support.reminders import absolute
+        self.initialize_existing()
+        omitted = full(labels=[LABEL], items=[])
+        self.run_init(Boundary([omitted, omitted]))
+        before = self.bytes()
+        bad = deepcopy(omitted)
+        bad['reminders'] = [absolute('bad', {'date': '2026-10-30'}, item_id='task')]
+        with self.assertRaises(InitError):
+            self.run_init(Boundary([bad]))
+        self.assertEqual(self.bytes(), before)
+
     def test_invalid_retained_owner_note_blocks_all_provisions(self):
         self.initialize_existing()
         self.put('config', CONFIG.replace(b'default_sections=cat', b'default_sections=cat,missing'))

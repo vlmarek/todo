@@ -10,7 +10,7 @@ from todo_lib.domain.text import START, END
 
 
 def offsets(snapshot, item_id):
-    return tuple(r.minutes for r in snapshot.reminders.values() if r.item_id == item_id)
+    return tuple(r.minutes for r in snapshot.reminders.values() if r.item_id == item_id and r.type == 'relative')
 
 
 def offset_text(values):
@@ -29,6 +29,7 @@ class Proposal:
     reminders: tuple[int, ...]
     unresolved: bool = False
     enable: bool = False
+    retain_absolute: bool = True
 
 
 def propose(request, snapshot, item, now):
@@ -87,7 +88,7 @@ def propose(request, snapshot, item, now):
         if attention is None or (not unresolved and not attention.exact):
             raise d.DomainError('reminders require timed attention; clear or replace reminders with a timed date')
     return Proposal(replace(item, attention=attention, labels=frozenset(labels),
-                            description=description), reminders, unresolved, enable)
+                            description=description), reminders, unresolved, enable, markers is None and not clear)
 
 
 def validate_proposals(snapshot, proposals, hidden_names=()):
@@ -102,7 +103,7 @@ def validate_proposals(snapshot, proposals, hidden_names=()):
     for index, proposal in enumerate(proposals):
         item = proposal.item
         items[item.id] = replace(item, attention=None) if proposal.unresolved else item
-        reminders = {k: r for k, r in reminders.items() if r.item_id != item.id}
+        reminders = {k: r for k, r in reminders.items() if r.item_id != item.id or (r.type == 'absolute' and proposal.retain_absolute)}
         if not proposal.unresolved:
             for j, minutes in enumerate(proposal.reminders):
                 key = f'proposal-reminder-{index}-{j}'
