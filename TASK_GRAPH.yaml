@@ -4918,7 +4918,7 @@ tasks:
 
     Adapt the producing and consuming call sites together. LocalState, _cache, prepare_candidates and
     StateStore publication in todo_lib/local/store.py currently carry combined snapshot/token/synced_at.
-    Synchronizer.refresh_locked and Reporter._prepare publish after _reconcile. Initializer._observe and
+    Synchronizer.refresh_locked and Reporter._prepare publish after _reconcile. workflows.init._observe and
     initialization publication, lifecycle._bounded_discover, moves._publish and Gateway.execute/current
     retrieval also exchange or publish snapshots/tokens. CaptureWorkflow, CommentWorkflow and LifecycleWorkflow
     construct Current from synchronized results. Inspect every retrieve/prepare_candidates/Current caller
