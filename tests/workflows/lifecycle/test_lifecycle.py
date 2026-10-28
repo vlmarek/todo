@@ -16,7 +16,7 @@ from unittest.mock import patch
 from todo_lib import domain as d, presentation as p
 from todo_lib.adapter.commands import Gateway, Result, Outcome
 from todo_lib.adapter.current import retrieve
-from todo_lib.local import empty_history, prepare_candidates, exclusive_lock, LocalError
+from todo_lib.local import empty_history, prepare_candidates, exclusive_lock, LocalError, StateStore
 from todo_lib.local.codec import loads
 from todo_lib.local.config import Configuration
 from todo_lib.syntax import parse
@@ -712,6 +712,81 @@ class AdapterLifecycleTests(unittest.TestCase):
         self.assertEqual(result.failure.remote_outcome, 'accepted')
         self.assertEqual(len(command.commands), 1)
         self.assertFalse(wf.synchronizer.read_local().snapshot.items['B'].completed)
+
+    def test_activity_only_recent_reopen_then_dual_source_discovery_cannot_resurrect(self):
+        f = self.fixture
+        recurrence = self.recurrence_seed()
+        completion = dict(id=901, object_type='item', object_id='B', event_type='completed',
+                          event_date='2026-10-21T18:11:14.719113Z')
+        undo = dict(id=902, object_type='item', object_id='B', event_type='uncompleted',
+                    event_date='2026-10-21T18:11:15Z')
+        counterpart = {**fixtures.completed_b(), 'checked': False, 'due': recurrence,
+                       'completed_at': '2026-10-21T18:11:14.704186Z'}
+        command = CommandRequest(self, 'item_update_date_complete',
+            {'id': 'B', 'is_forward': 0, 'reset_subtasks': 0})
+        restored = item('B', parent_id='A', due={**recurrence, 'date': '2026-10-24'},
+                        added_at=fixtures.CREATED)
+        events = [completion, undo]
+        wf, http = self.workflow([
+            f.sync('delta-token', delta()), f.completed([]), self.activity(records=[completion]),
+            f.completed([]),  # bounded recent discovery must keep activity-only evidence
+            command.step(), f.sync('delta-token', delta(items=[restored])),
+            f.completed([counterpart]), self.activity(records=events),  # gateway evidence
+            f.sync('delta-token', delta(items=[restored])), f.completed([counterpart]),
+            self.activity(records=events)])
+        result = wf.execute(['reopen', 'B'])
+        http.assert_done()
+        self.assertEqual(result.status, 0)
+        self.assertEqual([o.outcome for o in result.operations], ['accepted'])
+        self.assertEqual(len(command.commands), 1)
+        self.store = StateStore(self.store.root)
+        for _ in range(2):
+            again, http = self.workflow([f.sync('delta-token', delta()),
+                f.completed([counterpart]), self.activity(records=events), f.completed([counterpart])])
+            with self.assertRaises(NoMatch):
+                again.execute(['reopen', 'B'])
+            http.assert_done()
+            observed = list(self.store.load_history().snapshot.occurrences.values())
+            self.assertEqual(len(observed), 1)
+            self.assertTrue(observed[0].undone)
+            self.assertEqual(d.instant_text(observed[0].completed_at), completion['event_date'])
+            self.assertEqual(observed[0].undo_ids, ('undo:902',))
+
+    def test_anonymous_source_order_latest_reopen_survives_refresh_and_reload(self):
+        from todo_lib.workflows.reads import recent_candidates
+        f = self.fixture
+        self.recurrence_seed()
+        completion = dict(object_type='item', object_id='B', event_type='completed',
+                          event_date='2026-10-21T18:11:14.719113Z')
+        events = [dict(completion) for _ in range(11)]  # omitted IDs and extra_data
+        sync, http = f.workflow([f.sync('delta-token', delta()), f.completed([]),
+                                 self.activity(records=events)])
+        sync.refresh()
+        http.assert_done()
+        self.store = StateStore(self.store.root)
+        state = self.store.load_consistent_state()
+        latest = max(state.snapshot.occurrences.values(), key=lambda o: o.source_order)
+        self.assertEqual(latest.source_order, 10)
+        candidates = recent_candidates(state.snapshot, 'B', fixtures.CURSOR, fixtures.NOW)
+        self.assertEqual([c.occurrence_id for c in candidates], [latest.id])
+        undo = dict(completion, event_type='uncompleted', event_date='2026-10-21T18:11:15Z')
+        for count in (1, 1, 2, 2):
+            with self.subTest(undos=count):
+                wf, http = self.workflow([f.sync('delta-token', delta()), f.completed([]),
+                    self.activity(records=events + [dict(undo) for _ in range(count)]),
+                    f.completed([])])  # bounded discovery must not restore older eligibility
+                with self.assertRaises(NoMatch):
+                    wf.execute(['reopen', 'B'])
+                http.assert_done()  # no mutation request was attempted
+                self.store = StateStore(self.store.root)
+                state = self.store.load_consistent_state()
+                for snapshot in (state.snapshot, state.history.snapshot):
+                    observed = sorted(snapshot.occurrences.values(), key=lambda o: o.source_order)
+                    self.assertEqual(len(observed), 11)
+                    self.assertEqual(sum(o.undone for o in observed), count)
+                    self.assertTrue(observed[-1].undone)
+                    self.assertEqual(sum(len(o.undo_ids) for o in observed), count)
+                    self.assertEqual(recent_candidates(snapshot, 'B', fixtures.CURSOR, fixtures.NOW), ())
 
     def test_recurring_latest_exact_undo_through_real_adapter(self):
         f = self.fixture

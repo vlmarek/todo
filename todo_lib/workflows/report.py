@@ -21,6 +21,7 @@ from todo_lib.syntax import parse
 from todo_lib.syntax.input import prompt, Cancelled
 from todo_lib.syntax.parser import UsageError
 from .sync import Synchronizer, SyncError, SyncInterrupted, _known, _reconcile
+from .completion import reconcile_completions
 
 
 @dataclass(frozen=True)
@@ -41,50 +42,16 @@ def _key(event):
 
 
 def _select(snapshot, completed, activities, start, end, hidden_names, *, now=None):
-    # Use one shared exact chronological stream, irrespective of wire order/IDs.
-    events = sorted((e for e in activities.records
-                     if d.instant_key(e.event_date) <= d.instant_key(end)), key=_key)
-    completions = []
-    activity_instants = set()
-    for source_order, event in enumerate(events):
-        if (event.object_type == 'item' and event.event_type == 'completed'
-                and event.object_id in snapshot.items):
-            completions.append((event.object_id, event.event_date, event.id, source_order))
-            activity_instants.add((event.object_id, d.instant_key(event.event_date)))
-    # Completed-object evidence supplements activity, rather than creating a
-    # second occurrence for the same observation. Anonymous activities remain
-    # separate occurrences in their stable endpoint source order.
-    for record in completed.records:
-        item = snapshot.items.get(record.item.id)
-        at = record.occurrence.completed_at
-        if (item is not None and not record.deleted
-                and (item.id, d.instant_key(at)) not in activity_instants):
-            completions.append((item.id, at, None, len(events) + len(completions)))
-    effective = set(range(len(completions)))
-    timeline = []
-    for index, (owner, at, identity, source_order) in enumerate(completions):
-        timeline.append(((d.instant_key(at), identity is None, identity or '', owner, source_order),
-                         'completed', owner, index))
-    for source_order, event in enumerate(events):
-        if event.object_type == 'item' and event.event_type == 'uncompleted':
-            timeline.append(((*_key(event), source_order), 'uncompleted', event.object_id, None))
-    stacks = {}
-    for _, kind, owner, index in sorted(timeline, key=lambda row: row[0]):
-        item = snapshot.items.get(owner)
-        if item is None or not item.recurring:
-            continue
-        stack = stacks.setdefault(item.id, [])
-        if kind == 'completed':
-            stack.append(index)
-        elif stack:
-            effective.remove(stack.pop())
+    events = sorted(activities.records, key=_key)
+    occurrences = reconcile_completions(snapshot.items, completed.records, events, end=end)
     finished, progress = [], []
-    for index in sorted(effective):
-        owner, at, identity, source_order = completions[index]
-        item = snapshot.items[owner]
-        if not _within(at, start, end) or not (item.completed or item.recurring):
+    for occurrence in occurrences.values():
+        item = snapshot.items[occurrence.item_id]
+        at = occurrence.completed_at
+        if occurrence.undone or not _within(at, start, end) or not (item.completed or item.recurring):
             continue
-        entry = ReportEvent(item.id, at, event_id=identity, source_order=source_order)
+        entry = ReportEvent(item.id, at, event_id=occurrence.activity_id,
+                            source_order=occurrence.source_order)
         (finished if item.parent_id is None else progress).append(entry)
     latest = {}
     for event in events:
@@ -321,6 +288,13 @@ class Reporter:
             snapshot = d.validate(replace(snapshot, items=items, comments=comments.comments,
                 reminders={k: v for k, v in snapshot.reminders.items() if v.item_id in items},
                 occurrences={k: v for k, v in snapshot.occurrences.items() if v.item_id in items}), config.hidden_from_now)
+            # Persist the selected activity times for ordinary owners too, so
+            # final cleanup retains context for later unreported occurrences.
+            occurrences = reconcile_completions({**pending.snapshot.items, **snapshot.items},
+                self.completed.records, activities.records, pending.snapshot.occurrences.values())
+            snapshot = replace(snapshot, occurrences={k: o for k, o in occurrences.items()
+                if o.item_id in items})
+            pending = replace(pending, snapshot=replace(pending.snapshot, occurrences=occurrences))
             incoming = History(snapshot, {k: now for k in items})
             pending = merge_history(pending, incoming,
                 removed_comment_ids={k for k, c in pending.snapshot.comments.items()

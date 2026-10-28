@@ -734,6 +734,59 @@ else:
                     self.assertEqual(d.instant_text(observed.completed_at), DONE)
                     self.assertEqual(observed.undone, undone)
 
+    def test_activity_only_recurring_reloads_and_each_undo_is_applied_once(self):
+        from tests.adapter.current.test_current import due
+        recurrence = due('2026-10-25', timezone=None, is_recurring=True)
+        recurring = item('B', parent_id='A', due=recurrence, added_at=None)
+        times = ['2026-10-21T18:11:14.719113Z', '2026-10-21T18:11:14.719114Z']
+        events = [dict(id=identity, object_type='item', object_id='B',
+                       event_type='completed', event_date=value, parent_project_id='cat')
+                  for identity, value in zip((801, 802), times)]
+        query = [('object_type', 'item'), ('object_id', 'B'),
+            ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
+            ('limit', '200'),
+            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
+        counterpart = {**completed_b(), 'checked': False, 'due': recurrence,
+                       'completed_at': '2026-10-21T18:11:14.704186Z'}
+        for count in (0, 1, 2, 2):
+            with self.subTest(undos=count):
+                undos = [dict(id=803 + i, object_type='item', object_id='B',
+                    event_type='uncompleted', event_date=f'2026-10-21T18:11:15.{i}Z')
+                    for i in range(count)]
+                workflow, http = self.workflow([self.sync('delta-token', delta(items=[recurring])),
+                    self.completed([counterpart] if count else []),
+                    (Expected('/activities', query),
+                     {'results': events + [events[0]] + undos, 'next_cursor': None})])
+                workflow.refresh()
+                http.assert_done()
+                self.store = StateStore(self.root)  # actual protected JSON reload
+                state = self.store.load_consistent_state()
+                for snapshot in (state.snapshot, state.history.snapshot):
+                    observed = sorted(snapshot.occurrences.values(), key=lambda o: d.instant_key(o.completed_at))
+                    self.assertEqual([d.instant_text(o.completed_at) for o in observed], times)
+                    self.assertEqual(sum(o.undone for o in observed), count)
+                    self.assertEqual(observed[-1].undone, count > 0)
+                    self.assertEqual(sum(len(o.undo_ids) for o in observed), count)
+                    self.assertIsNone(snapshot.items['B'].added_at)
+                    self.assertFalse(snapshot.items['B'].completed)
+                    self.assertEqual(len(d.recent_reopen_candidates(snapshot, CURSOR, NOW)), 0 if count else 1)
+
+    def test_activity_only_recurring_required_read_failure_preserves_files(self):
+        from tests.adapter.current.test_current import due
+        recurring = item('B', parent_id='A', due=due(is_recurring=True))
+        query = [('object_type', 'item'), ('object_id', 'B'),
+            ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
+            ('limit', '200'),
+            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
+        before = self.bytes()
+        workflow, http = self.workflow([self.sync('delta-token', delta(items=[recurring])),
+            self.completed([]), (Expected('/activities', query),
+                                 {'results': [], 'next_cursor': 'malformed'})])
+        with self.assertRaisesRegex(SyncError, 'malformed next_cursor'):
+            workflow.refresh()
+        http.assert_done()
+        self.assertEqual(self.bytes(), before)
+
     def test_new_bounded_historical_observation_joins_pending_context(self):
         other = item('C', parent_id='A', checked=True, completed_at=DONE, added_at=CREATED)
         workflow, _ = self.workflow([self.sync('delta-token', full(items=[item('A', added_at=CREATED)])),

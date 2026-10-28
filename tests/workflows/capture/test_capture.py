@@ -48,6 +48,9 @@ class Boundary:
     def completed(self, records=()):
         self.steps.append(('get', '/tasks/completed/by_completion_date', {'items': list(records)}))
 
+    def activities(self, owner):
+        self.steps.append(('get', ('/activities', owner), {'results': [], 'next_cursor': None}))
+
     def comments(self, owner):
         self.steps.append(('get', ('/comments', owner), {'results': [], 'next_cursor': None}))
 
@@ -64,6 +67,12 @@ class Boundary:
             self.case.assertEqual(kwargs['replay'], Replay.READ)
             if path == '/comments':
                 self.case.assertEqual(dict(kwargs['query'])['task_id'], expected_owner)
+            elif path == '/activities':
+                self.case.assertEqual(kwargs['query'], [
+                    ('object_type', 'item'), ('object_id', expected_owner),
+                    ('date_from', '2026-10-22T12:00:00Z'),
+                    ('date_to', '2026-10-22T12:00:01Z'), ('limit', '200'),
+                    ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')])
             else:
                 self.case.assertEqual(dict(kwargs['query'])['project_id'], 'cat')
             self.case.assertEqual(dict(kwargs['query'])['limit'], '200')
@@ -136,6 +145,9 @@ class CaptureTests(unittest.TestCase):
         self.http.read(delta())
         if synchronize and any(i['due'] and i['due']['is_recurring'] for i in state['items']):
             self.http.completed()
+            for owner in sorted(i['id'] for i in state['items']
+                                if i['due'] and i['due']['is_recurring']):
+                self.http.activities(owner)
 
     def operation(self, kind, args, state, identity='new', status='ok'):
         self.http.command(kind, args, identity, status)

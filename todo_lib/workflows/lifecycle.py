@@ -20,6 +20,7 @@ from todo_lib.syntax import parse
 from todo_lib.syntax.input import prompt, Cancelled, InputError
 from .reads import choose, matches, title_candidates, recent_candidates, deletion_candidates
 from .sync import SyncError, SyncInterrupted
+from .completion import reconcile_completions
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ def _recent_snapshot(synchronizer, result, hidden_names):
     s = result.snapshot
     adapter = HistoryAdapter(synchronizer.transport, timezone=s.account.timezone)
     items, occurrences, latest = dict(s.items), dict(s.occurrences), {}
+    records = []
     for category in sorted(s.categories):
         for record in adapter.completed(result.state.cursor, result.now,
                                         {'project_id': category}).records:
@@ -72,6 +74,7 @@ def _recent_snapshot(synchronizer, result, hidden_names):
                 continue
             if record.item.category_id != category:
                 continue
+            records.append(record)
             old = latest.get(record.item.id)
             if old is None or d.instant_key(at) > d.instant_key(old.occurrence.completed_at):
                 latest[record.item.id] = record
@@ -80,8 +83,7 @@ def _recent_snapshot(synchronizer, result, hidden_names):
             continue
         if identity not in items and record.item.completed and not record.item.recurring:
             items[identity] = record.item
-        if identity in items and (items[identity].completed or items[identity].recurring):
-            occurrences.setdefault(record.occurrence.id, record.occurrence)
+    occurrences = reconcile_completions(items, records, (), occurrences.values())
     snapshot = d.validate(replace(s, items=items, occurrences=occurrences), hidden_names)
     if snapshot != s:
         # These observations are needed even if selection is cancelled or a

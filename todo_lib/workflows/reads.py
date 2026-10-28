@@ -14,6 +14,7 @@ import unicodedata
 from todo_lib import domain as d
 from todo_lib import presentation as p
 from todo_lib.local import LocalError, load_config
+from todo_lib.local.occurrence import ObservedOccurrence
 from todo_lib.syntax import parse
 from todo_lib.syntax.input import interactive, prompt
 
@@ -88,7 +89,24 @@ def move_destination_candidates(snapshot, query, *, kind='positional'):
 def recent_candidates(snapshot, query, cursor, now, *, operation='reopen', target='item'):
     """Return exact lifecycle facts, including only the latest recurring undo."""
     if operation == 'reopen':
-        population = d.recent_reopen_candidates(snapshot, cursor, now)
+        # Activity provenance orders equal-time completions, including anonymous
+        # ordinals beyond 9. Keep the latest even when undone: discarding it here
+        # would incorrectly license reopening an older completion. Plain legacy
+        # occurrences retain the domain's stable-ID tie-breaker.
+        def activity_key(o):
+            return (d.instant_key(o.completed_at), o.activity_id is None,
+                    o.activity_id or '', o.source_order)
+        latest, occurrences = {}, {}
+        for occurrence in snapshot.occurrences.values():
+            if not isinstance(occurrence, ObservedOccurrence) or not occurrence.activity_backed:
+                occurrences[occurrence.id] = occurrence
+                continue
+            old = latest.get(occurrence.item_id)
+            if old is None or activity_key(occurrence) > activity_key(old):
+                latest[occurrence.item_id] = occurrence
+        occurrences.update((o.id, o) for o in latest.values())
+        population = d.recent_reopen_candidates(replace(snapshot,
+            occurrences=occurrences), cursor, now)
     elif operation == 'delete':
         population = d.completed_deletion_candidates(snapshot, cursor, now)
     else:
