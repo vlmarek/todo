@@ -68,6 +68,17 @@ class ReadsTests(unittest.TestCase):
         self.sync = Synchronizer(Transport('secret', opener=self.http), self.store, clock=lambda: NOW)
         self.workflow = ReadWorkflow(self.sync, streams=self.streams)
 
+    def test_lists_use_command_time_and_original_stdout_color_without_http(self):
+        tomorrow = d.parse_attention('2026-10-23', d.instant_datetime(NOW), 'UTC')
+        self.edit(A=replace(self.snapshot.items['A'], attention=tomorrow),
+                  H=replace(self.snapshot.items['H'], attention=tomorrow))
+        for argv in (('search', 'Root'), ('search', '--all', 'Root'), ('someday',)):
+            result = self.read(*argv, '--color', 'always')
+            self.assertIn('due:2026-10-23 · in 1d', result.document.stdout)
+            self.assertIn('\x1b[38;2;38;139;210m', result.document.stdout)
+            self.assertEqual(d.instant_key(result.now), d.instant_key(NOW))
+        self.assertEqual(self.http.requests, [])
+
     def config(self, hidden='Later'):
         self.put('config', ('[main]\nproject=root\ndefault_sections=Work\nhidden_from_now=' + hidden + '\n').encode())
 
@@ -148,7 +159,7 @@ class ReadsTests(unittest.TestCase):
             self.read('task', 'Root')
         error = caught.exception
         self.assertEqual({i.id for i in error.candidates}, {'A', 'X'})
-        self.assertIn('1. task: Root  due:none — Work', error.document.stdout)
+        self.assertIn('1. task: Root — Work', error.document.stdout)
         self.assertNotIn('Select ', error.document.stdout)
         self.assertNotIn('Description', error.document.stdout)
         self.assertEqual(self.streams.stdout.getvalue(), '')
@@ -158,8 +169,8 @@ class ReadsTests(unittest.TestCase):
         self.edit(X=d.Item('X', 'cat', 'Leaf plan'))
         self.put('config', (self.root / 'config').read_bytes() + b'\n[colors]\nbase01=#123456\n')
         plain = ('Multiple items match "Leaf":\n'
-                 '  1. task: Leaf plan  due:none — Work\n'
-                 '  2. step: Leaf  due:none — Root > Branch — Work')
+                 '  1. task: Leaf plan — Work\n'
+                 '  2. step: Leaf — Root > Branch — Work')
         colored = plain.replace(' — Root > Branch',
                                 '\x1b[38;2;18;52;86m — Root > Branch\x1b[0m')
         cases = [('auto', {'TERM': 'xterm'}, True),
@@ -273,8 +284,8 @@ class ReadsTests(unittest.TestCase):
         self.assertLess(text.index('Older'), text.index('Unknown'))
         self.assertLess(text.index('Unknown'), text.index('Below unknown'))
         self.assertLess(text.index('First owner comment'), text.index('Second owner comment'))
-        self.assertIn('added unknown', text)
-        self.assertIn('added 2026-10-21 12:00', text)
+        self.assertIn('[ ] P2 Unknown\n', text)
+        self.assertIn('completed 2026-10-21 12:00', text)
         self.assertEqual(text.count('Root comment'), 1)
         self.assertEqual(text.count('First owner comment'), 1)
         self.assertIn('coverage may be incomplete', result.document.stderr)
@@ -430,8 +441,8 @@ class ReadsTests(unittest.TestCase):
         candidates = recent_candidates(snapshot, ('Branch',), CURSOR, NOW)
         with self.assertRaises(AmbiguityError) as caught:
             choose(snapshot, ('Branch',), candidates, NOW, streams=self.streams)
-        self.assertEqual(caught.exception.document.stdout.count(' — completed Wed 21 Oct 2026, 12:00:00'), 2)
-        self.assertIn('step: Branch  due:none — Root — Work', caught.exception.document.stdout)
+        self.assertEqual(caught.exception.document.stdout.count('  completed 2026-10-21 12:00'), 2)
+        self.assertIn('step: Branch  completed 2026-10-21 12:00 — Root — Work', caught.exception.document.stdout)
         self.assertLess(d.instant_key(candidates[0].completed_at), d.instant_key(candidates[1].completed_at))
 
     def test_refresh_uses_actual_adapter_and_authoritative_timezone(self):

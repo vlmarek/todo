@@ -14,8 +14,8 @@ class CoexistenceTests(unittest.TestCase):
         expected = r'Child\\name\nnext\ttab'
         ancestor = r'Root\\name\nnext\ttab'
         docs = [p.render_now(s, NOW), p.render_detail(s, child, NOW),
-                p.render_comments(s, child), p.render_search(s, [child]),
-                p.render_someday(s, hidden_names=['Work']),
+                p.render_comments(s, child), p.render_search(s, [child], NOW),
+                p.render_someday(s, NOW, hidden_names=['Work']),
                 p.render_ambiguity(s, 'name', [root, child], NOW),
                 p.render_mutation(s, child, 'Completed'),
                 p.render_move(s, child, replace(s, items={**s.items, 's': replace(child, parent_id=None)}), replace(child, parent_id=None)),
@@ -54,8 +54,8 @@ class CoexistenceTests(unittest.TestCase):
         s = d.validate(snap(item, waiting), ['Work'])
         self.assertEqual(p.render_now(s, NOW, hidden_names=['Work']).stdout, 'No actionable items.')
         self.assertIn('Overdue', p.render_now(s, NOW, hidden_names=['Work'], all_items=True).stdout)
-        self.assertIn('Overdue', p.render_someday(s, hidden_names=['Work']).stdout)
-        self.assertIn('Overdue', p.render_search(s, [item]).stdout)
+        self.assertIn('Overdue', p.render_someday(s, NOW, hidden_names=['Work']).stdout)
+        self.assertIn('Overdue', p.render_search(s, [item], NOW).stdout)
         self.assertEqual(p.render_waiting(s, NOW, hidden_names=['Work']).stdout, 'No waiting items.')
         self.assertIn('Waiting: enabled', p.render_detail(s, waiting, NOW).stdout)
         self.assertIn('Future', p.render_waiting(s, NOW).stdout)

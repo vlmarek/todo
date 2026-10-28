@@ -228,6 +228,30 @@ class PublicMoves(unittest.TestCase):
     workflow = move_fixture.MoveTests.workflow
     after = move_fixture.MoveTests.after
 
+    def test_cached_dated_lists_and_ambiguous_mutation_cancel_before_writes(self):
+        from tests.adapter.current.test_current import due
+        from todo_lib.workflows.sync import Synchronizer
+        rows = [*self.rows, item('ambiguous', content='other', due=due('2026-10-23', timezone=None))]
+        transport, _ = self.boundary([self.sync('delta-token', full(projects=self.projects,
+            items=rows, notes=self.notes)), self.sync('full-token', delta())])
+        Synchronizer(transport, self.store, clock=lambda: move_fixture.NOW).refresh()
+        transport, http = self.boundary([])
+        status, out, err, _ = invoke(self, ['search', '--all', 'other'], transport, now=move_fixture.NOW)
+        self.assertEqual(status, 0, err)
+        self.assertIn('other — due:2026-10-23 · in 1d', out)
+        before = (self.root / 'cache.json').read_bytes()
+        for terminal in (False, True):
+            status, out, err, _ = invoke(self, ['move', 'A', 'other'], transport,
+                now=move_fixture.NOW,
+                input=comment_fixture.Terminal('q\n') if terminal else StringIO(),
+                output=comment_fixture.Terminal() if terminal else StringIO())
+            self.assertEqual(status, 1)
+            self.assertIn('task: other  due:2026-10-23 · in 1d — cat', out)
+            self.assertIn('category: other', out)
+            self.assertNotIn('Moved', out)
+        self.assertEqual((self.root / 'cache.json').read_bytes(), before)
+        self.assertEqual(http.requests, [])
+
     def test_step_alias_parent_selection_then_promotion_preserve_own_comments(self):
         # C is a nested parent; selection must resolve that parent before D.
         after = self.after('D', None, 'cat')

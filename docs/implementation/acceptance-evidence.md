@@ -1106,3 +1106,62 @@ complete history reconstruction, universal occurrence identity, or atomic provid
 snapshot is established. Remote unseen cascade scope is deliberately represented
 by a post-operation tombstone; the client cannot promise an exhaustive cached
 preview or retarget a stale stable ID safely.
+
+### T33 — revision-14 item date fragments (2026-10-28)
+
+Observed subject: worktree based on `d94577868f875c75275b7f2faab1ba7ea4b114c2`,
+with this task's uncommitted renderer, read caller, presentation API, consumer
+fixture and copied-probe changes. Earlier evidence and the contract-map ledger
+remain unchanged. One scoped row helper uses existing actual_due/timing/compact
+values; no clock capture, provider read, validation or selection policy changed.
+Search/someday now require the supplied view time and accept the existing Color.
+
+Directed worker commands and observed results:
+
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/presentation -p 'test_*.py' -v`
+  — 64 tests passed, `/tmp/t33-presentation.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/reads -p 'test_*.py' -v`
+  — 25 tests passed, `/tmp/t33-reads.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.test_cached_selection -v`
+  — 21 tests passed, `/tmp/t33-cache.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/cli -p 'test_*.py' -v`
+  — 37 tests passed, `/tmp/t33-cli.log`, including public reminder routes.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.presentation.test_item_dates tests.workflows.capture.test_reminders -v`
+  — 20 tests passed, `/tmp/t33-extra.log`; this final focused run includes
+  the added missing-time list assertion and interactive occurrence identity check.
+- Existing `tests/delivery/final/copy_probe.py` copied beside the unchanged
+  launcher/runtime into temporary bin/outside/home directories, with the existing
+  `scripts.verify_clean.environment` allowlist, then
+  `python3.11 -I -B OUTSIDE/copy_probe.py INSTALL` from OUTSIDE — all 14 phase
+  processes passed, `/tmp/t33-copy.log`. No full suite was invoked by this probe.
+- `git diff --check` — passed.
+
+The new pure evidence distinguishes own attention from creation and completion,
+recursive differing dates and an undated descendant, compact completion and
+missing-time omission while validation still rejects the malformed completed
+record. Shared search/someday context, timed account-zone attention, date-only
+countdown without midnight, full block color/stripped spacing, reminder-only
+undated candidates, active recurrence and a selected completed occurrence are
+covered. Interactive selection returns the original occurrence candidate.
+Existing exact recursive comments, submicrosecond sibling/comment order, DST,
+countdown, reminder ordering, red overdue blocks, title escaping, hiding metadata,
+category candidates, warnings and prompt/error assertions remain meaningful.
+Only superseded date fragments and required direct caller arguments were migrated.
+
+Real ReadWorkflow uses its controlled SyncResult command time for search,
+search --all and someday countdowns and color. Public CLI composition additionally
+observes dated search --all and mixed category/task mutation ambiguity, both
+noninteractive exit and interactive cancellation before writes; the strict empty
+HTTP boundary and unchanged cache bytes establish local selection. The copied
+saved-state read now observes undated Alpha context without a separator and B's
+single account-local completed field; the existing cached-ID mutation, report,
+editor and PATH checks remain intact. The final-delivery gate and its real-less
+probe are unchanged.
+
+Limits: offline controlled fixtures, no live-account or independent-review claim.
+An initial direct-call fixture argument error, invalid synthetic date-only
+timezone, and final-line newline assertion were corrected before the recorded
+passes. The runner's settled integrated `scripts/verify-clean` remains responsible
+for exactly one complete offline suite followed by distinct copy/PATH/real-less
+probes; this worker did not duplicate that full-suite run. Detailed date cases
+remain in pure/read tests rather than being replicated throughout the copy probe.
