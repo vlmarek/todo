@@ -817,3 +817,160 @@ cross-command completion caching, new framework, telemetry or storage design was
 added. Unknown archived metadata and cross-endpoint concurrency limitations remain.
 All current evidence is offline/synthetic: no production credentials, real-account,
 latency or notification-delivery claim.
+
+## T30 — revision-12 composed and copied completion acceptance (2026-10-28)
+
+Observed starting subject: `25086f91b937ee9092cc7670811dbd7a1b469426`,
+including T29 `e82ea95ac215fce086d0e7fe19b2c36fe3343faf`. Inspected T29's
+concrete diff, shared `completion.py`, report preparation/selection/finalization,
+Sync/recent-discovery consumers, pending occurrence codec and retained
+`completion-reconciliation-notes.md`. No runtime defect was demonstrated; only
+`tests/workflows/report/test_report.py`, `tests/delivery/final/copy_probe.py` and
+this appended evidence changed. The contract map and all earlier evidence bytes
+are unchanged (original evidence prefix: 60,533 bytes, SHA-256
+`4f258d8d884f7951ff4113e85ab32aec320e49b7f97f9caf6f02f9716e979c98`).
+
+Focused/copy observations below bind to these final executable test bytes:
+
+- report test SHA-256: `17783d719e9a32aebd778a19916b59c2477eb2fcf6bca2db486a1464388bcee1`.
+- copy probe SHA-256: `fc5162b0fe1a2030e06b13c46de122004811e801a309a72be77a773081de5479`.
+- unchanged runtime tree digest: `a8b60268a93a7061731dd71c473cece3539463fff560561f12098d946f568b89`
+  (SHA-256 of sorted `todo` and `todo_lib/**/*.py`, each path, NUL, bytes, NUL).
+
+Offline source authority inspected: retained Todoist manifest and original
+`upstream/api-v1.openapi.json`, specifically completed-by-completion-date and
+activities query parameters, TasksCompletedDateResponse, ActivityEvents required
+fields and optional integer/null ID and optional object/null extra_data. Provider
+facts supply object IDs and separate timestamps; they do not supply a mandatory
+cross-source occurrence ID. These are controlled synthetic responses, not real
+account data or a live provider guarantee. Application association is bounded,
+one-to-one supplemental association; absence of an activity counterpart is not
+malformed protocol data. Required activity pagination/owner information and
+capability/retention restrictions remain separate obligations.
+
+Reused evidence, executed on this subject:
+
+- `test_unequal_completion_sources_use_activity_for_task_step_and_cutoffs`
+  sends ordinary completed `18:11:14.704186Z` and activity
+  `18:11:14.719113Z` through real Transport/HistoryAdapter/Reporter. It checks
+  one Finished root or representative Progress step, exact selected activity
+  instant, and inclusion/exclusion with the interval boundary between sources.
+- `test_recurring_partial_overlap_fallback_and_dual_source_undo` checks two
+  completed records plus one activity retain the unmatched older fallback;
+  completed-only recurring fallback uses completed_at; a dual-source completion
+  plus one undo yields zero. This distinguishes owner-wide suppression.
+  `test_same_instant_completion_multiplicity_and_undo`,
+  `test_activity_only_recurring_omitted_metadata_distinct_close_events` and
+  `test_anonymous_same_instant_undo_respects_source_order` preserve separate
+  supplied-ID and anonymous events, close/same-time recurring completions,
+  supplied-ID deduplication and chronological/source-order undo. Fixtures do not
+  pre-deduplicate or supply a shared provider occurrence ID; omitted ID and
+  extra_data pass the real adapter.
+- Sync's `test_activity_only_recurring_reloads_and_each_undo_is_applied_once`
+  discovers activity-only recurring occurrences, later associates completed
+  evidence, repeats supplied activity IDs and undos, and reloads protected JSON.
+  Its required-read negative preserves files. Lifecycle's
+  `test_activity_only_recent_reopen_then_dual_source_discovery_cannot_resurrect`,
+  `test_anonymous_source_order_latest_reopen_survives_refresh_and_reload` and
+  `test_recurring_latest_exact_undo_through_real_adapter` cover recent discovery
+  and no resurrection. An undone latest occurrence does not authorize reopening
+  an older one. Existing accepted/unknown mutation and late-publication tests
+  still distinguish UUID acceptance from observed occurrence evidence; report
+  association has not become a new command-success policy.
+- Existing report saved-baseline/delta, archived-comment sharing and progress
+  tests retain fresh Sync active notes and one complete command-local archived
+  retrieval (including all archived pages). Exact fakes reject request/query
+  drift and extra reads. Adapter negatives cover malformed required events,
+  missing/repeated cursors, later-page failure, valid null/omitted fields,
+  unknown fields, no partial results, and a deliberately incorrect request.
+  Report owner/parent negatives abort before stdout/cursor publication; capability
+  and retention refusal, exact Hidden/context framing, pager/flush/write/cursor
+  failures, output -> flush -> cursor -> cleanup and safe cleanup failure pass.
+  `test_final_output_flush_cursor_cleanup_and_newer_pending_context` and
+  `test_final_cleanup_retains_newer_activity_backed_ordinary_context` retain
+  newer occurrence time/ancestor context rather than pruning all pending work.
+
+New distinguishing composed cases:
+
+- `test_reconciled_activity_time_orders_before_fallback_without_counterpart_reads`
+  supplies B's completion at `18:11:14.994186Z`, duplicate supplied activity 611
+  at `18:11:15.009113Z` with omitted extra_data, and C's completed-only fallback
+  at `18:11:15Z`. Exact HTTP exhaustion prohibits a counterpart lookup. The
+  observable order is C then B, one row each, with B displayed at Prague
+  `20:11:15`, and exact terminal Hidden framing. This challenges both source
+  duplication and ordering; ordering cannot pass by using completed_at.
+- `test_reconciled_completion_failure_paths_keep_pending_and_cursor` puts an
+  unequal-time ordinary step through missing required activity-page cursor,
+  missing archived-comment-page cursor, output write/flush and cursor failures.
+  Retrieval failures leave stdout empty and history/cursor bytes unchanged;
+  delivery failures keep one activity-timed pending occurrence/context and the
+  original cursor. Pruning is forbidden in all these failed finalizations.
+
+The copied probe now supplies B's completed `13:00:00.994186Z` and activity
+`13:00:01.009113Z`, including a repeated supplied activity ID and omitted
+extra_data. The 14.927ms difference crosses a display-second boundary. Unchanged
+copied launcher/modules render exactly one `Completed step: B` at Prague
+`15:00:01`, never `15:00:00`, with exact terminal Hidden framing. Preview and
+controlled cursor failure retain the cursor bytes and one activity-timed pending
+occurrence. Final saves END and removes covered B history while retaining newer
+D/comment/ancestor context; the later cleanup removes it after advancing FINAL.
+Each report still issues exactly Sync, category-scoped completed, filtered
+activity, one archived B comments request; active D text is fresh from Sync.
+No production flags, runtime edits, test imports or request-fake relaxation.
+
+Focused commands/results (exit 0, no skips; logs are ephemeral worker captures):
+
+- t15-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v`
+  — 50 tests, `/tmp/t30-t15-final.log`.
+- t18-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/lifecycle -p 'test_*.py' -v`
+  — 29 tests, `/tmp/t30-t18.log`.
+- t25-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_coexistence tests.delivery.final.test_verify -v`
+  — 8 tests, `/tmp/t30-t25.log`; harness self-tests use tiny suites only.
+- Shared Sync: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p 'test_*.py' -v`
+  — 34 tests, `/tmp/t30-sync.log`.
+- History adapter: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v`
+  — 34 tests, `/tmp/t30-history.log`.
+- Copy-only command below — all 13 phase processes passed,
+  `/tmp/t30-copy.log`; byte comparison confirmed launcher/module copies unchanged.
+- `git diff --check` passed.
+
+Initial t15 execution (`/tmp/t30-t15.log`, 50 tests) found a new test assertion
+incorrectly expecting UTC display; actual output correctly used fixture account
+Europe/Prague. Corrected only that expectation and reran t15 successfully.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY' > /tmp/t30-copy.log 2>&1
+from pathlib import Path
+import os, shutil, subprocess, tempfile
+root=Path.cwd()
+with tempfile.TemporaryDirectory(prefix='t30-copy-') as temp:
+    base=Path(temp)
+    home, install, outside=(base/n for n in ('home','bin','outside'))
+    for p in (home,install,outside): p.mkdir(mode=0o700)
+    shutil.copy2(root/'todo',install/'todo')
+    shutil.copytree(root/'todo_lib',install/'todo_lib')
+    probe=outside/'copy_probe.py'
+    shutil.copy2(root/'tests/delivery/final/copy_probe.py',probe)
+    env=dict(HOME=str(home),PATH=str(install)+':/usr/local/bin:/usr/bin:/bin',TMPDIR=str(outside),LANG='C.UTF-8',TERM='xterm',PYTHONDONTWRITEBYTECODE='1',TODOIST_TOKEN='synthetic-delivery-token')
+    subprocess.run(['python3.11','-I','-B',str(probe),str(install)],cwd=outside,env=env,check=True,timeout=60)
+    for source in [root/'todo',*(root/'todo_lib').rglob('*')]:
+        if source.is_file(): assert source.read_bytes()==(install/source.relative_to(root)).read_bytes()
+PY
+```
+
+Runner provenance available now: inherited `final-delivery` passed on starting
+HEAD `25086f91b937ee9092cc7670811dbd7a1b469426`, capture reference
+`CHECK-da681dc4e26d4293a59c332e53890726`. It does not cover these uncommitted test
+changes. No complete suite was run by this worker or added to a probe/self-test.
+The existing runner final-delivery must still execute one `scripts/check` complete
+offline suite plus distinct unchanged-copy/PATH/real-less probes on the settled
+integrated subject. No future pass, new-subject final gate or independent review
+is claimed here.
+
+Remaining association limits: no universal source occurrence identity is promised;
+nearest chronological one-to-one association is bounded by available observations.
+Anonymous cross-observation identity and disjoint/changing endpoint windows retain
+the documented tolerance. Activity-time cutoff tests require both source records
+to have been fetched; they do not prove late-evidence repair or exactly-once
+cross-report accounting. No persistent ledger or stronger provider guarantee was
+introduced. All observations are offline/synthetic.

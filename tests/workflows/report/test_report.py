@@ -892,6 +892,66 @@ else:
                         self.assertEqual(d.instant_text(entries[0].instant), activity_at)
                         self.assertEqual(streams.stdout.getvalue().count(' — '), 1)
 
+    def test_reconciled_activity_time_orders_before_fallback_without_counterpart_reads(self):
+        # Completed ordering is B,C; selected activity ordering must be C,B.
+        rows = [item('B', checked=True, completed_at='2026-10-21T18:11:14.994186Z'),
+                item('C', checked=True, completed_at='2026-10-21T18:11:15Z')]
+        completion = event(611, '2026-10-21T18:11:15.009113Z',
+                           'completed', obj='B', typ='item')
+        completion.pop('extra_data')
+        steps = self.requests(current_items=[item('A')], rows=rows,
+                              events=[completion, dict(completion)], comments=[])
+        _, streams = self.run_report(steps)
+        self.last_http.assert_done()  # exact requests prohibit counterpart discovery
+        text = streams.stdout.getvalue()
+        self.assertEqual(text.count(' — B'), 1)
+        self.assertEqual(text.count(' — C'), 1)
+        self.assertLess(text.index(' — C'), text.index(' — B'))
+        self.assertIn('Wed 21 Oct 2026, 20:11:15 — B', text)
+        self.assertNotIn('20:11:14 — B', text)
+        self.assertTrue(text.endswith('Hidden\n  None.\n'))
+
+    def test_reconciled_completion_failure_paths_keep_pending_and_cursor(self):
+        row = item('B', parent_id='A', checked=True,
+                   completed_at='2026-10-21T18:11:14.704186Z')
+        completion = event(612, '2026-10-21T18:11:14.719113Z',
+                           'completed', obj='B', typ='item')
+        completion.pop('extra_data')
+        for failure in ('activity-page', 'owner-page', 'write', 'flush', 'cursor'):
+            with self.subTest(failure=failure):
+                before = (self.root / 'report-cursor').read_bytes()
+                pending = (self.root / 'history.json').read_bytes()
+                steps = self.requests(current_items=[item('A')], rows=[row],
+                                      events=[completion], comments=[])
+                streams = self.streams()
+                target = 'todo_lib.workflows.report.prune_history'
+                error = AssertionError('must not prune')
+                if failure == 'activity-page':
+                    steps = steps[:4]
+                    steps[-1] = (steps[-1][0], {'results': [completion]})
+                elif failure == 'owner-page':
+                    steps[-1] = (steps[-1][0], {'results': []})
+                elif failure == 'cursor':
+                    target = 'todo_lib.local.store.StateStore.write_cursor'
+                    error = LocalError('controlled cursor failure')
+                else:
+                    def broken(*args):
+                        raise BrokenPipeError('controlled output failure')
+                    setattr(streams.stdout, failure, broken)
+                with patch(target, side_effect=error):
+                    with self.assertRaises((SyncError, LocalError, OutputError)):
+                        self.run_report(steps, ['--final'], streams)
+                self.last_http.assert_done()
+                self.assertEqual((self.root / 'report-cursor').read_bytes(), before)
+                if failure in ('activity-page', 'owner-page'):
+                    self.assertEqual(streams.stdout.getvalue(), '')
+                    self.assertEqual((self.root / 'history.json').read_bytes(), pending)
+                else:
+                    observed = list(StateStore(self.root).load_history().snapshot.occurrences.values())
+                    self.assertEqual(len(observed), 1)
+                    self.assertEqual(d.instant_text(observed[0].completed_at), completion['event_date'])
+                    self.assertIn('B', self.store.load_history().snapshot.items)
+
     def test_recurring_partial_overlap_fallback_and_dual_source_undo(self):
         from todo_lib.workflows.report import render_report
         active = [item('A', due=due(is_recurring=True)), item('B', parent_id='A')]
