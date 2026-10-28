@@ -259,6 +259,7 @@ class Reports(unittest.TestCase):
                 raw = loads((self.root / 'cache.json').read_bytes())
                 if provenance is None:
                     raw.pop('current_resources')
+                    raw.pop('waiting_label_ids', None)
                 else:
                     raw['current_resources'] = provenance  # missing active ancestor
                 self.put('cache.json', dumps(raw))

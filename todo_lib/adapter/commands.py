@@ -22,7 +22,7 @@ import json
 from uuid import UUID, uuid4
 
 from todo_lib.domain import (
-    Reminder, rebase_attention, preserves_reminder, preserves_item,
+    rebase_attention, preserves_reminder,
     Attention, DomainError, Item, account_timezone, resolve_reminder_due, instant_key, instant_text,
     reconciles_attention, retain_recurrence, validate_body,
     validate_title,
@@ -277,6 +277,10 @@ def due_arguments(attention, previous=None):
     return raw
 
 
+class _UnsubmittedOperation(DomainError):
+    """Gateway validation refused the operation before transport dispatch."""
+
+
 class Gateway:
     def __init__(self, transport, *, history=None, retrieve=current.retrieve, clock=None):
         self.transport = transport
@@ -285,56 +289,64 @@ class Gateway:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self._used = set()
 
-    def execute(self, operation, *, before=None, known_owners=None, owner_id=None, start=None, end=None):
+    def execute(self, operation, *, before=None, known_owners=None, known_reminders=None, owner_id=None, start=None, end=None):
         """Submit once, then read current and required bounded history.
 
-        before is the synchronized preflight Current. known_owners supplies already
+        before is the saved preflight Current. known_owners supplies already
         resolved archived Items for own comments. start/end bound lifecycle evidence;
         defaults cover the call with a five-minute lookback for provider clock skew.
         No valid state or matching title alone establishes operation acceptance.
         """
-        op = operation
-        # Revalidate even a caller-mutated args mapping before sending bytes.
-        op = Operation(op.type, op.args, op.uuid, op.temp_id, op.expected_attention)
-        identities = {op.uuid} | ({op.temp_id} if op.temp_id else set())
-        if identities & self._used:
-            raise DomainError('operation already attempted; reconcile without replay')
-        if before is None and op.type not in ('project_add', 'label_add'):
-            raise DomainError('synchronized preflight Current required')
-        owners = dict(known_owners or {})
-        if before is not None:
-            owners.update(before.snapshot.items)
-        owner = op.args.get('item_id', owner_id)
-        if op.type.startswith('note_') and owner is None and before is not None:
-            note = before.snapshot.comments.get(op.args['id'])
-            owner = note.item_id if note else None
-        if op.type.startswith('note_') and owner not in owners:
-            raise DomainError('known comment owner required')
-        if op.type.startswith('item_') and op.type != 'item_add' and op.args['id'] not in owners:
-            raise DomainError('known managed item required')
-        if op.type.startswith('reminder_') and op.type != 'reminder_add' and op.args['id'] not in before.snapshot.reminders:
-            raise DomainError('known managed reminder required')
-        if op.type in ('reminder_add', 'reminder_update'):
-            old_reminder = before.snapshot.reminders.get(op.args.get('id'))
-            reminder_owner = op.args.get('item_id', old_reminder.item_id if old_reminder else None)
-            if reminder_owner not in owners:
-                raise DomainError('known managed reminder owner required')
-            reminder_kind = op.args.get('type', old_reminder.type if old_reminder else None)
-            if reminder_kind == 'relative':
-                attention = owners[reminder_owner].attention
-                if attention is None or not attention.exact:
-                    raise DomainError('relative reminder requires timed task due')
-        old_ancestors = []
-        if op.type == 'item_uncomplete':
-            node, seen = owners[op.args['id']], {op.args['id']}
-            while node.parent_id is not None:
-                if node.parent_id in seen or node.parent_id not in owners:
-                    raise DomainError('reopen requires known acyclic ancestor context')
-                seen.add(node.parent_id)
-                node = owners[node.parent_id]
-                old_ancestors.append(node)
-        lower = start if start is not None else self.clock() - timedelta(minutes=5)
-        instant_key(lower)
+        try:
+            op = operation
+            # Revalidate even a caller-mutated args mapping before sending bytes.
+            op = Operation(op.type, op.args, op.uuid, op.temp_id, op.expected_attention)
+            identities = {op.uuid} | ({op.temp_id} if op.temp_id else set())
+            if identities & self._used:
+                raise DomainError('operation already attempted; reconcile without replay')
+            if before is None and op.type not in ('project_add', 'label_add'):
+                raise DomainError('saved preflight Current required')
+            # Selected identities survive ordered operations, but their saved facts
+            # are fallbacks: accepted reconciliation supplies the next operation's
+            # current due, recurrence, hierarchy and reminder state.
+            owners = dict(known_owners or {})
+            reminders = dict(known_reminders or {})
+            if before is not None:
+                owners.update(before.snapshot.items)
+                reminders.update(before.snapshot.reminders)
+            owner = op.args.get('item_id', owner_id)
+            if op.type.startswith('note_') and owner is None and before is not None:
+                note = before.snapshot.comments.get(op.args['id'])
+                owner = note.item_id if note else None
+            if op.type.startswith('note_') and owner not in owners:
+                raise DomainError('known comment owner required')
+            if op.type.startswith('item_') and op.type != 'item_add' and op.args['id'] not in owners:
+                raise DomainError('known managed item required')
+            if op.type.startswith('reminder_') and op.type != 'reminder_add' and op.args['id'] not in reminders:
+                raise DomainError('known managed reminder required')
+            if op.type in ('reminder_add', 'reminder_update'):
+                old_reminder = reminders.get(op.args.get('id'))
+                reminder_owner = op.args.get('item_id', old_reminder.item_id if old_reminder else None)
+                if reminder_owner not in owners:
+                    raise DomainError('known managed reminder owner required')
+                reminder_kind = op.args.get('type', old_reminder.type if old_reminder else None)
+                if reminder_kind == 'relative':
+                    attention = owners[reminder_owner].attention
+                    if attention is None or not attention.exact:
+                        raise DomainError('relative reminder requires timed task due')
+            old_ancestors = []
+            if op.type == 'item_uncomplete':
+                node, seen = owners[op.args['id']], {op.args['id']}
+                while node.parent_id is not None:
+                    if node.parent_id in seen or node.parent_id not in owners:
+                        raise DomainError('reopen requires known acyclic ancestor context')
+                    seen.add(node.parent_id)
+                    node = owners[node.parent_id]
+                    old_ancestors.append(node)
+            lower = start if start is not None else self.clock() - timedelta(minutes=5)
+            instant_key(lower)
+        except DomainError as error:
+            raise _UnsubmittedOperation(str(error)) from error
         self._used.update(identities)
         observed = _Observed(self.transport)
         issues, evidence = [], []
@@ -352,7 +364,7 @@ class Gateway:
                 after = self.retrieve(observed, before.binding, prior=before.current_snapshot or before.snapshot,
                                       sync_token=before.sync_token,
                                       replace=before.sync_token == '*' or before.current_snapshot is None,
-                                      known=before.snapshot, reminder_ids=before.reminder_ids)
+                                      known=before.snapshot, reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids)
             else:
                 # Provisioning before a root binding exists: only project/label
                 # resources, full plus one bounded freshness delta.
@@ -453,10 +465,13 @@ class Gateway:
                 if actual.item_id != owner or actual.body != op.args['content']:
                     issues.append('accepted comment differs from requested owner/text')
             if actual is not None and op.type in ('reminder_add', 'reminder_update'):
-                previous = before.snapshot.reminders.get(op.args.get('id')) if before else None
-                kind = op.args.get('type', previous.type if previous else None)
+                previous = reminders.get(op.args.get('id'))
                 owner_id = previous.item_id if previous else op.args['item_id']
-                expected = previous or Reminder(target, owner_id, type=kind)
+                # Untouched fields are authoritative returned context, rather
+                # than a comparison against potentially outdated saved values.
+                expected = replace(actual, item_id=owner_id)
+                kind = op.args.get('type', 'absolute' if 'due' in op.args else
+                                   'relative' if 'minute_offset' in op.args else actual.type)
                 expected = replace(expected, type=kind,
                     minutes=op.args.get('minute_offset', expected.minutes) if kind == 'relative' else None,
                     due=expected.due if kind == 'absolute' else None,
@@ -483,12 +498,7 @@ class Gateway:
                     expected = replace(expected, due=actual.due)
                 differs |= not preserves_reminder(expected, actual, account_zone)
                 if differs:
-                    issues.append('accepted reminder differs from request or retained state')
-            if op.type.startswith('reminder_') and before is not None and snapshot is not None:
-                previous = before.snapshot.reminders.get(op.args.get('id'))
-                owner_id = previous.item_id if previous else op.args.get('item_id')
-                if not preserves_item(before.snapshot.items[owner_id], snapshot.items.get(owner_id), account_zone):
-                    issues.append('reminder operation changed the owner task state')
+                    issues.append('accepted reminder differs from request')
             if actual is not None and op.type in ('project_add', 'label_add'):
                 if actual.name != op.args['name'] or (op.type == 'project_add' and actual.parent_id != op.args.get('parent_id')):
                     issues.append('accepted provision differs from request')
@@ -558,7 +568,7 @@ class Gateway:
             args['priority'] = 5-priority
         expected = attention
         if attention is not _UNSET:
-            before = context['before'].snapshot.items[item_id]
+            before = context['before'].snapshot.items.get(item_id) or (context.get('known_owners') or {})[item_id]
             expected = retain_recurrence(attention, before.attention) if attention is not None else None
             args['due'] = due_arguments(expected, before.attention)
         return self.execute(Operation('item_update', args, expected_attention=expected), **context)

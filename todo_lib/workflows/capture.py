@@ -1,4 +1,4 @@
-"""Ordered capture, scalar and scheduling workflows over synchronized state.
+"""Ordered capture, scalar and scheduling workflows over validated saved state.
 
 Preflight constructs and validates the whole proposed batch. The execution plan
 uses symbolic create IDs until the gateway supplies operation-attributable IDs.
@@ -7,9 +7,9 @@ another mutation. Failure receipts retain remote classification without replay.
 """
 from dataclasses import dataclass, field, replace
 from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, Operation, due_arguments
+from todo_lib.adapter.commands import Gateway, Operation, due_arguments, _UnsubmittedOperation
 from todo_lib.adapter.current import Current
-from todo_lib.adapter.transport import HTTPFailure, Replay
+from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import exclusive_lock, load_config, LocalError
 from todo_lib.syntax import parse
 from todo_lib.syntax.input import prompt, InputError
@@ -63,33 +63,10 @@ def _same_item(left, right, zone):
         d.rebase_attention(left.attention, zone), right.attention, zone)
 
 
-def _require_waiting_label(transport):
-    """Read label resources only when adding policy; never provision implicitly.
-
-    Sync's documented full response followed by freshness delta supplies label
-    existence, which Snapshot deliberately does not model. Item labels are names.
-    """
-    labels, token = {}, '*'
-    for full in (True, False):
-        response = transport.request('POST', '/sync', operation='read waiting label', replay=Replay.READ,
-            form={'sync_token': token, 'resource_types': '["labels"]'})
-        if (not isinstance(response, dict) or response.get('full_sync') is not full
-                or not isinstance(response.get('sync_token'), str)
-                or not response['sync_token'] or response['sync_token'] == '*'
-                or not isinstance(response.get('labels', [] if not full else None), list)):
-            raise d.DomainError('invalid waiting label resource response')
-        token = response['sync_token']
-        for label in response.get('labels', []):
-            if (not isinstance(label, dict) or not isinstance(label.get('id'), str)
-                    or not label['id'] or type(label.get('is_deleted', False)) is not bool):
-                raise d.DomainError('invalid waiting label resource')
-            if label.get('is_deleted', False):
-                labels.pop(label['id'], None)
-            else:
-                if not isinstance(label.get('name'), str) or not label['name']:
-                    raise d.DomainError('invalid waiting label name')
-                labels[label['id']] = label['name']
-    if 'waiting' not in labels.values():
+def _require_waiting_label(state):
+    if state.waiting_label_ids is None:
+        raise LocalError('saved waiting-label context is missing; run todo --refresh now then retry')
+    if not state.waiting_label_ids:
         raise d.DomainError('waiting label is missing; run todo init before adding hiding')
 
 
@@ -107,7 +84,8 @@ class CaptureWorkflow:
             raise ValueError('not a capture/scalar/scheduling command: ' + request.command)
         settings = self.settings or load_config(self.synchronizer.store.root)
         with exclusive_lock('capture', self.synchronizer.store.root):
-            synchronized = self.synchronizer.refresh_locked()
+            synchronized = (self.synchronizer.refresh_locked() if request.command == 'add' and request.target == 'category'
+                            else self.synchronizer.read_local())
             snapshot = synchronized.snapshot
             now = d.instant_datetime(synchronized.now)
             d.validate(snapshot, settings.hidden_from_now)
@@ -130,7 +108,7 @@ class CaptureWorkflow:
                         p.deliver(result.document, settings, streams, view_kind='mutation')
                     return result
             if adding_hiding:
-                _require_waiting_label(self.synchronizer.transport)
+                _require_waiting_label(synchronized.state)
             result = self._run(actions, synchronized, settings.hidden_from_now, now)
         if deliver:
             streams = self.streams or p.OriginalStreams.current()
@@ -248,6 +226,8 @@ class CaptureWorkflow:
 
     def _run(self, actions, synchronized, hidden, now):
         snapshot = synchronized.snapshot
+        selected_owners = dict(snapshot.items)
+        selected_reminders = dict(snapshot.reminders)
         ids, outcomes, documents = {}, [], []
         failure = None
         status = 0
@@ -257,14 +237,14 @@ class CaptureWorkflow:
             if kwargs.get('parent_id') in ids:
                 kwargs['parent_id'] = ids[kwargs['parent_id']]
             before = Current(snapshot, synchronized.state.sync_token, current_snapshot=synchronized.state.current_snapshot,
-                reminder_ids=synchronized.state.current_reminder_ids)
-            old = snapshot.items.get(target)
+                waiting_label_ids=synchronized.state.waiting_label_ids, reminder_ids=synchronized.state.current_reminder_ids)
+            old = snapshot.items.get(target) or selected_owners.get(target)
             receipt = None
             rendered = False
             try:
                 method = getattr(self.gateway, action.method)
                 if action.method == 'create_task':
-                    receipt = method(**kwargs, before=before)
+                    receipt = method(**kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders)
                 elif (action.method == 'update_task' and kwargs.get('attention') is not None
                       and kwargs['attention'].kind == 'date' and old.recurring and old.attention.zone is not None):
                     # update_task retains the previous zone unconditionally. A date-only
@@ -275,9 +255,9 @@ class CaptureWorkflow:
                     args['due']['timezone'] = None
                     args.update({k: list(v) if k == 'labels' else v for k, v in kwargs.items() if k != 'attention'})
                     receipt = self.gateway.execute(Operation('item_update', args,
-                        expected_attention=attention), before=before)
+                        expected_attention=attention), before=before, known_owners=selected_owners, known_reminders=selected_reminders)
                 else:
-                    receipt = method(target, **kwargs, before=before)
+                    receipt = method(target, **kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders)
                 outcome = receipt.outcome.value
                 issues = list(receipt.issues)
                 actual = receipt.actual
@@ -293,6 +273,8 @@ class CaptureWorkflow:
                     target = receipt.target_id
                 synchronized = self.synchronizer.reconcile_accepted_locked()
                 snapshot = synchronized.snapshot
+                if action.method == 'create_task' and target in snapshot.items:
+                    selected_owners[target] = snapshot.items[target]
                 d.validate(snapshot, hidden)
                 actual = (snapshot.categories.get(receipt.target_id) if action.method == 'provision_category'
                           else snapshot.reminders.get(receipt.target_id) if action.method in ('create_reminder', 'delete_reminder')
@@ -302,19 +284,20 @@ class CaptureWorkflow:
                     if actual is None:
                         issues.append('accepted item is absent from reconciled state')
                     else:
-                        attention = expected.attention
-                        if 'attention' not in kwargs:
-                            attention = d.rebase_attention(attention, snapshot.account.timezone)
-                        if attention is not None and attention.kind == 'unresolved':
-                            valid_due = actual.attention is not None
-                        else:
-                            compare = d.reconciles_attention if 'attention' in kwargs else d.same_attention
-                            valid_due = compare(attention, actual.attention, snapshot.account.timezone)
-                        if not valid_due:
-                            issues.append(f'accepted attention differs: requested {attention!r}; actual {actual.attention!r}')
-                        if (expected.title, expected.priority, expected.labels, expected.description) != (actual.title, actual.priority, actual.labels, actual.description):
+                        creating = action.method == 'create_task'
+                        if creating or 'attention' in kwargs:
+                            attention = expected.attention
+                            if attention is not None and attention.kind == 'unresolved':
+                                valid_due = actual.attention is not None
+                            else:
+                                valid_due = d.reconciles_attention(attention, actual.attention, snapshot.account.timezone)
+                            if not valid_due:
+                                issues.append(f'accepted attention differs: requested {attention!r}; actual {actual.attention!r}')
+                        if any(getattr(expected, name) != getattr(actual, name)
+                               for name in ('title', 'priority', 'labels', 'description')
+                               if creating or name in kwargs):
                             issues.append('accepted scalar state differs from proposed title/priority/hiding/reason')
-                        if (actual.parent_id != ids.get(expected.parent_id, expected.parent_id)
+                        if creating and (actual.parent_id != ids.get(expected.parent_id, expected.parent_id)
                                 or actual.category_id != expected.category_id):
                             issues.append('accepted item has unexpected parent/category')
                 if action.method == 'create_reminder':
@@ -336,27 +319,9 @@ class CaptureWorkflow:
                     issues.append('accepted reminder deletion remains in reconciled state')
                 elif action.method == 'complete' and (actual is None or not actual.completed):
                     issues.append('accepted ordinary completion is absent from reconciled lifecycle state')
-                if action.method in ('create_reminder', 'delete_reminder'):
-                    owner_id = target if action.method == 'create_reminder' else before.snapshot.reminders[target].item_id
-                    for key, reminder in before.snapshot.reminders.items():
-                        if (reminder.item_id == owner_id and key != target
-                                and not d.preserves_reminder(reminder, snapshot.reminders.get(key), snapshot.account.timezone)):
-                            issues.append('reminder operation changed another preserved reminder')
-                    owner_before = before.snapshot.items[owner_id]
-                    owner_after = snapshot.items.get(owner_id)
-                    if owner_after is None or not d.preserves_item(owner_before, owner_after, snapshot.account.timezone):
-                        issues.append('reminder operation changed the owner attention/scalar state')
                 if action.method == 'provision_category':
                     if actual is None or (actual.name, actual.parent_id) != (kwargs['name'], target):
                         issues.append('accepted category differs from reconciled name/parent')
-                if action.retained is not None:
-                    retained = {k: r for k, r in before.snapshot.reminders.items() if r.item_id == target}
-                    returned = {k: r for k, r in snapshot.reminders.items() if r.item_id == target}
-                    if (set(offsets(snapshot, target)) != set(action.retained)
-                            or retained.keys() != returned.keys()
-                            or any(not d.preserves_reminder(r, returned.get(k), snapshot.account.timezone)
-                                   for k, r in retained.items())):
-                        issues.append('accepted attention changed the preserved reminder set')
                 outcomes[-1] = replace(outcomes[-1], actual=actual, issues=tuple(issues))
                 if not issues:
                     documents.append(self._document(action, old, actual, snapshot, now, before.snapshot))
@@ -369,7 +334,11 @@ class CaptureWorkflow:
                 failure = error
                 status = 130 if isinstance(error, KeyboardInterrupt) else 1
                 if receipt is None:
-                    outcomes.append(OperationOutcome(action.method, action.title, 'unknown', target,
+                    # Only the gateway's explicit pre-dispatch refusal proves
+                    # that this operation was never submitted. Other failures
+                    # without a receipt remain conservatively unknown.
+                    outcome = 'unattempted' if isinstance(error, _UnsubmittedOperation) else 'unknown'
+                    outcomes.append(OperationOutcome(action.method, action.title, outcome, target,
                         issues=(str(error),)))
                 elif receipt.accepted:
                     if not rendered and not receipt.issues and receipt.actual is not None and receipt.after is not None:

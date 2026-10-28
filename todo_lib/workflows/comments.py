@@ -186,7 +186,7 @@ class CommentWorkflow:
         root = self.synchronizer.store.root
         with exclusive_lock('comment edit' if request.option('edit') else 'comment', root):
             settings = self.settings or load_config(root)
-            initial = self.synchronizer.refresh_locked()
+            initial = self.synchronizer.read_local()
             snapshot = initial.snapshot
             color = p.Color.for_stdout(self.streams.stdout, request.option('color', 'auto'), slots=settings.colors)
             if request.parent:
@@ -210,9 +210,7 @@ class CommentWorkflow:
                     result = CommentResult(p.document(warnings='todo: comment editing interrupted'),
                                            snapshot, initial.now, owner, 130)
                 else:
-                    # The editor may have been open for hours. Refresh only after
-                    # validation/confirmation; missing targets fail at their turn.
-                    current = self.synchronizer.refresh_locked() if plan.changes else initial
+                    current = initial
                     result = self._apply(current, owner, plan.changes, editing=True)
             else:
                 result = self._apply(initial, owner, tuple(Change('add', body=b) for b in bodies))
@@ -264,8 +262,8 @@ class CommentWorkflow:
             self.gateway.transport = observed
         try:
             result = self.gateway.execute(operation, before=Current(current.snapshot, current.state.sync_token, current_snapshot=current.state.current_snapshot,
-                reminder_ids=current.state.current_reminder_ids),
-                                          owner_id=owner.id)
+                waiting_label_ids=current.state.waiting_label_ids, reminder_ids=current.state.current_reminder_ids),
+                                          known_owners={owner.id: owner}, owner_id=owner.id)
             if observed is not None:
                 result = replace(result, issues=tuple(dict.fromkeys((*result.issues, *observed.mutation_issues()))))
             return result, False
@@ -293,12 +291,6 @@ class CommentWorkflow:
             reason, accepted, remote = None, False, None
             state = 'Failed'
             try:
-                if owner.id not in current.snapshot.items or current.snapshot.items[owner.id].completed:
-                    raise CommentError('selected owner is no longer open')
-                if change.kind != 'add' and change.comment_id not in current.snapshot.comments:
-                    raise CommentError('comment was concurrently deleted')
-                if change.kind != 'add' and current.snapshot.comments[change.comment_id].item_id != owner.id:
-                    raise CommentError('comment no longer belongs to the selected owner')
                 args = ({'item_id': owner.id, 'content': change.body} if change.kind == 'add' else
                         {'id': change.comment_id, 'content': change.body} if change.kind == 'edit' else
                         {'id': change.comment_id})
@@ -318,6 +310,9 @@ class CommentWorkflow:
                 state = 'Accepted' if accepted else 'Unknown' if remote.outcome == Outcome.UNKNOWN else 'Failed'
                 reason = '; '.join(remote.issues) or None
                 if accepted:
+                    if remote.after is not None and owner.id in remote.after.snapshot.items:
+                        snapshot = remote.after.snapshot
+                        owner = snapshot.items[owner.id]
                     if change.kind == 'add' and isinstance(remote.actual, d.Comment):
                         accepted_bodies.append(remote.actual.body)
                     if reason:
@@ -328,6 +323,9 @@ class CommentWorkflow:
                     # Always reconcile accepted work, including accepted outcomes
                     # with incomplete gateway evidence. Never retry the mutation.
                     current = self.synchronizer.reconcile_accepted_locked()
+                    if owner.id in current.snapshot.items:
+                        snapshot = current.snapshot
+                        owner = snapshot.items[owner.id]
                 else:
                     if interrupted:
                         raise KeyboardInterrupt

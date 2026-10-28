@@ -117,6 +117,7 @@ class PublicCapture(unittest.TestCase):
     state = capture.CaptureTests.state
     seed = capture.CaptureTests.seed
     refresh = capture.CaptureTests.refresh
+    queue_refresh = capture.CaptureTests.queue_refresh
     operation = capture.CaptureTests.operation
 
     def call(self, argv, **kw):

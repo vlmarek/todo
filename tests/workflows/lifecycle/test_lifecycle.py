@@ -63,7 +63,11 @@ class FakeSync:
     def value(self):
         return SimpleNamespace(snapshot=self.snapshot, now=END,
             state=SimpleNamespace(cursor=CURSOR, sync_token='token',
-                current_snapshot=None, current_reminder_ids=None))
+                current_snapshot=None, current_reminder_ids=None, waiting_label_ids=None))
+
+    def read_local(self):
+        self.calls.append(('local', {}))
+        return self.value()
 
     def refresh_locked(self, **kwargs):
         self.calls.append(('refresh', kwargs))
@@ -97,7 +101,8 @@ class LifecycleTests(unittest.TestCase):
         self.lock = patch('todo_lib.workflows.lifecycle.exclusive_lock', return_value=nullcontext())
         self.lock.start()
         self.addCleanup(self.lock.stop)
-        self.history = patch('todo_lib.workflows.lifecycle._recent_snapshot', side_effect=lambda sync, result, hidden: result.snapshot)
+        self.history = patch('todo_lib.workflows.lifecycle._recent_snapshot',
+            side_effect=AssertionError('ordinary lifecycle selection must use saved evidence'))
         self.history.start()
         self.addCleanup(self.history.stop)
 
@@ -400,10 +405,23 @@ class AdapterLifecycleTests(unittest.TestCase):
         with exclusive_lock('setup', self.store.root):
             self.store.publish_snapshot(prepare_candidates(observed.snapshot,
                 empty_history(observed.snapshot), account_display='Person',
-                current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=fixtures.INITIAL))
+                waiting_label_ids=observed.waiting_label_ids, current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=fixtures.INITIAL))
             self.store.write_cursor(cursor)
 
-    def workflow(self, steps, *, now=fixtures.NOW):
+    def establish(self, steps, *, now=fixtures.NOW, recent=False):
+        """Explicit fixture refresh, finished before the command boundary exists."""
+        sync, http = self.fixture.workflow(steps, now=now)
+        current = sync.refresh()
+        if recent:
+            from todo_lib.workflows.lifecycle import _recent_snapshot
+            from todo_lib.local import load_config
+            with exclusive_lock('retained fixture evidence', self.store.root):
+                _recent_snapshot(sync, current, load_config(self.store.root).hidden_from_now)
+        http.assert_done()
+
+    def workflow(self, steps, *, now=fixtures.NOW, setup=(), recent=False):
+        if setup:
+            self.establish(setup, now=now, recent=recent)
         sync, http = self.fixture.workflow(steps, now=now)
         return LifecycleWorkflow(sync, gateway=Gateway(sync.transport, clock=lambda: now), streams=self.out), http
 
@@ -429,15 +447,23 @@ class AdapterLifecycleTests(unittest.TestCase):
         rest = [dict(id='new-comment', content='Done: first body', posted_at=fixtures.COMMENT,
                      file_attachment=None, is_deleted=False)]
         current_note = note('new-comment', 'B', content='Done: first body', posted_at=fixtures.COMMENT)
-        wf, _ = self.workflow([
-            f.sync('delta-token', delta()),
-            complete.step(), f.sync('delta-token', full(items=[item('A', added_at=fixtures.CREATED)])),
-            f.sync('full-token', delta()), f.completed([fixtures.completed_b()]),
+        wf, _ = self.workflow([complete.step(),
+            f.sync('delta-token', full(items=[item('A', added_at=fixtures.CREATED)])),
+            f.sync('full-token', delta()),
+            f.completed([fixtures.completed_b()]),
             *f.external(),
-            comment1.step(), f.sync('delta-token', delta()), self.comments('B', rest),
-            f.sync('delta-token', delta(notes=[current_note])), f.completed([]), self.comments('B', rest),
-            comment2.step(), f.sync('delta-token', delta()), self.comments('B', rest),
-            f.sync('delta-token', delta()), f.completed([]), self.comments('B', rest)])
+            comment1.step(),
+            f.sync('delta-token', delta()),
+            self.comments('B', rest),
+            f.sync('delta-token', delta(notes=[current_note])),
+            f.completed([]),
+            self.comments('B', rest),
+            comment2.step(),
+            f.sync('delta-token', delta()),
+            self.comments('B', rest),
+            f.sync('delta-token', delta()),
+            f.completed([]),
+            self.comments('B', rest)], setup=[f.sync('delta-token', delta())])
         result = wf.execute(['done', 'B', '--comment', 'first body', 'second body', 'third body'])
         self.assertEqual(result.status, 1)
         self.assertEqual([o.outcome for o in result.operations], ['accepted', 'accepted', 'rejected', 'unattempted'])
@@ -457,7 +483,8 @@ class AdapterLifecycleTests(unittest.TestCase):
         child = item('B', parent_id='A', checked=True, completed_at=fixtures.DONE,
                      due=due('2026-10-24', timezone=None))
         self.seed(full(items=[parent, child]))
-        wf, http = self.workflow([f.sync('delta-token', delta()), f.completed([child])])
+        wf, http = self.workflow([], setup=[f.sync('delta-token', delta()),
+            f.completed([child])], recent=True)
         with self.assertRaisesRegex(d.DomainError, 'precedes waiting ancestor'):
             wf.execute(['reopen', 'B'])
         http.assert_done()
@@ -475,9 +502,10 @@ class AdapterLifecycleTests(unittest.TestCase):
         self.seed(full(items=[a, b, child], notes=[note('own', 'B', posted_at=fixtures.COMMENT)]))
         reopen = CommandRequest(self, 'item_uncomplete', {'id': 'B'})
         restored = [item('A', added_at=fixtures.CREATED), item('B', parent_id='A', added_at=fixtures.CREATED)]
-        wf, _ = self.workflow([f.sync('delta-token', delta()), f.completed([a, b, child]),
-            reopen.step(), f.sync('delta-token', delta(items=restored)),
-            f.sync('delta-token', delta(items=restored))])
+        wf, _ = self.workflow([reopen.step(),
+            f.sync('delta-token', delta(items=restored)),
+            f.sync('delta-token', delta(items=restored))], setup=[f.sync('delta-token', delta()),
+            f.completed([a, b, child])], recent=True)
         result = wf.execute(['step', '--undone', 'A', 'B'])
         self.assertEqual(result.status, 0)
         self.assertIn('Also reopened:', result.document.stdout)
@@ -500,13 +528,14 @@ class AdapterLifecycleTests(unittest.TestCase):
         query = [('project_id', 'cat'), ('since', '2026-10-22T12:00:00Z'),
                  ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]
         deletion = CommandRequest(self, 'item_delete', {'id': 'eligible'})
-        wf, _ = self.workflow([f.sync('delta-token', delta()),
-            (Expected('/tasks/completed/by_completion_date', query), {'items': rows, 'unknown': 1}),
-            self.comments('eligible', []), self.comments('end', [own]),
-            deletion.step(), f.sync('delta-token', delta(items=[item('eligible', is_deleted=True)])),
+        wf, _ = self.workflow([deletion.step(),
+            f.sync('delta-token', delta(items=[item('eligible', is_deleted=True)])),
             f.sync('delta-token', delta(items=[item('eligible', is_deleted=True)])),
             (Expected('/tasks/completed/by_completion_date', query), {'items': []}),
-            self.comments('end', [own])], now=END)
+            self.comments('end', [own])], setup=[f.sync('delta-token', delta()),
+            (Expected('/tasks/completed/by_completion_date', query), {'items': rows, 'unknown': 1}),
+            self.comments('eligible', []),
+            self.comments('end', [own])], recent=True, now=END)
         result = wf.execute(['delete', '--yes', 'eligible'])
         self.assertEqual(result.status, 0)
         self.assertEqual(len(deletion.commands), 1)
@@ -550,8 +579,9 @@ class AdapterLifecycleTests(unittest.TestCase):
         archived = item('C', parent_id='A', checked=True, completed_at=fixtures.DONE,
                         added_at=fixtures.CREATED)
         self.out = streams('no\n')
-        wf, http = self.workflow([f.sync('delta-token', delta()),
-            f.completed([archived]), self.comments('C', [])])
+        wf, http = self.workflow([], setup=[f.sync('delta-token', delta()),
+            f.completed([archived]),
+            self.comments('C', [])], recent=True)
         from todo_lib.syntax.input import Cancelled
         with self.assertRaises(Cancelled):
             wf.execute(['delete', 'C'])
@@ -563,57 +593,15 @@ class AdapterLifecycleTests(unittest.TestCase):
         self.assertEqual(d.instant_text(saved.history.snapshot.items['C'].added_at), fixtures.CREATED)
         self.assertEqual(d.instant_text(saved.state.cursor), d.instant_text(fixtures.CURSOR))
 
-    def test_discovery_publication_failure_stops_before_remote_mutation(self):
-        f = self.fixture
-        archived = item('C', parent_id='A', checked=True, completed_at=fixtures.DONE,
-                        added_at=fixtures.CREATED)
-        # Reset between the two actual-store fault boundaries; do not infer a
-        # usable old set once destination replacement has begun.
-        original = f.bytes()
-        for late in (False, True):
-            with self.subTest(late=late):
-                for name, content in original.items():
-                    f.put(name, content)
-                wf, http = self.workflow([f.sync('delta-token', delta()),
-                    f.completed([archived]), self.comments('C', [])])
-                real_replace = os.replace
-                saved, destinations = {}, {}
-                refreshed = False
-                def fail_discovery(source, destination):
-                    nonlocal refreshed
-                    name = Path(destination).name
-                    if refreshed:
-                        destinations[name] = Path(source).read_bytes()
-                        if name == ('binding.json' if late else 'cache.json'):
-                            raise OSError('controlled discovery replacement failure')
-                    result = real_replace(source, destination)
-                    if name == 'binding.json' and not refreshed:
-                        saved.update(f.bytes())
-                        refreshed = True
-                    return result
-                with patch('todo_lib.local.safety.os.replace', side_effect=fail_discovery):
-                    with self.assertRaises(SyncError) as caught:
-                        wf.execute(['delete', '--yes', 'C'])
-                http.assert_done()  # No delete, reopen, completion or undo sent.
-                failure = caught.exception
-                self.assertEqual(failure.remote_outcome, 'unattempted')
-                self.assertEqual(failure.publication_started, late)
-                self.assertEqual(failure.refresh_permitted, not late)
-                if not late:
-                    self.assertEqual(f.bytes(), saved)
-                    self.assertIn('own', wf.synchronizer.read_local().history.snapshot.comments)
-                else:
-                    after = f.bytes()
-                    for name in ('cache.json', 'history.json'):
-                        self.assertEqual(after[name], destinations[name])
-                        data = loads(after[name])  # Complete individual files.
-                        self.assertIn('C', data['snapshot']['items'])
-                        self.assertIn('own', data['snapshot']['comments'])
-                    self.assertEqual(after['binding.json'], saved['binding.json'])
-                    self.assertEqual(after['report-cursor'], saved['report-cursor'])
-                    with self.assertRaises(LocalError):
-                        Synchronizer(None, self.store).read_local()
-                    self.assertIn('restore a consistent saved set', str(failure))
+    def test_invalid_required_history_stops_before_remote_mutation(self):
+        path = self.store.root / 'history.json'
+        path.write_bytes(b'{invalid')
+        before = path.read_bytes()
+        wf, http = self.workflow([])
+        with self.assertRaises(LocalError):
+            wf.execute(['delete', '--yes', 'B'])
+        self.assertFalse(http.requests)
+        self.assertEqual(path.read_bytes(), before)
 
     def recurring_steps(self, command, normalized, *, include_after=True):
         f = self.fixture
@@ -621,8 +609,8 @@ class AdapterLifecycleTests(unittest.TestCase):
         new = {**fixtures.completed_b(), 'checked': False, 'due': normalized}
         new['completed_at'] = '2026-10-22T12:00:00.123456789012349Z'
         rows = [old, new]
-        steps = [f.sync('delta-token', delta()), f.completed([old]), self.activity(),
-            command.step(), f.sync('delta-token', delta(items=[item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)])),
+        self.establish([f.sync('delta-token', delta()), f.completed([old]), self.activity()])
+        steps = [command.step(), f.sync('delta-token', delta(items=[item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)])),
             f.completed(rows)]
         if include_after:
             steps += [f.sync('delta-token', delta(items=[item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)])),
@@ -636,20 +624,15 @@ class AdapterLifecycleTests(unittest.TestCase):
         command = CommandRequest(self, 'item_update_date_complete', {'id': 'B', 'is_forward': 1, 'reset_subtasks': 0})
         wf, http = self.workflow(self.recurring_steps(command, normalized))
         real_replace = os.replace
-        destinations, saved = {}, {}
+        destinations, saved = {}, f.bytes()
         binding_count = 0
         def fail_later_binding(source, destination):
             nonlocal binding_count
             name = Path(destination).name
             if name == 'binding.json':
                 binding_count += 1
-            if binding_count == 1 and name == 'binding.json':
-                value = real_replace(source, destination)
-                saved.update(f.bytes())
-                return value
-            if binding_count >= 1:
-                destinations[name] = Path(source).read_bytes()
-            if name == 'binding.json' and binding_count == 2:
+            destinations[name] = Path(source).read_bytes()
+            if name == 'binding.json' and binding_count == 1:
                 raise OSError('controlled later binding replacement')
             return real_replace(source, destination)
         with patch('todo_lib.local.safety.os.replace', side_effect=fail_later_binding):
@@ -699,7 +682,7 @@ class AdapterLifecycleTests(unittest.TestCase):
         def fail_second(*args, **kwargs):
             nonlocal calls
             calls += 1
-            if calls == 2:
+            if calls == 1:
                 saved.update(self.fixture.bytes())
                 raise LocalError('controlled candidate failure')
             return original_prepare(*args, **kwargs)
@@ -727,13 +710,16 @@ class AdapterLifecycleTests(unittest.TestCase):
         restored = item('B', parent_id='A', due={**recurrence, 'date': '2026-10-24'},
                         added_at=fixtures.CREATED)
         events = [completion, undo]
-        wf, http = self.workflow([
-            f.sync('delta-token', delta()), f.completed([]), self.activity(records=[completion]),
-            f.completed([]),  # bounded recent discovery must keep activity-only evidence
-            command.step(), f.sync('delta-token', delta(items=[restored])),
-            f.completed([counterpart]), self.activity(records=events),  # gateway evidence
-            f.sync('delta-token', delta(items=[restored])), f.completed([counterpart]),
-            self.activity(records=events)])
+        wf, http = self.workflow([command.step(),
+            f.sync('delta-token', delta(items=[restored])),
+            f.completed([counterpart]),
+            self.activity(records=events),
+            f.sync('delta-token', delta(items=[restored])),
+            f.completed([counterpart]),
+            self.activity(records=events)], setup=[f.sync('delta-token', delta()),
+            f.completed([]),
+            self.activity(records=[completion]),
+            f.completed([])], recent=True)
         result = wf.execute(['reopen', 'B'])
         http.assert_done()
         self.assertEqual(result.status, 0)
@@ -741,8 +727,10 @@ class AdapterLifecycleTests(unittest.TestCase):
         self.assertEqual(len(command.commands), 1)
         self.store = StateStore(self.store.root)
         for _ in range(2):
-            again, http = self.workflow([f.sync('delta-token', delta()),
-                f.completed([counterpart]), self.activity(records=events), f.completed([counterpart])])
+            again, http = self.workflow([], setup=[f.sync('delta-token', delta()),
+            f.completed([counterpart]),
+            self.activity(records=events),
+            f.completed([counterpart])], recent=True)
             with self.assertRaises(NoMatch):
                 again.execute(['reopen', 'B'])
             http.assert_done()
@@ -772,9 +760,10 @@ class AdapterLifecycleTests(unittest.TestCase):
         undo = dict(completion, event_type='uncompleted', event_date='2026-10-21T18:11:15Z')
         for count in (1, 1, 2, 2):
             with self.subTest(undos=count):
-                wf, http = self.workflow([f.sync('delta-token', delta()), f.completed([]),
-                    self.activity(records=events + [dict(undo) for _ in range(count)]),
-                    f.completed([])])  # bounded discovery must not restore older eligibility
+                wf, http = self.workflow([], setup=[f.sync('delta-token', delta()),
+            f.completed([]),
+            self.activity(records=events + [dict(undo) for _ in range(count)]),
+            f.completed([])], recent=True)  # bounded discovery must not restore older eligibility
                 with self.assertRaises(NoMatch):
                     wf.execute(['reopen', 'B'])
                 http.assert_done()  # no mutation request was attempted
@@ -807,10 +796,16 @@ class AdapterLifecycleTests(unittest.TestCase):
         command = CommandRequest(self, 'item_update_date_complete', {'id': 'B', 'is_forward': 0, 'reset_subtasks': 0})
         normalized = {**recurrence, 'date': '2026-10-24'}
         restored = item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)
-        wf, _ = self.workflow([f.sync('delta-token', delta()), f.completed([newer, older]), self.activity(),
-            f.completed([newer, older]), command.step(), f.sync('delta-token', delta(items=[restored])),
-            f.completed([newer, older]), self.activity(records=[event]),
-            f.sync('delta-token', delta(items=[restored])), f.completed([newer, older]), self.activity(records=[event])])
+        wf, _ = self.workflow([command.step(),
+            f.sync('delta-token', delta(items=[restored])),
+            f.completed([newer, older]),
+            self.activity(records=[event]),
+            f.sync('delta-token', delta(items=[restored])),
+            f.completed([newer, older]),
+            self.activity(records=[event])], setup=[f.sync('delta-token', delta()),
+            f.completed([newer, older]),
+            self.activity(),
+            f.completed([newer, older])], recent=True)
         result = wf.execute(['reopen', 'B'])
         self.assertEqual(result.status, 0)
         self.assertEqual(self.store.load_history().snapshot.reminders['absolute'], reminder)
@@ -821,8 +816,10 @@ class AdapterLifecycleTests(unittest.TestCase):
         self.assertEqual(len(command.commands), 1)
         # A second reopen must not erase the observed undo during bounded
         # discovery, or fall back to the earlier occurrence.
-        again, _ = self.workflow([f.sync('delta-token', delta()), f.completed([newer, older]),
-            self.activity(records=[event]), f.completed([newer, older])])
+        again, _ = self.workflow([], setup=[f.sync('delta-token', delta()),
+            f.completed([newer, older]),
+            self.activity(records=[event]),
+            f.completed([newer, older])], recent=True)
         with self.assertRaises(NoMatch):
             again.execute(['reopen', 'B'])
         self.assertEqual(len(command.commands), 1)
@@ -867,7 +864,7 @@ class AdapterLifecycleTests(unittest.TestCase):
             nonlocal binding_count
             if Path(destination).name == 'binding.json':
                 binding_count += 1
-                if binding_count == 2:
+                if binding_count == 1:
                     raise OSError('controlled late unknown-outcome publication failure')
             return real_replace(source, destination)
         with patch('todo_lib.local.safety.os.replace', side_effect=fail_second_binding):

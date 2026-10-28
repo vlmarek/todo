@@ -85,7 +85,7 @@ class ReminderGatewayTests(unittest.TestCase):
         self.assertEqual(result.outcome, Outcome.UNKNOWN)
 
 
-    def test_updates_protect_retained_schedule_owner_and_known_metadata(self):
+    def test_updates_validate_requested_fields_with_authoritative_untouched_context(self):
         initial = base.before()
         retained = d.Reminder('r', 'task', type='absolute',
             due=d.resolve_reminder_due(FIXED, 'UTC'), notify_uid='recipient', is_urgent=True)
@@ -100,18 +100,18 @@ class ReminderGatewayTests(unittest.TestCase):
                 g, _ = self.gateway('reminder_update', {'id': 'r', **args}, read=[delta(reminders=[returned])])
                 result = g.execute(Operation('reminder_update', {'id': 'r', **args}), before=initial)
                 self.assertEqual(result.outcome, Outcome.ACCEPTED)
-                self.assertEqual(bool(result.issues), (args, returned) != cases[-1])
+                self.assertFalse(result.issues)
                 self.assertEqual(result.actual.notify_uid, returned['notify_uid'])
                 self.assertEqual(result.after.snapshot.reminders['r'], result.actual)
 
-    def test_direct_reminder_operations_protect_task_and_allow_timezone_normalization(self):
+    def test_direct_reminder_operations_accept_valid_changed_owner_context(self):
         for changed in ({'due': base.due()}, {'content': 'Unexpected'}, {'priority': 4},
                         {'checked': True, 'completed_at': base.AT}):
             g, _ = self.gateway('reminder_add', {'item_id': 'task', 'type': 'absolute', 'due': MINIMAL},
                 read=[delta(items=[base.item(**changed)], reminders=[absolute('new', item_id='task')])])
             result = g.create_reminder('task', due=MINIMAL, before=base.before())
-            self.assertTrue(result.partial)
-            self.assertTrue(any('owner task' in issue for issue in result.issues))
+            self.assertFalse(result.partial)
+            self.assertFalse(result.issues)
         initial = base.before()
         retained = d.Reminder('r', 'task', type='absolute', due=d.resolve_reminder_due(FIXED, 'UTC'))
         initial = replace(initial, snapshot=replace(initial.snapshot, reminders={'r': retained}))
@@ -121,8 +121,8 @@ class ReminderGatewayTests(unittest.TestCase):
                 ('reminder_delete', {'id': 'r'}, {'id': 'r', 'is_deleted': True})):
             g, _ = self.gateway(kind, args, read=[delta(items=[base.item(content='Unexpected')], reminders=[raw])])
             result = g.execute(Operation(kind, args), before=initial)
-            self.assertTrue(result.partial)
-            self.assertTrue(any('owner task' in issue for issue in result.issues))
+            self.assertFalse(result.partial)
+            self.assertFalse(result.issues)
         floating = base.due('2026-10-30T09:00:00')
         initial = base.before(replace(base.before().snapshot.items['task'], attention=d.resolve_remote_due(floating, 'UTC')))
         g, _ = self.gateway('reminder_add', {'item_id': 'task', 'type': 'absolute', 'due': MINIMAL},
@@ -140,7 +140,7 @@ class ReminderGatewayTests(unittest.TestCase):
                 self.assertEqual(not result.issues, good)
 
 
-    def test_metadata_update_retains_floating_schedule_in_returned_zone(self):
+    def test_metadata_update_uses_authoritative_schedule_in_returned_zone(self):
         from tests.support.reminders import FLOATING
         initial = base.before()
         retained = d.Reminder('r', 'task', type='absolute', due=d.resolve_reminder_due(FLOATING, 'UTC'))
@@ -152,7 +152,7 @@ class ReminderGatewayTests(unittest.TestCase):
                 read=[delta(user={'id': 'u', 'tz_info': {'timezone': 'America/New_York'}},
                     reminders=[absolute('r', raw, item_id='task', notify_uid='new')])])
             result = g.execute(Operation('reminder_update', {'id': 'r', 'notify_uid': 'new'}), before=initial)
-            self.assertEqual(not result.issues, good)
+            self.assertFalse(result.issues)
             self.assertEqual(result.actual.due.raw_due, raw)
             self.assertTrue(result.actual.is_urgent)  # unknown metadata may become known
         task = replace(initial.snapshot.items['task'], attention=d.resolve_remote_due(base.due(), 'UTC'))
@@ -163,4 +163,16 @@ class ReminderGatewayTests(unittest.TestCase):
                 read=[delta(reminders=[{'id': 'r', 'item_id': 'task', 'type': 'relative',
                     'minute_offset': offset, 'is_urgent': False, 'is_deleted': False}])])
             result = g.execute(Operation('reminder_update', {'id': 'r', 'is_urgent': False}), before=initial)
-            self.assertEqual(not result.issues, offset == 0)
+            self.assertFalse(result.issues)
+
+    def test_requested_metadata_mismatch_remains_partial(self):
+        initial = base.before()
+        reminder = d.Reminder('r', 'task', type='absolute', due=d.resolve_reminder_due(FIXED, 'UTC'))
+        initial = replace(initial, snapshot=replace(initial.snapshot, reminders={'r': reminder}))
+        for args, returned in (({'notify_uid': 'requested'}, {'notify_uid': 'different'}),
+                               ({'is_urgent': False}, {'is_urgent': True})):
+            with self.subTest(args=args):
+                g, _ = self.gateway('reminder_update', {'id':'r', **args},
+                    read=[delta(reminders=[absolute('r', FIXED, item_id='task', **returned)])])
+                result = g.execute(Operation('reminder_update', {'id':'r', **args}), before=initial)
+                self.assertTrue(result.partial)

@@ -246,10 +246,10 @@ def phase(install, name):
                 assert '[id: blank posted:' in buffer and '[no text]' not in buffer
                 return buffer.replace('\n', '\r\n')
             with patch.object(CommentWorkflow, '_edit', side_effect=unchanged):
-                call(['comment', '--edit', 'Amendment'], [sync('delta-token', delta())])
+                call(['comment', '--edit', 'Amendment'])
             assert store.load_consistent_state().snapshot.comments == original
             out = call(['schedule', 'Amendment', '--reminder-at', 'every day at nine'],
-                [sync('delta-token', delta()), accepted('reminder_add', {
+                [accepted('reminder_add', {
                     'item_id': 'E', 'type': 'absolute',
                     'due': {'string': 'every day at nine', 'lang': 'en'}}, True),
                  *reconciled(reminders=[reminder])])
@@ -263,20 +263,20 @@ def phase(install, name):
             out = call(['task', 'Amendment'])
             assert '[no text]' in out and 'cada día a las 9' in out
             out = call(['schedule', 'Amendment', '--reminder-at', 'every Monday at 9am'],
-                       [sync('delta-token', delta())], expected_status=1)
+                       [], expected_status=1)
             assert r'Reminder replacement for: Amendment\nline\ttab' in out
             assert 'expression (Todoist): every Monday at 9am' in out
             assert '--reminder-at keep' in out and '[y/N]' not in out
             assert store.load_consistent_state().snapshot.reminders == saved.reminders
             row['due'] = dict(date='2026-10-23', lang='en', string='tomorrow', is_recurring=False)
             out = call(['schedule', 'Amendment', '--at', 'tomorrow', '--reminder-at', 'keep'],
-                [sync('delta-token', delta()), accepted('item_update', {
+                [accepted('item_update', {
                     'id': 'E', 'due': {'date': '2026-10-23', 'lang': 'en'}}),
                  *reconciled(items=[row])])
             assert 'Reminder replacement' not in out
             assert store.load_consistent_state().snapshot.reminders == saved.reminders
             out = call(['schedule', 'Amendment', '--reminder', 'clear'],
-                [sync('delta-token', delta()), accepted('reminder_delete', {'id': 'absolute'}),
+                [accepted('reminder_delete', {'id': 'absolute'}),
                  *reconciled(reminders=[{'id': 'absolute', 'is_deleted': True}])])
             assert '[y/N]' not in out
             state = store.load_consistent_state().snapshot
@@ -300,7 +300,7 @@ def phase(install, name):
             assert op['type'] == 'item_update' and op['args'] == {'id': 'A', 'content': 'Alpha'}
             return {'sync_status': {op['uuid']: 'ok'}}
         changed = item('A'); changed['content'] = 'Alpha'
-        steps = [sync('delta-token', delta()), ('POST', '/sync', None, accepted),
+        steps = [('POST', '/sync', None, accepted),
                  sync('delta-token', delta(items=[changed])), sync('delta-token', delta(items=[changed]))]
         assert 'Alpha' in call(['rename', 'A', '--to', 'Alpha'], steps, INITIAL)
     elif name == 'repeat':

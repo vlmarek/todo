@@ -22,6 +22,7 @@ class CoexistenceTests(unittest.TestCase):
     state = fixtures.CaptureTests.state
     seed = fixtures.CaptureTests.seed
     refresh = fixtures.CaptureTests.refresh
+    queue_refresh = fixtures.CaptureTests.queue_refresh
     operation = fixtures.CaptureTests.operation
     run_request = fixtures.CaptureTests.run_request
 

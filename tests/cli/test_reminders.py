@@ -12,6 +12,7 @@ class PublicReminders(unittest.TestCase):
     state = f.CaptureTests.state
     seed = f.CaptureTests.seed
     refresh = f.CaptureTests.refresh
+    queue_refresh = f.CaptureTests.queue_refresh
     operation = f.CaptureTests.operation
 
     def test_noninteractive_preview_refuses_before_task_write(self):

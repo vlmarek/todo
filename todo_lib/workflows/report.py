@@ -224,7 +224,7 @@ class Reporter:
             current = retrieve(self.transport, known.binding,
                 prior=state.current_snapshot or known, sync_token=state.sync_token,
                 replace=state.current_snapshot is None, hidden_names=config.hidden_from_now,
-                known=known, reminder_ids=state.current_reminder_ids)
+                known=known, waiting_label_ids=state.waiting_label_ids, reminder_ids=state.current_reminder_ids)
             zone = current.account.timezone
             start = self._boundary(options['since'], now, zone) if 'since' in options else state.cursor
             end = self._boundary(options['until'], now, zone) if 'until' in options else now
@@ -315,7 +315,7 @@ class Reporter:
             phase = 'candidate preparation'
             candidates = prepare_candidates(cached, pending, account_display=state.binding.account_display,
                 sync_token=current.sync_token, synced_at=now, current_snapshot=current.snapshot,
-                current_reminder_ids=current.reminder_ids, hidden_names=config.hidden_from_now)
+                waiting_label_ids=current.waiting_label_ids, current_reminder_ids=current.reminder_ids, hidden_names=config.hidden_from_now)
             before = sync._bytes(('cache.json', 'history.json', 'binding.json'))
             phase = 'local publication'
             self.store.publish_snapshot(candidates)
