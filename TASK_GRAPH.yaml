@@ -1,7 +1,7 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-010
-predecessor_revision_id: TODO3-PLAN-009
+revision_id: TODO3-PLAN-011
+predecessor_revision_id: TODO3-PLAN-010
 contract_sources:
 - docs/design/report-retrieval-reuse.md
 - docs/design/external/todoist/report-retrieval-notes.md
@@ -26,6 +26,8 @@ contract_sources:
 - docs/design/quality-requirements.md
 - docs/design/security.md
 - docs/design/todoist-adapter.md
+- docs/design/completion-reconciliation.md
+- docs/design/external/todoist/completion-reconciliation-notes.md
 components:
 - id: domain
   responsibility: Offline identity, recursive hierarchy, text, time, scheduling, selection predicates
@@ -466,6 +468,18 @@ interfaces:
     protected history or cursor. Internal adapter/store extensions remain compatible and all callers preserve
     or invalidate actual current-resource provenance with its token. No cross-command completion-query
     skipping is supported by retained evidence.
+  source_path: COMPONENTS.yaml
+- id: reconciled-completion-reports
+  owner: workflows
+  supersedes_ref: reused-report-retrieval
+  description: Successor Reporter.run/report with unchanged CommandRequest, ReportResult and classified
+    errors. Reconcile completed-task context/fallback with activity completion/undo evidence before
+    report eligibility; one cross-source occurrence uses activity event_date, unmatched completed
+    evidence uses completed_at. Preserve independent recurring activity events and anonymous source
+    order, current scope/context, complete retrieval, incremental Sync/comment reuse, and output/flush
+    -> cursor -> cleanup. Shared synchronization/recent-reopen consumers retain usable recurring
+    occurrence evidence without changing mutation acceptance or adding a persistent event ledger.
+    Concrete existing APIs and technical association limits are in docs/design/external/todoist/completion-reconciliation-notes.md.
   source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
@@ -5261,6 +5275,361 @@ tasks:
     acceptance results to docs/implementation/acceptance-evidence.md.
   - Existing final-delivery shared gate must pass on settled integrated subject, with one complete suite
     and distinct copied-runtime/PATH/real-less evidence; no duplicate broad worker gate.
+- id: T29
+  title: Reconcile completion evidence across reports and recurring history consumers
+  origin_stage_ref: completion-reconciliation
+  observable_outcome: An occurrence represented by unequal completed/activity timestamps appears
+    once at its activity time, and shared recurring history/reopen selection agrees with effective
+    completion and undo evidence.
+  dependencies:
+  - task_ref: T27
+    kind: interface
+    interface_ref: reused-report-retrieval
+    reason: Extend the accepted incremental Reporter and command-local complete evidence reuse.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Adapt shared _reconcile publication and pending history, preserving all callers.
+  - task_ref: T18
+    kind: interface
+    interface_ref: lifecycle-transitions
+    reason: Preserve recent reopen/deletion and recurring undo selection using the existing domain/gateway
+      contract.
+  - task_ref: T22
+    kind: interface
+    interface_ref: tolerant-history
+    reason: Preserve HistoryAdapter pagination, supplied-ID deduplication and anonymous/relevance
+      behavior.
+  - task_ref: T19
+    kind: interface
+    interface_ref: state-store-precise
+    reason: Use existing precise protected StateStore and history serialization; no history reset.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Keep composed source/copy commands and their directly affected doubles usable.
+  - task_ref: T28
+    kind: repository_state
+    interface_ref: null
+    reason: Start from the completed revision-11 application and its accepted source/copy evidence,
+      not an earlier planning commit.
+  goal: 'Implement REQ-REPORT-017/018 as one completion-evidence correction, preserving the earlier
+    requirements except their explicit narrow successor precedence. Read docs/design/completion-reconciliation.md
+    and docs/design/external/todoist/completion-reconciliation-notes.md, then the actual dependency
+    code. Reporter._select currently suppresses completed records only for exact (item ID, instant)
+    activity equality; _reconcile seeds recurring occurrences from completed records and ignores
+    completed activity; lifecycle._recent_snapshot can reintroduce completed-record representations.
+    Correct these interacting paths and their concrete callers/fakes together; do not rebuild
+    the accepted application.
+
+
+    Use activity completion events as the occurrence backbone, retaining supplied-ID deduplication
+    and all anonymous entries in stable order. Associate supplemental completed representations
+    one-to-one by owner and ordered lifecycle/time evidence as described in the technical notes;
+    timestamps need not be equal and no arbitrary tolerance is authorized. Keep unmatched completed
+    records as fallback, with completed_at. Never deduplicate distinct activity events by task
+    ID, rounded time or timestamp proximity. Associate before discarding undone occurrences and
+    before applying the requested report interval: an undone cross-source occurrence must not
+    survive as fallback, and a matched activity time outside an explicit report interval must
+    not leak in via completed_at. Use activity event_date for eligibility/order/display, then
+    apply existing precise (start, fixed end] filtering and latest-unmatched-preceding undo once.
+    Preserve ordinary reopened omission and all task/step/current ancestry/comment/Hidden presentation
+    rules.
+
+
+    Repair shared _reconcile so supported activity-only recurring completions with a fresh active
+    owner supply usable pending occurrence evidence even with no completed counterpart. Preserve
+    current active fields and scope over historical object context; ordinary missing archived
+    owners still require supported context. Repeated refresh/retrieval of the same supplied event
+    ID must not add another occurrence or apply the same undo twice. Distinct completions survive
+    and each undo cancels one unmatched preceding completion; retain the established latest-completion
+    eligibility rule for reopen after undo. Adapt _recent_snapshot so bounded completed discovery
+    cannot resurrect a reconciled/undone representation or defeat an activity-only completion.
+    Keep ordinary bounded deletion/reopen scopes, confirmation and direct selected-item semantics.
+    Do not infer mutation acceptance from report timestamp priority or mere activity existence:
+    Gateway UUID/status and accepted/rejected/unknown/unattempted behavior remain unchanged. Reuse
+    current Occurrence/History storage where possible; any compatible representation extension
+    must round-trip existing protected pending data, without new cache/ledger or silent reset.
+    Assess prune_history against selected timestamps and retain context for newer unreported occurrences
+    after successful finalization.
+
+
+    Extend existing controlled endpoint-shaped fixtures through real HistoryAdapter/Reporter/Synchronizer
+    and lifecycle composition where the bug is observable. Establish the observed .704186Z completed
+    versus .719113Z activity pair gives one ordinary Finished row at activity time, and a representative
+    step gives one Progress row. A preview start or explicit end between those times must select
+    by activity when both source records are retrieved; do not create a new cross-command cutoff
+    guarantee. Cover activity-only recurring completion with omitted extra_data; two distinct
+    recurring events, including close/same-time distinct IDs and accepted anonymous multiplicity;
+    a dual-source completion followed by undo leaving none; two completions followed by two undos,
+    each applied once across reload/refresh; completed-only fallback at completed_at with no counterpart
+    error/lookup; and a partially overlapping recurring source set where a genuinely unmatched
+    completed occurrence is retained. Reuse adequate existing cases instead of multiplying every
+    case across entities/layers. Include recent reopen from activity-only evidence, no resurrection
+    after undo/bounded discovery, and pending-history serialization/cleanup with newer activity-backed
+    context. Maintain existing source/copy probe request expectations as needed without weakening
+    real requests, fixed-end capture or fresh comment reuse.
+
+
+    Directed feedback uses existing t15-focused, t08-focused, t18-focused, t06-focused and t02-focused.
+    Useful starting cases are Reports.test_same_instant_completion_multiplicity_and_undo, test_anonymous_same_instant_undo_respects_source_order,
+    test_recurring_pairing_deep_comments_and_current_roles, test_final_output_flush_cursor_cleanup_and_newer_pending_context,
+    and AdapterLifecycleTests.test_recurring_latest_exact_undo_through_real_adapter; inspect tests/workflows/sync/test_sync.py''s
+    existing external-recurring and failure fixtures. Preserve and run applicable required-read
+    malformed identity/time/cursor, unresolved archived owner, output/flush/cursor/publication
+    failure cases; failures must not become empty history or intentional partial output. If scoped
+    activity reads change, adapt affected existing request fixtures explicitly. Existing final-delivery
+    is the runner''s broad settled-subject gate, not a second mandatory worker suite. Report concrete
+    provider contradictions or a required changed product promise rather than inventing new failures,
+    missing fields or undercounting policy.'
+  failure_domain: Completion-evidence association and its shared report/history/lifecycle consumers.
+  verification_rationale: The report selector, sync occurrence representation and bounded lifecycle
+    discovery share the same evidence; splitting them would accept an inconsistent intermediate
+    state or require temporary adapters. Focused report, sync, lifecycle, history and store suites
+    cover output, caller compatibility, required negative paths and round-trip preservation. Cases
+    challenge exact-time matching, owner-only suppression, missing-counterpart assumptions and
+    repeated undo. The existing full offline and copied-runtime final-delivery gate runs after
+    composition; no new framework, resource gate or broad worker rerun is required.
+  correction_instructions: Only the confirmed completion reconciliation/timestamp scope and necessary
+    shared-consumer repairs are authorized. Preserve all 28 accepted effective assignments, retained
+    upstream bytes, existing capability/retention and malformed-required-record failures, JSON
+    state compatibility, current Sync/comment reuse and finalization safeguards. No numerical
+    time tolerance, global identity service, cross-command completion cache, new CLI option, new
+    source-mismatch error or mutation-success heuristic. Source navigation is the accepted 97e29189449f73a4f5457f24b55987e9b28955d8
+    baseline; read actual prerequisite code if paths move.
+  requirement_refs:
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  constraint_refs:
+  - REQ-REPORT-006
+  - REQ-REPORT-011
+  - REQ-REPORT-014
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-009
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-034
+  - REQ-SYNC-032
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CACHE-006
+  - REQ-CACHE-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-005
+  - REQ-SEC-007
+  - REQ-VERIFY-003
+  - REQ-CACHE-009
+  - REQ-LOCAL-003
+  - REQ-LOCAL-007
+  - REQ-SEC-005
+  - REQ-SYNC-030
+  exclusion_refs:
+  - OUT-REPORT-001
+  - OUT-REPORT-002
+  - OUT-ARCHIVE-001
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-OPS-003
+  - OUT-TIME-002
+  component_refs:
+  - workflows
+  - adapter
+  - local
+  - cli
+  - delivery
+  provides_interface_refs:
+  - reconciled-completion-reports
+  consumes_interface_refs:
+  - reused-report-retrieval
+  - synchronized-state
+  - lifecycle-transitions
+  - tolerant-history
+  - state-store-precise
+  - public-cli
+  expected_paths:
+  - todo_lib/workflows/**
+  - todo_lib/adapter/history.py
+  - todo_lib/local/**
+  - tests/workflows/**
+  - tests/adapter/history/**
+  - tests/local/**
+  - tests/support/**
+  - tests/cli/**
+  - tests/delivery/final/copy_probe.py
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t15-focused
+  - t08-focused
+  - t18-focused
+  - t06-focused
+  - t02-focused
+  required_evidence:
+  - t15-focused
+  - t08-focused
+  - t18-focused
+  - t06-focused
+  - t02-focused
+  - Controlled real-adapter/composed evidence for unequal-time one-row task/step results, activity
+    timestamp eligibility/display, recurring distinct/activity-only/fallback occurrences and one-to-one
+    undo without residuals.
+  - Verify activity-only recent reopen and repeated refresh/undo/bounded discovery, existing pending-state
+    round-trip, newer-context cleanup and required retrieval/output/cursor failure protections
+    without mutation-status changes.
+- id: T30
+  title: Verify reconciled completions through composed and copied application
+  origin_stage_ref: completion-reconciliation
+  observable_outcome: Subject-bound acceptance evidence establishes the completion reconciliation
+    and timestamp outcomes in the source and unchanged copied runtime, with preserved retrieval
+    and finalization protections.
+  dependencies:
+  - task_ref: T29
+    kind: interface
+    interface_ref: reconciled-completion-reports
+    reason: Verify the completed coupled implementation and repair only demonstrated acceptance
+      gaps.
+  - task_ref: T17
+    kind: interface
+    interface_ref: routine-check
+    reason: Reuse verify-clean single-suite and distinct unchanged-copy/PATH/real-less probes.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Exercise actual public command composition, streams and statuses.
+  goal: 'Own REQ-VERIFY-030 acceptance for the composed revision-12 behavior. Read T29''s concrete
+    implementation/tests and the retained technical notes. Check that source fixtures challenge
+    the actual error mechanisms rather than presuppose a deduplicated stream or fabricate a shared
+    provider occurrence ID. Reuse adequate tests and correct only concrete missing evidence or
+    in-scope implementation defects. Audit ordinary unequal-time one-row behavior and activity-time
+    ordering/display/eligibility, representative step Progress, activity-only recurring completions,
+    preserved distinct recurring/supplied-ID/anonymous events, dual-source completion plus undo
+    with no residual, and completed-only fallback without a counterpart lookup or absence error.
+    Include the partial-source recurring case so owner-wide suppression cannot masquerade as reconciliation.
+    Verify shared sync/reload/recent-reopen and no-resurrection behavior against the existing
+    mutation acceptance and latest-eligible rules, not a new report-driven command-success policy.
+
+
+    Use actual Reporter/Synchronizer/HistoryAdapter/Transport with controlled responses. Add a
+    representative unequal-timestamp report to tests/delivery/final/copy_probe.py so the unchanged
+    copied launcher/runtime produces one completion row at the selected activity time and correct
+    preview/final cursor behavior. Inspect whether required activity/pages/owner metadata failures
+    still abort before normal output/cursor advancement; whether preview and failed output/flush/cursor
+    leave pending work; and whether successful finalization cleans only covered history while
+    retaining newer context. Reuse existing negative-path tests; add a distinguishing composed
+    case if a changed path is uncovered. Preserve fresh Sync comments, one complete archived-comment
+    retrieval, real category-scoped completion/activity requests, exact output/Hidden framing
+    and capability/retention refusal. Do not weaken request fakes or import real account data.
+
+
+    Append observed subjects, focused commands/results, reused/new cases and remaining source-association
+    limits to docs/implementation/acceptance-evidence.md, preserving all earlier bytes. The prepared
+    contract map is frozen. Run directed t15-focused, t18-focused and t25-focused for report/lifecycle
+    acceptance and CLI/delivery self-tests, plus relevant focused suites for actual repairs. Existing
+    final-delivery runs verify-clean on the settled integrated subject: one scripts/check full
+    offline suite, then distinct copied-runtime/PATH/real-less probes. Do not add a second complete
+    suite to a worker, a wrapper, copy probe or harness self-test. Record runner final-gate results
+    only when actually available; no future pass or independent-review claim.'
+  failure_domain: Composed completion-reconciliation acceptance and delivered-runtime evidence.
+  verification_rationale: A separate acceptance task starts from a usable complete correction
+    and examines observable behavior/test adequacy through the public composition and copied runtime.
+    Directed suites cover report/lifecycle regressions and miniature harness tests; existing final-delivery
+    supplies one broad source suite and distinct copy evidence on the final subject. Separately
+    executed focused checks cover the audit/repair subject; they do not claim broad-result reuse
+    across changed worktrees.
+  correction_instructions: Preserve upstream/design/accepted assignments and earlier acceptance-evidence
+    bytes. Fix only demonstrated revision-12 defects or missing distinguishing coverage in the
+    declared paths; no new identity guarantees, report errors, permanent ledger or production-account
+    dependency. A live provider guarantee is not established by synthetic passes.
+  requirement_refs:
+  - REQ-VERIFY-030
+  constraint_refs:
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-REPORT-006
+  - REQ-REPORT-011
+  - REQ-REPORT-014
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-009
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-034
+  - REQ-SYNC-032
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CACHE-006
+  - REQ-CACHE-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-005
+  - REQ-SEC-007
+  - REQ-VERIFY-003
+  - REQ-CACHE-009
+  - REQ-LOCAL-003
+  - REQ-LOCAL-007
+  - REQ-SEC-005
+  - REQ-SYNC-030
+  - REQ-VERIFY-002
+  - REQ-VERIFY-013
+  exclusion_refs:
+  - OUT-REPORT-001
+  - OUT-REPORT-002
+  - OUT-ARCHIVE-001
+  - OUT-PRIVACY-001
+  - OUT-TEST-001
+  - OUT-OPS-003
+  - OUT-TIME-002
+  component_refs:
+  - workflows
+  - adapter
+  - local
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - reconciled-completion-reports
+  - routine-check
+  - public-cli
+  expected_paths:
+  - todo_lib/workflows/**
+  - todo_lib/adapter/history.py
+  - todo_lib/local/**
+  - tests/workflows/**
+  - tests/adapter/history/**
+  - tests/local/**
+  - tests/support/**
+  - tests/cli/**
+  - tests/delivery/final/copy_probe.py
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t15-focused
+  - t18-focused
+  - t25-focused
+  required_evidence:
+  - t15-focused
+  - t18-focused
+  - t25-focused
+  - Append actual subject-bound completion reconciliation, activity-time eligibility/display,
+    recurring/fallback/undo and retrieval/output/cursor/history observations to docs/implementation/acceptance-evidence.md.
+  - Existing final-delivery must pass on the settled integrated subject, including one complete
+    offline suite and a representative unequal-time one-row report in the unchanged copied runtime;
+    no duplicate broad worker gate.
 stages:
 - id: release-1
   final_project: false
@@ -5403,6 +5772,9 @@ stages:
   - REQ-SYNC-034
   - REQ-CACHE-011
   - REQ-VERIFY-029
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-VERIFY-030
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -5546,6 +5918,9 @@ stages:
   - REQ-SYNC-034
   - REQ-CACHE-011
   - REQ-VERIFY-029
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-VERIFY-030
   check_refs:
   - final-delivery
 - id: todoist-coexistence
@@ -5689,6 +6064,9 @@ stages:
   - REQ-SYNC-034
   - REQ-CACHE-011
   - REQ-VERIFY-029
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-VERIFY-030
   check_refs:
   - final-delivery
 - id: request-conformance
@@ -5832,10 +6210,13 @@ stages:
   - REQ-SYNC-034
   - REQ-CACHE-011
   - REQ-VERIFY-029
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-VERIFY-030
   check_refs:
   - final-delivery
 - id: report-retrieval-reuse
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-REPORT-016
   - REQ-SYNC-034
@@ -5974,6 +6355,155 @@ stages:
   - REQ-SYNC-032
   - REQ-SYNC-033
   - REQ-VERIFY-028
+  deferred_requirement_refs:
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-VERIFY-030
+  check_refs:
+  - final-delivery
+- id: completion-reconciliation
+  final_project: true
+  active_requirement_refs:
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-VERIFY-030
+  satisfied_requirement_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  - REQ-INIT-009
+  - REQ-VERIFY-025
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
+  - REQ-SYNC-031
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-027
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-VERIFY-029
   deferred_requirement_refs: []
   check_refs:
   - final-delivery

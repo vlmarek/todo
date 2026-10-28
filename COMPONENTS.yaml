@@ -464,3 +464,15 @@ interfaces:
     protected history or cursor. Internal adapter/store extensions remain compatible and all callers preserve
     or invalidate actual current-resource provenance with its token. No cross-command completion-query
     skipping is supported by retained evidence.
+- id: reconciled-completion-reports
+  owner: workflows
+  supersedes_ref: reused-report-retrieval
+  description: Successor Reporter.run/report with unchanged CommandRequest, ReportResult and classified
+    errors. Reconcile completed-task context/fallback with activity completion/undo evidence before
+    report eligibility; one cross-source occurrence uses activity event_date, unmatched completed
+    evidence uses completed_at. Preserve independent recurring activity events and anonymous source
+    order, current scope/context, complete retrieval, incremental Sync/comment reuse, and output/flush
+    -> cursor -> cleanup. Shared synchronization/recent-reopen consumers retain usable recurring
+    occurrence evidence without changing mutation acceptance or adding a persistent event ledger.
+    Concrete existing APIs and technical association limits are in docs/design/external/todoist/completion-reconciliation-notes.md.
+  status: provisional

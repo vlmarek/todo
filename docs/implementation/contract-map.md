@@ -1,12 +1,6 @@
 # Prepared ownership and evidence
 
-Confirmed Design revision 11 governs report evidence reuse and safe incremental
-report synchronization. T27 owns the coupled implementation and evidence-conditional
-completion-history outcome; T28 owns its distinguishing acceptance evidence.
-All 132 earlier requirements remain satisfied with historical owners T01-T26
-preserved in the cumulative graph. Four successor requirements are active and
-none are deferred. This frozen ledger records planned coverage; append observed
-results to `docs/implementation/acceptance-evidence.md` without changing this map.
+Confirmed Design revision 12 governs completion-evidence reconciliation and activity timestamp priority. T29 owns the coupled report/history/lifecycle correction; T30 owns distinguishing composed/copied acceptance. All 136 earlier obligations remain satisfied with accepted owners T01-T28 preserved. Three successor requirements are active; nothing is deferred in the final stage. This protected ledger is planned coverage. Append observed results only to `docs/implementation/acceptance-evidence.md`.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -15,27 +9,29 @@ requirements:
   REQ-ARCH-002:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id009
+    planned_evidence:
     - t01-focused
   REQ-BUILD-002:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id012
+    planned_evidence:
     - t17-focused
     - final-delivery
   REQ-CACHE-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id001
+    planned_evidence:
     - t08-focused
   REQ-CACHE-006:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id001
+    planned_evidence:
+    - t08-focused
   REQ-CACHE-008:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id001
+    planned_evidence:
+    - t08-focused
   REQ-CACHE-009:
     stage_status: satisfied
     primary_owner: null
@@ -49,54 +45,63 @@ requirements:
   REQ-CLI-012:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id004
+    planned_evidence:
     - t03-focused
   REQ-CLI-016:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id002
+    planned_evidence:
     - t10-focused
   REQ-CLI-021:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id002
+    planned_evidence:
+    - t10-focused
   REQ-CLI-024:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id003
+    planned_evidence:
     - t16-focused
   REQ-CLI-027:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id002
+    planned_evidence:
+    - t10-focused
   REQ-CLI-029:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id001
+    planned_evidence:
+    - t08-focused
   REQ-CLI-030:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-CLI-031:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id004
+    planned_evidence:
+    - t03-focused
   REQ-CLI-032:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-CLI-033:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id004
+    planned_evidence:
+    - t03-focused
   REQ-CLI-034:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id002
+    planned_evidence:
+    - t10-focused
   REQ-CLI-035:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id002
+    planned_evidence:
+    - t10-focused
   REQ-CLI-036:
     stage_status: satisfied
     primary_owner: null
@@ -105,127 +110,148 @@ requirements:
   REQ-CLI-037:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id014
+    planned_evidence:
     - t24-focused
   REQ-COMMENT-006:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id005
+    planned_evidence:
     - t14-focused
   REQ-COMMENT-007:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id005
+    planned_evidence:
+    - t14-focused
   REQ-COMMENT-008:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id005
+    planned_evidence:
+    - t14-focused
   REQ-COMMENT-009:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id017
+    planned_evidence:
     - t22-focused
   REQ-COMP-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id006
+    planned_evidence:
     - t18-focused
   REQ-COMP-006:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id006
+    planned_evidence:
+    - t18-focused
   REQ-COMP-007:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id006
+    planned_evidence:
+    - t18-focused
   REQ-COMP-008:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id006
+    planned_evidence:
+    - t18-focused
   REQ-CONFIG-002:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id007
+    planned_evidence:
     - t02-focused
   REQ-CONFIG-003:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id007
+    planned_evidence:
+    - t02-focused
   REQ-CREATE-007:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id008
+    planned_evidence:
     - t12-focused
   REQ-CREATE-008:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-DOM-001:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-006:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-007:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-009:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-010:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-012:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-013:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-014:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-DOM-015:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id010
+    planned_evidence:
     - t21-focused
   REQ-DOM-016:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id010
+    planned_evidence:
+    - t21-focused
   REQ-DOM-017:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id010
+    planned_evidence:
+    - t21-focused
   REQ-DOM-018:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id010
+    planned_evidence:
+    - t21-focused
   REQ-INIT-002:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id011
+    planned_evidence:
     - t11-focused
   REQ-INIT-003:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id011
+    planned_evidence:
+    - t11-focused
   REQ-INIT-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id011
+    planned_evidence:
+    - t11-focused
   REQ-INIT-008:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id011
+    planned_evidence:
+    - t11-focused
   REQ-INIT-009:
     stage_status: satisfied
     primary_owner: null
@@ -240,19 +266,23 @@ requirements:
   REQ-LOCAL-002:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id007
+    planned_evidence:
+    - t02-focused
   REQ-LOCAL-003:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id007
+    planned_evidence:
+    - t02-focused
   REQ-LOCAL-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id007
+    planned_evidence:
+    - t02-focused
   REQ-LOCAL-006:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-LOCAL-007:
     stage_status: satisfied
     primary_owner: null
@@ -261,180 +291,220 @@ requirements:
   REQ-MUT-001:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-MUT-003:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id006
+    planned_evidence:
+    - t18-focused
   REQ-MUT-004:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id019
+    planned_evidence:
     - t13-focused
   REQ-MUT-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-NET-001:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id018
+    planned_evidence:
     - t04-focused
   REQ-OPS-001:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id012
+    planned_evidence:
+    - t17-focused
+    - final-delivery
   REQ-OUT-009:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id013
+    planned_evidence:
     - t09-focused
   REQ-OUT-015:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-OUT-017:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-OUT-018:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-OUT-019:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-OUT-020:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-OUT-021:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-OUT-022:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id014
+    planned_evidence:
+    - t24-focused
   REQ-PLAT-001:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-PLAT-002:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id012
+    planned_evidence:
+    - t17-focused
+    - final-delivery
   REQ-PLAT-003:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-PROD-004:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-PROD-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-REPORT-003:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id015
+    planned_evidence:
     - t15-focused
   REQ-REPORT-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id015
+    planned_evidence:
+    - t15-focused
   REQ-REPORT-006:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id015
+    planned_evidence:
+    - t15-focused
   REQ-REPORT-009:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id015
+    planned_evidence:
+    - t15-focused
   REQ-REPORT-011:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id015
+    planned_evidence:
+    - t15-focused
   REQ-REPORT-013:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id015
+    planned_evidence:
+    - t15-focused
   REQ-REPORT-014:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id015
+    planned_evidence:
+    - t15-focused
   REQ-REPORT-015:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id015
+    planned_evidence:
+    - t15-focused
   REQ-SCHED-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-SCHED-010:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-SCHED-011:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-SCHED-012:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-SCHED-013:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id009
+    planned_evidence:
+    - t01-focused
   REQ-SCHED-014:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-SCHED-015:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id014
+    planned_evidence:
+    - t24-focused
   REQ-SCHED-016:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id014
+    planned_evidence:
+    - t24-focused
   REQ-SEC-004:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id007
+    planned_evidence:
+    - t02-focused
   REQ-SEC-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id007
+    planned_evidence:
+    - t02-focused
   REQ-SEC-007:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id001
+    planned_evidence:
+    - t08-focused
   REQ-SYNC-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id001
+    planned_evidence:
+    - t08-focused
   REQ-SYNC-013:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: &id016
+    planned_evidence:
     - t05-focused
   REQ-SYNC-016:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id016
+    planned_evidence:
+    - t05-focused
   REQ-SYNC-021:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id016
+    planned_evidence:
+    - t05-focused
   REQ-SYNC-024:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id016
+    planned_evidence:
+    - t05-focused
   REQ-SYNC-025:
     stage_status: satisfied
     primary_owner: null
@@ -448,7 +518,8 @@ requirements:
   REQ-SYNC-027:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id016
+    planned_evidence:
+    - t05-focused
   REQ-SYNC-028:
     stage_status: satisfied
     primary_owner: null
@@ -458,11 +529,13 @@ requirements:
   REQ-SYNC-029:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id017
+    planned_evidence:
+    - t22-focused
   REQ-SYNC-030:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id017
+    planned_evidence:
+    - t22-focused
   REQ-SYNC-031:
     stage_status: satisfied
     primary_owner: null
@@ -477,71 +550,91 @@ requirements:
   REQ-VERIFY-001:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-VERIFY-002:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id012
+    planned_evidence:
+    - t17-focused
+    - final-delivery
   REQ-VERIFY-003:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id018
+    planned_evidence:
+    - t04-focused
   REQ-VERIFY-004:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-VERIFY-005:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id012
+    planned_evidence:
+    - t17-focused
+    - final-delivery
   REQ-VERIFY-007:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id011
+    planned_evidence:
+    - t11-focused
   REQ-VERIFY-010:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id008
+    planned_evidence:
+    - t12-focused
   REQ-VERIFY-011:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-VERIFY-012:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id019
+    planned_evidence:
+    - t13-focused
   REQ-VERIFY-013:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-VERIFY-016:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id005
+    planned_evidence:
+    - t14-focused
   REQ-VERIFY-017:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id013
+    planned_evidence:
+    - t09-focused
   REQ-VERIFY-018:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-VERIFY-019:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id016
+    planned_evidence:
+    - t05-focused
   REQ-VERIFY-020:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id003
+    planned_evidence:
+    - t16-focused
   REQ-VERIFY-021:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id006
+    planned_evidence:
+    - t18-focused
   REQ-VERIFY-022:
     stage_status: satisfied
     primary_owner: null
-    planned_evidence: *id012
+    planned_evidence:
+    - t17-focused
+    - final-delivery
   REQ-VERIFY-023:
     stage_status: satisfied
     primary_owner: null
@@ -592,8 +685,8 @@ requirements:
     - t12-focused
     - final-delivery
   REQ-REPORT-016:
-    stage_status: active
-    primary_owner: T27
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t05-focused
     - t06-focused
@@ -601,8 +694,8 @@ requirements:
     - t08-focused
     - t15-focused
   REQ-SYNC-034:
-    stage_status: active
-    primary_owner: T27
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t05-focused
     - t06-focused
@@ -610,8 +703,8 @@ requirements:
     - t08-focused
     - t15-focused
   REQ-CACHE-011:
-    stage_status: active
-    primary_owner: T27
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t05-focused
     - t06-focused
@@ -619,9 +712,34 @@ requirements:
     - t08-focused
     - t15-focused
   REQ-VERIFY-029:
-    stage_status: active
-    primary_owner: T28
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t15-focused
+    - t25-focused
+  REQ-REPORT-017:
+    stage_status: active
+    primary_owner: T29
+    planned_evidence:
+    - t15-focused
+    - t08-focused
+    - t18-focused
+    - t06-focused
+    - t02-focused
+  REQ-REPORT-018:
+    stage_status: active
+    primary_owner: T29
+    planned_evidence:
+    - t15-focused
+    - t08-focused
+    - t18-focused
+    - t06-focused
+    - t02-focused
+  REQ-VERIFY-030:
+    stage_status: active
+    primary_owner: T30
+    planned_evidence:
+    - t15-focused
+    - t18-focused
     - t25-focused
 ```

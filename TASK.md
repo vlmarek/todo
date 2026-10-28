@@ -1,3 +1,31 @@
+# Current continuation: TODO3-PLAN-011
+
+Reuse the completed revision-11 application at `97e29189449f73a4f5457f24b55987e9b28955d8`.
+Confirmed Design revision 12 in `docs/design/completion-reconciliation.md` controls
+the narrow reconciliation of cross-endpoint completion evidence and activity-time
+priority. T29 owns the coupled report/shared-history/recent-reopen implementation
+and regressions; T30 verifies composed and unchanged copied-runtime behavior and
+appends subject-bound evidence. Preserve all 28 accepted effective assignments,
+their original referenced definitions, upstream bytes and prior evidence.
+
+The final completion-reconciliation stage activates three successor requirements;
+all 136 earlier obligations remain satisfied and applicable where coupled, with
+no final-stage deferral. Technical association choices, concrete APIs, fallback
+and shared-consumer limits are in
+`docs/design/external/todoist/completion-reconciliation-notes.md`. Keep distinct
+activity completions/anonymous multiplicity and latest-unmatched-preceding undo.
+Timestamp preference does not change mutation acceptance, current context,
+complete required retrieval, incremental Sync/comment reuse or finalization.
+No numerical tolerance, persistent occurrence ledger, new mismatch error, CLI
+option or stronger cross-command identity/cutoff guarantee is introduced.
+
+T29 then T30 is a real implementation/acceptance dependency and prevents shared
+path conflicts under unchanged concurrency settings. Use existing focused checks;
+the runner's final-delivery provides one complete offline suite and distinct
+copied-runtime/PATH/real-less probes on the settled integrated subject. Earlier
+continuation sections below are historical. This plan authorizes no adoption or
+paid execution; stop before further product/plan scope changes.
+
 # Current continuation: TODO3-PLAN-010
 
 Reuse the completed application at `f3eb3b2c88d40bede17edf70a0c7437707c528bd`.

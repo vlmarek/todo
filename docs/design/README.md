@@ -1,9 +1,42 @@
 # todo-3 product specification
 
-Design revision: **11 — report retrieval reuse and incremental synchronization, 2026-10-27**.
-State: **accepted scoped revision; uncommitted Design handoff**.
+Design revision: **12 — completion evidence reconciliation and timestamp priority, 2026-10-28**.
+State: **accepted scoped revision; committed with Planning publication**.
 
-## Current revision 11
+## Current revision 12
+
+Read [completion-reconciliation.md](completion-reconciliation.md) first. The
+operator agreed to activity timestamps for report completion occurrences, with
+completed-task timestamps used only as fallback. Reconcile the two sources so a
+single ordinary completion with slightly different source timestamps produces one
+row. Neither matching timestamps nor presence in both endpoints is required.
+Recurring activity can establish an occurrence while the completed endpoint
+returns no matching record. Existing current-state and complete-retrieval rules
+continue to apply.
+
+REQ-REPORT-017/018 narrowly clarify REQ-REPORT-006/011/014's combined completion
+evidence and timestamp eligibility. REQ-VERIFY-030 adds representative distinguishing
+outcomes. Keep supplied activity-ID deduplication, accepted anonymous-event
+multiplicity, recurring completion/undo semantics and earlier definitions intact.
+The optional recurring due-date observations and remaining matching/impact
+investigations are retained in the new document. No provider snapshot is replaced.
+
+The operator's final instruction was "I agree with that, activity timestamp with
+the completed-task timestamp used only as fallback?" They rejected treating
+uncontrollable Todoist differences as a new user-facing error and said the tiny
+cutoff discrepancy was not a concern. Actual excerpts and interpretation are
+retained separately in native decision
+`TX-41d10e23a8204542ac2271c94f13e2fa:0`. There is no general undercounting waiver,
+new cross-report identity guarantee, or mandatory reconciliation ledger.
+
+The original confirmed Design handoff changed only this index and
+completion-reconciliation.md and was uncommitted. The operator subsequently
+requested Planning, which binds the complete Design tree and records technical
+matching/shared-history assessment in external/todoist/completion-reconciliation-notes.md.
+The preparation commit does not authorize adoption or paid execution. Prior
+revision-11 retrieval reuse and all unrelated decisions remain in force.
+
+## Preserved revision 11
 
 Read [report-retrieval-reuse.md](report-retrieval-reuse.md) first. The operator
 confirmed reuse of fresh synchronized comments and complete owner-scoped comment
