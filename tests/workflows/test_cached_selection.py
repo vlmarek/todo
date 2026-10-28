@@ -306,6 +306,38 @@ class CachedSelectionTests(unittest.TestCase):
         self.assertEqual(len(http.requests), 3)
         self.assertNotIn('parent', self.f.store.load_consistent_state().snapshot.items)
 
+    def test_cached_deletion_confirmation_and_cancellation_keep_bounded_warning(self):
+        self.f.wire_items.append(item('old', content='Older completed', parent_id='parent',
+            checked=True, completed_at='2026-10-20T00:00:00Z'))
+        for answer in ('yes\n', 'no\n'):
+            with self.subTest(answer=answer):
+                self.f.seed()
+                before = self.f.store.load_consistent_state()
+                op = CommandRequest(self, 'item_delete', {'id': 'parent'})
+                tombstones = [dict(id=k, is_deleted=True)
+                              for k in ('parent', 'child', 'leaf', 'old', 'unseen')]
+                steps = ([op.step(), self.read(delta(items=tombstones)),
+                          self.read(delta(items=tombstones))] if answer == 'yes\n' else [])
+                wf, http = self.workflow(steps, LifecycleWorkflow)
+                out, err = comments.Terminal(), StringIO()
+                wf.streams = p.OriginalStreams(comments.Terminal(answer), out, err)
+                if answer == 'yes\n':
+                    result = wf.execute(['delete', 'Parent'])
+                    self.assertEqual(result.status, 0, result.document.stderr)
+                    self.assertEqual(len(op.commands), 1)
+                    self.assertEqual(len(http.requests), 3)
+                    self.assertNotIn('parent', self.f.store.load_consistent_state().snapshot.items)
+                else:
+                    with self.assertRaises(Cancelled): wf.execute(['delete', 'Parent'])
+                    self.assertFalse(http.requests)
+                    self.assertEqual(self.f.store.load_consistent_state(), before)
+                self.assertIn('Delete this subtree? [y/yes]:', out.getvalue())
+                self.assertIn('  Saved child\n    Saved leaf', out.getvalue())
+                self.assertNotIn('Older completed', out.getvalue())
+                self.assertNotIn('unseen', out.getvalue())
+                self.assertEqual(err.getvalue(), 'Older completed descendants are outside this bounded preview '
+                    'and may also be cascade-deleted by Todoist.\n')
+
     def test_accepted_mutation_then_reconciliation_failure_is_partial(self):
         op = CommandRequest(self, 'item_update', {'id':'parent', 'priority':4})
         rows = [dict(r, priority=4) if r['id']=='parent' else r for r in self.f.wire_items]

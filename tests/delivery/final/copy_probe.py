@@ -303,6 +303,33 @@ def phase(install, name):
         steps = [('POST', '/sync', None, accepted),
                  sync('delta-token', delta(items=[changed])), sync('delta-token', delta(items=[changed]))]
         assert 'Alpha' in call(['rename', 'A', '--to', 'Alpha'], steps, INITIAL)
+    elif name == 'cached-parent':
+        # init/mutation published this saved parent and child in earlier processes.
+        # The remote title changes after selection; no read may populate operands.
+        before = store.load_consistent_state()
+        assert before.snapshot.items['A'].title == 'Alpha'
+        assert before.snapshot.items['B'].parent_id == 'A'
+        def accepted(form):
+            assert set(form) == {'commands'}
+            commands = json.loads(form['commands'][0]); assert len(commands) == 1
+            op = commands[0]
+            assert set(op) == {'type', 'uuid', 'args'}
+            UUID(op['uuid'])
+            assert (op['type'], op['args']) == ('item_update', {'id': 'A', 'priority': 2})
+            return {'sync_status': {op['uuid']: 'ok'}}
+        changed = a(); changed.update(content='Remote parent', priority=2)
+        steps = [('POST', '/sync', None, accepted),
+                 sync('delta-token', delta(items=[changed])),
+                 sync('delta-token', delta(items=[changed]))]
+        out = call(['priority', 'Alpha', 'P3'], steps, INITIAL)
+        assert 'P1 -> P3' in out and 'Remote parent' in out
+        after = store.load_consistent_state()
+        assert after.snapshot.items['A'].title == 'Remote parent'
+        assert after.snapshot.items['A'].priority == 3
+        assert after.current_snapshot.items['A'] == after.snapshot.items['A']
+        assert after.snapshot.items['B'].parent_id == 'A'
+        assert after.snapshot.comments == before.snapshot.comments
+        assert after.cursor == before.cursor
     elif name == 'repeat':
         rows = [a(), item('B', 'A')]
         # Actual preflight null supersedes old value even when final reads omit it.
@@ -383,7 +410,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 3:
         phase(install, sys.argv[2])
     else:
-        for name in ('init', 'mutation', 'repeat', 'external', 'read', 'rebuild', 'read',
+        for name in ('init', 'mutation', 'cached-parent', 'repeat', 'external', 'read', 'rebuild', 'read',
                      'preview', 'failure', 'final', 'cleanup', 'tolerance', 'tolerance-read'):
             subprocess.run([sys.executable, '-I', '-B', __file__, str(install), name],
                            check=True, timeout=10)

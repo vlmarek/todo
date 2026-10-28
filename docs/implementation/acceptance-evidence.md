@@ -974,3 +974,135 @@ the documented tolerance. Activity-time cutoff tests require both source records
 to have been fetched; they do not prove late-evidence repair or exactly-once
 cross-report accounting. No persistent ledger or stronger provider guarantee was
 introduced. All observations are offline/synthetic.
+
+
+## T32 — REQ-VERIFY-031 composed and copied cached commands (2026-10-28)
+
+Observed subject: starting HEAD `da361227c9eabddae5be557263e67a63dc003a20`
+plus the two uncommitted test changes below. Production launcher/modules are
+unchanged. Tested file SHA256 values:
+
+- `tests/delivery/final/copy_probe.py`:
+  `ca5122916ac07d61aff40eeed553aaecd3dcf195be2b7bc1386a9f2ae7daa1d9`.
+- `tests/workflows/test_cached_selection.py`:
+  `ef04011725e3f65de3b06e5e50ef70646fe1b9d593dad9fe08df049ddbe0d5bc`.
+
+This evidence-only append follows verification; no executable bytes changed
+after the gate. Earlier evidence and protected design/ledger inputs are unchanged.
+Read cached-selection-notes and the retained upstream OpenAPI Sync description
+(Read resources, Command UUID, Tasks/Delete tasks). The provider contract supports
+stable-ID writes and recursive item deletion; local eligibility and bounded
+previews are application rules. Synthetic responses below are not captured
+provider traffic or a stronger freshness guarantee.
+
+Inspected initial boundaries for capture/scalar/scheduling/creation, move,
+lifecycle and comment/editor families. Each ordinary task/step entry calls
+`Synchronizer.read_local` under the existing lock. Capture plans the entire batch;
+move resolves source, mixed destination and optional category before validating
+the proposed subtree; lifecycle resolves parent and bounded candidate before
+planning operations; comments validate all bodies/buffer blocks before applying.
+Their first operation reaches real Gateway/Transport without current, completed,
+activity, comment or label population retrieval. Gateway checks known identities
+and sends the UUID-attributed command before authoritative retrieval. Category-only
+creation retains refresh; initialization, explicit refresh and reports retain their
+fresh paths. Explicit test setup refreshes finish before command execution; no
+request fake or accepted-operation helper was relaxed to allow preflight reads.
+
+Reused source coverage in `tests/workflows/test_cached_selection.py` establishes:
+local no-match with full selector/explicit refresh advice, noninteractive ambiguity,
+cancellation, sibling rejection, missing/corrupt cache errors distinct from NoMatch,
+cached creation parent, mixed move destination and known descendants. Shared
+`reads.choose/select_child` tests cover interactive blank/q/EOF cancellation and
+parent/direct-child resolution; public CLI ambiguity tests exercise the shared
+selector across scalar, creation, move and lifecycle families. Lifecycle tests
+retain cursor-exclusive/end-inclusive completed bounds, latest recurring undo,
+parent-context aliases, all-body validation and postorder completion. These shared
+paths avoid a redundant command/entity matrix.
+
+Actual composed parent trace: cached `Parent` selects ID `parent`; first POST
+`/sync` carries `item_update {id: parent, priority: 4}`. Gateway full/current delta
+reconciliation and independent synchronization follow (five HTTP calls total).
+Remote title/description changes are accepted, the actual title is saved, and
+child/leaf ancestry survives. Stale-ID rejection sends only cached `parent`;
+subsequent response contains a replacement titled Parent, but no retarget or second
+mutation occurs (one command plus two read calls). Local sibling/no-op/hiding/tree
+rejections have no mutation request. Accepted-then-publication/read failure remains
+accepted with status 1 and old saved priority; it is not reported as rejection.
+
+New deletion confirmation/cancellation case complements existing `--yes` coverage.
+Saved Parent/child/leaf and an older completed descendant are seeded through real
+full/delta acquisition. Preview contains child/leaf but excludes the old row and
+never-observed `unseen`. Both interactive paths emit exactly the older-completed
+cascade warning. Yes submits only `item_delete {id: parent}`, followed by two
+post-operation Sync reads whose tombstones include `unseen`; the parent disappears
+from saved state. No cancels with zero requests and identical loaded state. The
+existing `--yes` case similarly has exactly three calls and no descendant read.
+The unseen tombstone is synthetic cascade evidence, not remote child discovery.
+
+New copied `cached-parent` phase runs between mutation and repeat initialization.
+Earlier fresh init and mutation processes seed saved Alpha/ID A with child B. The
+unchanged launcher is resolved through PATH in a separate isolated interpreter,
+with only copied runtime modules and the test opener at the real HTTP boundary.
+`priority Alpha P3` must first POST exactly one UUID-attributed `item_update`
+with `{id: A, priority: 2}`; any read-first request fails. Two authoritative delta
+reads return `Remote parent` and the requested priority. Status is 0, output
+contains `P1 -> P3` and Remote parent, reloaded current/snapshot agree, B still
+belongs to A, and comments/cursor survive. All copied fixture phases (existing
+mutation, tolerance/reminder writes and cached unchanged editor included) pass;
+no prerequisite fixture migration is deferred. No production injection flag or
+test import was added to the copied runtime.
+
+Editor audit: saved owner/comments seed the buffer; unchanged and invalid buffers
+issue no requests. The composed changed-buffer case first writes saved comment
+ID z-older, then performs current/scoped-comment reconciliation and publication
+(six calls); no owner/comment freshness read intervenes after save. Existing codec
+and workflow cases preserve escaping, all-shown deletion confirmation, sequential
+edit/add/delete, concurrent-add retention, precise receipts, accepted/rejected/
+unknown/unattempted distinctions, interruption and publication failure protections.
+Capture/move/lifecycle failure cases retain no unsafe replay and protected pending
+history, including mixed-publication refusal rather than a false rollback claim.
+
+Compatibility audit followed Current -> prepare_candidates -> saved/reloaded
+LocalState -> capture/move/lifecycle/comments/report/init consumers. Unknown legacy
+waiting-label context remains distinct from known empty membership: unknown needs
+explicit refresh, malformed context is LocalError with bytes preserved, known
+absence rejects hiding locally with init advice. Existing focused full/delta
+rename/tombstone/omission tests and explicit refresh recovery establish acquisition
+and preservation of cursor/pending history. Legacy current provenance hydrates
+only after a saved-ID write. Report publication retains current baseline/token and
+label/reminder context without converting reports into cached reads.
+
+Commands/results (exit 0, no skips; worker logs are ephemeral captures):
+
+- t31-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.test_cached_selection -v`
+  — 21 tests, `/tmp/t32-t31.log`. Initial new assertion incorrectly used capture's
+  `outcomes` on LifecycleResult; corrected the test assertion before this pass.
+- t15-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v`
+  — 50 tests, `/tmp/t32-t15.log`.
+- t25-focused: `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_coexistence tests.delivery.final.test_verify -v`
+  — 8 tests, `/tmp/t32-t25.log`.
+- Copy-only probe: temporary unchanged launcher/module copy, allowlisted environment
+  from verify_clean.environment, `python3.11 -I -B copy_probe.py INSTALL` outside
+  repository, byte comparisons after execution — 14 phase processes passed,
+  `/tmp/t32-copy.log`; no scripts/check invocation.
+- `scripts/verify-clean` — exit 0, `/tmp/t32-verify-clean.log`: exactly one complete
+  scripts/check suite, 684 tests in 26.824s, followed by 14 separate copied phases,
+  PATH help and real GNU less short/long/color/quit probes. Harness self-tests use
+  tiny synthetic suites. This broad run fulfills the explicit final-delivery duty
+  and checks all migrated fixtures; directed suites alone cannot establish that.
+- `git diff --check` — passed.
+
+Revision-12 unequal completion/activity times, activity-only recurring/undo and
+fallback cases remain intact. Copied reports still request fresh Sync, bounded
+completed, filtered activity and one archived owner-comments page in that order;
+active text comes from fresh Sync. Preview/cursor failure retain exact cursor and
+pending occurrence; final flush precedes cursor then cleanup, preserving newer
+pending context. Source write/flush/cursor failure tests also passed. No report
+expectation was weakened to accommodate cached command context.
+
+Limits: these are worker-observed offline tests on the stated subject, not future
+runner acceptance or independent review. No live account, latency/benchmark claim,
+complete history reconstruction, universal occurrence identity, or atomic provider
+snapshot is established. Remote unseen cascade scope is deliberately represented
+by a post-operation tombstone; the client cannot promise an exhaustive cached
+preview or retarget a stale stable ID safely.
