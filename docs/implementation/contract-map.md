@@ -1,6 +1,12 @@
 # Prepared ownership and evidence
 
-Confirmed Design revision 12 governs completion-evidence reconciliation and activity timestamp priority. T29 owns the coupled report/history/lifecycle correction; T30 owns distinguishing composed/copied acceptance. All 136 earlier obligations remain satisfied with accepted owners T01-T28 preserved. Three successor requirements are active; nothing is deferred in the final stage. This protected ledger is planned coverage. Append observed results only to `docs/implementation/acceptance-evidence.md`.
+Confirmed Design revision 13 governs cached task/step selection, saved mutation
+preflight and cached deletion scope. T31 owns the coupled implementation and
+consumer adaptations; T32 owns composed/copied acceptance. All 139 earlier
+requirements remain satisfied with accepted historical owners preserved. Five
+successors are active; nothing is deferred in the final stage. This protected
+ledger records planned coverage; observed results append only to
+`docs/implementation/acceptance-evidence.md`.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -718,8 +724,8 @@ requirements:
     - t15-focused
     - t25-focused
   REQ-REPORT-017:
-    stage_status: active
-    primary_owner: T29
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t15-focused
     - t08-focused
@@ -727,8 +733,8 @@ requirements:
     - t06-focused
     - t02-focused
   REQ-REPORT-018:
-    stage_status: active
-    primary_owner: T29
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t15-focused
     - t08-focused
@@ -736,10 +742,40 @@ requirements:
     - t06-focused
     - t02-focused
   REQ-VERIFY-030:
-    stage_status: active
-    primary_owner: T30
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t15-focused
     - t18-focused
     - t25-focused
+  REQ-CLI-038:
+    stage_status: active
+    primary_owner: T31
+    planned_evidence:
+    - t31-focused
+    - final-delivery
+  REQ-SYNC-035:
+    stage_status: active
+    primary_owner: T31
+    planned_evidence:
+    - t31-focused
+    - final-delivery
+  REQ-MUT-006:
+    stage_status: active
+    primary_owner: T31
+    planned_evidence:
+    - t31-focused
+    - final-delivery
+  REQ-MUT-007:
+    stage_status: active
+    primary_owner: T31
+    planned_evidence:
+    - t31-focused
+    - final-delivery
+  REQ-VERIFY-031:
+    stage_status: active
+    primary_owner: T32
+    planned_evidence:
+    - t31-focused
+    - final-delivery
 ```

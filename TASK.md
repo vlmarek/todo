@@ -1,3 +1,32 @@
+# Current continuation: TODO3-PLAN-012
+
+Reuse the accepted integrated application at `35ac02cf7fb6dc1ba8cc82b71400c02be7d91c35`;
+the prior prepared-plan commit is `8275862260fbbedd7b0e1aa9cfd09fd7b127213b`.
+Confirmed Design revision 13 in `docs/design/cached-selection.md` governs saved
+task/step selectors and pre-mutation context. T31 owns the coupled saved-context,
+selector, direct-command and caller/test adaptation; T32 verifies composed/copied
+behavior and appends observed evidence. Preserve all 30 accepted effective
+assignments, earlier definitions, retained upstream bytes and acceptance evidence.
+
+The final cached-selection stage activates five successor requirements; all 139
+earlier obligations are satisfied and remain applicable except explicit scoped
+freshness precedence. Nothing is deferred in the final stage. Technical notes in
+`docs/design/external/todoist/cached-selection-notes.md` identify the concrete APIs,
+waiting-label context gap, legacy-cache recovery and fresh-consumer compatibility.
+Every task/step operand resolves locally, direct operations keep selected stable
+IDs, deletion shows saved scope, and post-operation/reports keep required fresh
+retrieval and outcome/cursor/history protections. Category-only creation and init
+retain their existing fresh behavior. Help explains saved preflight/previous values
+without changing exact receipts or adding prompts/progress output.
+
+T31 then T32 is the real implementation/acceptance dependency and avoids shared
+path conflicts. Use directed checks for changed behavior and compatible state;
+the runner retains one final-delivery full offline suite and distinct copied
+runtime/PATH/real-less probes. Historical continuation sections below describe
+previous revisions. This prepared plan grants no adoption, paid execution or
+recovery authority. Existing branch/unrelated work must be preserved; publication
+and execution readiness are separate.
+
 # Current continuation: TODO3-PLAN-011
 
 Reuse the completed revision-11 application at `97e29189449f73a4f5457f24b55987e9b28955d8`.

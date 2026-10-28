@@ -476,3 +476,17 @@ interfaces:
     occurrence evidence without changing mutation acceptance or adding a persistent event ledger.
     Concrete existing APIs and technical association limits are in docs/design/external/todoist/completion-reconciliation-notes.md.
   status: provisional
+- id: cached-task-step-workflows
+  owner: workflows
+  supersedes_ref: synchronized-state
+  status: provisional
+  description: Successor ordinary task/step workflow entry uses a validated saved SyncResult/LocalState
+    and compatible pending history under the existing lock, with cached stable-ID operands and
+    one command time; no current/history/comment/label preflight read. Existing ReadWorkflow
+    refresh remains explicit. Preserve public request/result/error shapes, local eligibility/no-op/tree
+    validation, cached editor comments and preview, direct Gateway UUID/status submission and
+    post-operation reconciliation. Saved scope/account/capability/timezone facts and minimal
+    proven waiting-label availability support preflight; missing required facts fail with explicit
+    recovery. Full/delta metadata publication preserves token provenance and pending data. Report/init
+    and post-acceptance refresh paths keep their fresh retrieval duties. Concrete API navigation,
+    compatible-context extension and consumer adaptation are in docs/design/external/todoist/cached-selection-notes.md.

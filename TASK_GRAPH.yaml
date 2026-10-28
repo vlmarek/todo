@@ -1,7 +1,7 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-011
-predecessor_revision_id: TODO3-PLAN-010
+revision_id: TODO3-PLAN-012
+predecessor_revision_id: TODO3-PLAN-011
 contract_sources:
 - docs/design/report-retrieval-reuse.md
 - docs/design/external/todoist/report-retrieval-notes.md
@@ -28,6 +28,8 @@ contract_sources:
 - docs/design/todoist-adapter.md
 - docs/design/completion-reconciliation.md
 - docs/design/external/todoist/completion-reconciliation-notes.md
+- docs/design/cached-selection.md
+- docs/design/external/todoist/cached-selection-notes.md
 components:
 - id: domain
   responsibility: Offline identity, recursive hierarchy, text, time, scheduling, selection predicates
@@ -481,6 +483,20 @@ interfaces:
     occurrence evidence without changing mutation acceptance or adding a persistent event ledger.
     Concrete existing APIs and technical association limits are in docs/design/external/todoist/completion-reconciliation-notes.md.
   source_path: COMPONENTS.yaml
+- id: cached-task-step-workflows
+  owner: workflows
+  supersedes_ref: synchronized-state
+  description: Successor ordinary task/step workflow entry uses a validated saved SyncResult/LocalState
+    and compatible pending history under the existing lock, with cached stable-ID operands and
+    one command time; no current/history/comment/label preflight read. Existing ReadWorkflow
+    refresh remains explicit. Preserve public request/result/error shapes, local eligibility/no-op/tree
+    validation, cached editor comments and preview, direct Gateway UUID/status submission and
+    post-operation reconciliation. Saved scope/account/capability/timezone facts and minimal
+    proven waiting-label availability support preflight; missing required facts fail with explicit
+    recovery. Full/delta metadata publication preserves token provenance and pending data. Report/init
+    and post-acceptance refresh paths keep their fresh retrieval duties. Concrete API navigation,
+    compatible-context extension and consumer adaptation are in docs/design/external/todoist/cached-selection-notes.md.
+  source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
   command: git diff --check
@@ -687,6 +703,14 @@ checks:
     -v
   prerequisite_task_refs:
   - T25
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t31-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.test_cached_selection
+    -v
+  prerequisite_task_refs:
+  - T31
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -5630,6 +5654,542 @@ tasks:
   - Existing final-delivery must pass on the settled integrated subject, including one complete
     offline suite and a representative unequal-time one-row report in the unchanged copied runtime;
     no duplicate broad worker gate.
+- id: T31
+  title: Use cached selection and preflight across task and step workflows
+  origin_stage_ref: cached-selection
+  observable_outcome: Every task/step operand and preflight uses valid saved context; direct
+    operations target cached IDs before any freshness read, while post-operation and report
+    truth remain enforced.
+  dependencies:
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Extend read_local and publication while preserving explicit refresh and accepted-operation
+      reconciliation.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Reuse concrete title/child/recent/mixed-destination candidate and chooser behavior.
+  - task_ref: T12
+    kind: interface
+    interface_ref: capture-scheduling
+    reason: Adapt shared creation/scalar planning without changing category-only workflows.
+  - task_ref: T13
+    kind: interface
+    interface_ref: hierarchy-moves
+    reason: Use known subtree and direct stable source/destination IDs.
+  - task_ref: T18
+    kind: interface
+    interface_ref: lifecycle-transitions
+    reason: Replace remote recent discovery with compatible local occurrences while preserving
+      post-operation evidence.
+  - task_ref: T14
+    kind: interface
+    interface_ref: comment-editing
+    reason: Start editor from saved comments and remove pre-write owner refresh.
+  - task_ref: T24
+    kind: interface
+    interface_ref: complete-reminder-scheduling
+    reason: Preserve reminder consent, actual results and caller compatibility.
+  - task_ref: T23
+    kind: interface
+    interface_ref: reminder-gateway
+    reason: Reuse direct commands and current/reminder mapping with saved preflight facts.
+  - task_ref: T19
+    kind: interface
+    interface_ref: state-store-precise
+    reason: Extend compatible protected JSON context without losing precision or pending history.
+  - task_ref: T22
+    kind: interface
+    interface_ref: tolerant-current
+    reason: Carry minimal proven label context from legitimate full/delta resources and preserve
+      relevance validation.
+  - task_ref: T29
+    kind: interface
+    interface_ref: reconciled-completion-reports
+    reason: Retain current completion evidence and recurring undo semantics in shared history
+      and fresh reports.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Preserve public composition, credential source, statuses and receipt formats.
+  - task_ref: T30
+    kind: repository_state
+    interface_ref: null
+    reason: Start from the completed revision-12 implementation and subject-bound evidence,
+      retaining all accepted code.
+  goal: 'Implement the four revision-13 workflow requirements together on the accepted application.
+    Read docs/design/cached-selection.md first: its explicit freshness precedence governs this
+    task, and all other earlier duties survive. Use the concrete APIs and retained provider
+    source navigation in docs/design/external/todoist/cached-selection-notes.md. Preserve public
+    CommandRequest, workflow result and classified error shapes; extend internals only as necessary.
+    Do not rebuild accepted code.
+
+
+    Every task/step selector, including reads/implicit lookup, mutation targets, parent/step
+    operands, creation parents, lifecycle candidates and mixed item/category move destinations,
+    resolves from validated saved state and compatible retained history. Match all operands
+    before the first mutation and hold their stable IDs. Keep title/phrase/term matching, scope/eligibility,
+    order/context, ambiguity and cancellation unchanged. Retained completed candidates obey
+    cursor/now and recurring latest-occurrence rules; remove lifecycle._recent_snapshot preflight
+    remote discovery from these paths without deleting the history utilities needed by reports/reconciliation.
+    No-match names the full searched selector, says saved data was searched and suggests todo
+    --refresh now then retry; required local-state errors propagate as such. Keep supported
+    explicit read refresh first, ordinary offline reads zero HTTP, existing flag applicability
+    and credential/configuration requirements.
+
+
+    CaptureWorkflow, MoveWorkflow, LifecycleWorkflow and CommentWorkflow must load the shared
+    saved context under their existing lock instead of refreshing before selection/action. Remove
+    the editor''s second pre-write refresh and the task/step hiding label-read preflight. Known
+    comments seed the editor and stable comment IDs; unchanged valid buffer is a zero-write
+    success, all-shown deletion retains its confirmation and foreign/invalid blocks reject before
+    writes. Use saved account, bound project/category scope, capabilities and the single binding
+    timezone plus one current command time. Existing snapshots carry most facts; extend protected
+    JSON/Current/SyncResult plumbing only for missing proven context (notably waiting-label
+    availability) and all affected init/sync/report/move/lifecycle publishers, using compatible
+    optional metadata as specified in the technical notes. Missing required saved facts fail
+    locally with existing explicit-refresh/protected-state recovery; never silently hydrate
+    or guess. Keep category creation and initialization on their existing fresh paths: the cache
+    policy covers ordinary task/step workflows, including task creation, rather than unrelated
+    category mutations.
+
+
+    Retain syntax, complete-batch/no-op, source-state, scheduling/reminder consent, cached waiting-label
+    prerequisite, sibling collision and full known subtree/depth/cycle/hiding checks before
+    mutation. Use saved known completed descendants as appropriate. Recursive done keeps known-recurring-descendant
+    refusal, preview confirmation and deterministic child-first ordering; move retains source
+    and destination identity with the complete known subtree. Deletion shows only saved open/eligible
+    completed descendants, including with --yes, with existing older-completed warning, indentation
+    and confirmation; do not fetch additional preview descendants. Trust cached stable IDs even
+    if remote names/context changed. No remote reselection, substitution, fresh eligibility
+    check, stale comparison/conflict prompt or fallback refresh before submission. Earlier ''preserve''
+    checks must not fabricate a stale-preflight conflict merely because an untouched field changed
+    remotely; actual valid returned context controls receipts, while requested-field/normalization
+    and actual invariant checks remain.
+
+
+    Keep Gateway direct POST /sync commands, UUID/temp-ID/status proof and transport replay
+    policy. The first operation-bearing request is the first task/step network action; gateway
+    read reconciliation after that request is retained. Build before=Current from saved facts;
+    compatible legacy current-resource provenance may trigger required hydration only after
+    submission. After each accepted operation retain existing authoritative retrieval, validation
+    and publication before the next ordered operation, with selected IDs/order fixed. Preserve
+    rejection, unknown outcome, accepted partial failure and unattempted work without unsafe
+    replay/rollback. Newly retrieved invalid state still stops the sequence. Required archived-owner
+    comments, recurring activity/completion proof and post-mutation account/scope/capability/timezone
+    validation remain. No receipt before acceptance; previous values are saved values, help
+    explains that basis without changing exact receipt templates or adding progress/warning
+    prompts.
+
+
+    Add the focused tests/workflows/test_cached_selection.py using existing controlled transport
+    helpers through real composition, and adapt directly affected existing workflow/caller/request
+    fixtures instead of leaving old preflight expectations. Trace first network action and cached
+    ID through a meaningful parent/subtree command (not only a leaf rename), plus representative
+    creation parent, mixed move destination and editor paths. Cover local ambiguity/no-match/cancellation
+    and missing versus invalid local context with zero requests; eligible retained completed
+    evidence with excluded cursor boundary and latest recurring undo; a locally invalid proposal
+    with no writes; stale-ID rejection without substitution; remote acceptance after changed
+    title/context; cached deletion with an unseen remotely cascaded descendant and no preflight
+    read; and accepted mutation followed by reconciliation failure. Distinguish mutation POST
+    from later read POST /sync and do not preseed the very metadata discovery being tested.
+    Reuse adequate negatives for unknown/SIGINT/ordered partial operations, pending history
+    and report finalization; add a specific case only where changed control flow exposes an
+    uncovered risk.
+
+
+    Use t31-focused for early directed feedback, t02-focused/t05-focused/t08-focused for compatible
+    metadata/store/current/refresh regression, and affected existing focused test cases for
+    actual caller repairs. Tests/workflows/capture, moves, lifecycle, comments and tests/cli
+    contain existing refreshed doubles/request expectations that must migrate to saved-state
+    setup; expand directed checks for concrete changed callers. The runner retains final-delivery
+    as its full offline/copy gate. Do not add another complete suite, live network, latency
+    benchmark, framework, database, identity ledger or background worker. Report a real provider
+    contradiction or needed product choice instead of silently weakening these obligations.'
+  failure_domain: Coupled saved-context representation, task/step selector and pre-mutation
+    workflow behavior.
+  verification_rationale: Removing preflight crosses shared state, direct commands, lifecycle
+    history and editor/caller paths. One usable coupled implementation avoids interim fake freshness
+    contracts. The new focused composed suite distinguishes network ordering and cached identity;
+    existing local/current/sync suites verify compatible persistence and fresh consumers. Full
+    product regressions run through the existing settled-subject final-delivery gate.
+  correction_instructions: Apply only Design revision 13 freshness precedence. Preserve all
+    30 accepted effective assignments, retained provider bytes and earlier evidence. Repair
+    all directly affected callers/fakes in scope; no fresh preflight hidden behind a helper,
+    no stale-report mode, no relaxation of actual post-operation validation or protected-history
+    failure. Missing legacy cache facts require explicit refresh when needed; never reset protected
+    state.
+  requirement_refs:
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  constraint_refs:
+  - REQ-CLI-035
+  - REQ-CLI-032
+  - REQ-CLI-029
+  - REQ-CLI-036
+  - REQ-CACHE-008
+  - REQ-CACHE-006
+  - REQ-CACHE-005
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-005
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-DOM-001
+  - REQ-DOM-009
+  - REQ-DOM-006
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-MUT-001
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SYNC-013
+  - REQ-SYNC-021
+  - REQ-SYNC-026
+  - REQ-SYNC-025
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-REPORT-003
+  - REQ-REPORT-014
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-TIME-001
+  - REQ-OUT-020
+  - REQ-OUT-022
+  - REQ-VERIFY-003
+  - REQ-CLI-012
+  - REQ-CLI-021
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-033
+  - REQ-DOM-007
+  - REQ-DOM-010
+  - REQ-DOM-013
+  - REQ-OUT-015
+  - REQ-OUT-021
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-SCHED-010
+  - REQ-NET-001
+  - REQ-CLI-024
+  - REQ-OUT-009
+  - REQ-OUT-019
+  - REQ-REPORT-006
+  exclusion_refs: &cached001
+  - OUT-SEARCH-001
+  - OUT-HISTORY-001
+  - OUT-SELECT-001
+  - OUT-ARCHIVE-001
+  - OUT-REPORT-001
+  - OUT-REPORT-002
+  - OUT-OPS-003
+  - OUT-LOCAL-001
+  - OUT-PRIVACY-001
+  - OUT-LOGGING-001
+  - OUT-CONC-001
+  - OUT-TEST-001
+  - OUT-TIME-002
+  - OUT-FEATURE-002
+  component_refs:
+  - workflows
+  - local
+  - adapter
+  - domain
+  - syntax
+  - presentation
+  - cli
+  provides_interface_refs:
+  - cached-task-step-workflows
+  consumes_interface_refs:
+  - synchronized-state
+  - read-commands
+  - capture-scheduling
+  - hierarchy-moves
+  - lifecycle-transitions
+  - comment-editing
+  - complete-reminder-scheduling
+  - reminder-gateway
+  - state-store-precise
+  - tolerant-current
+  - reconciled-completion-reports
+  - public-cli
+  expected_paths:
+  - todo_lib/workflows/**
+  - todo_lib/local/**
+  - todo_lib/adapter/**
+  - todo_lib/domain/**
+  - todo_lib/syntax/**
+  - todo_lib/presentation/**
+  - todo_lib/cli.py
+  - tests/workflows/**
+  - tests/local/**
+  - tests/adapter/**
+  - tests/domain/**
+  - tests/syntax/**
+  - tests/presentation/**
+  - tests/cli/**
+  - tests/support/**
+  denied_paths: &cached002
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  check_refs:
+  - t31-focused
+  - t02-focused
+  - t05-focused
+  - t08-focused
+  required_evidence:
+  - t31-focused
+  - t02-focused
+  - t05-focused
+  - t08-focused
+  - Request trace through actual transport proves cached stable-ID first write and only post-operation
+    reads for representative task/step parent/subtree, editor and move/create paths.
+  - Compatible context round-trip and missing-fact recovery preserve pending history, current-resource/token
+    association, fresh reports and actual-outcome classification.
+- id: T32
+  title: Verify cached selection through composed and copied commands
+  origin_stage_ref: cached-selection
+  observable_outcome: Subject-bound evidence shows local selection/direct cached-ID mutation,
+    accepted stale-preview consequences and unchanged post-operation/report protections in source
+    and copied runtime.
+  dependencies:
+  - task_ref: T31
+    kind: interface
+    interface_ref: cached-task-step-workflows
+    reason: Verify a complete adapted application and repair demonstrated composed acceptance
+      gaps.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Exercise actual public launcher, streams and statuses; reuse its routine-check capability
+      and existing verify-clean harness.
+  - task_ref: T29
+    kind: interface
+    interface_ref: reconciled-completion-reports
+    reason: Verify shared context changes preserve fresh revision-12 reports and recurring occurrence
+      evidence.
+  goal: 'Own REQ-VERIFY-031 on the usable T31 result. Read actual code/tests and docs/design/external/todoist/cached-selection-notes.md.
+    Inspect the selectors and initial network boundary for each task/step workflow family; reuse
+    representative shared-path evidence rather than multiply every command/entity/layer. Correct
+    demonstrated in-scope defects or missing distinguishing cases, including affected caller/fake
+    migrations, before recording evidence. Do not weaken transport fakes or hide preflight reads
+    in accepted helper paths.
+
+
+    Audit local match/ambiguity/cancel/no-match and invalid-state separation, all operands before
+    mutation, cached creation parent and mixed move destination, bounded completed/recurring
+    candidates, cached local rejection, stale-ID rejection without retarget, and remote acceptance
+    with changed title/context. Trace real Transport/Gateway order for a known parent/subtree
+    operation and cached deletion (including --yes/confirmation/cancellation and older-completed
+    warning) whose remote cascade affects an unseen descendant. Editor starts from saved comments
+    and performs no owner/comment freshness read after save; preserve escaping, unchanged-buffer
+    success, all-shown confirmation and sequential edit/add/delete behavior. Include missing
+    waiting-label context versus known absence and legitimate full/delta acquisition in the
+    compatibility assessment. Post-acceptance reads remain required and failures must preserve
+    accepted/unknown/unattempted distinctions, no unsafe replay, protected pending history,
+    exact receipts and report cursor/output safeguards.
+
+
+    Add a representative cached-selected-ID mutation to tests/delivery/final/copy_probe.py through
+    the unchanged copied launcher/runtime and its controlled real HTTP boundary. Its fixture
+    must seed saved state, then reject any read before the intended operation-bearing request
+    and supply authoritative post-operation evidence; verify observable output/status and subsequent
+    saved state. Keep the existing revision-12 unequal-time report, activity-only/undo/fallback
+    and report write/flush/cursor tests so shared metadata changes cannot make reports cached.
+    Fresh reports/explicit refresh/initialization and category-only commands retain their established
+    behavior. Append observed subjects, focused commands/results, reused/new coverage and evidence
+    limitations to docs/implementation/acceptance-evidence.md without altering earlier evidence
+    or the protected ledger.
+
+
+    Directed verification uses t31-focused, t15-focused and t25-focused, plus the relevant focused
+    tests for actual repairs. Existing final-delivery runs verify-clean on the final integrated
+    subject, with exactly one complete scripts/check suite followed by distinct unchanged-copy/PATH/real-less
+    probes. Do not recursively run the full suite in copy probes or harness self-tests, require
+    a benchmark/live account, add generic progress text, or claim unavailable future runner-gate/independent-review
+    results. No-change implementation outcome is valid only when existing evidence actually
+    covers each applicable duty; the owned focused and copied evidence still must be established.'
+  failure_domain: Composed/copy cached-command acceptance and current-truth regression evidence.
+  verification_rationale: The verification task starts after all shared-path adaptations and
+    checks the distinguishing observable boundary through real transport and unchanged copied
+    runtime. Focused cache/report/delivery suites supplement one existing final-delivery broad
+    suite; no second worker broad gate or per-command matrix is added.
+  correction_instructions: Preserve frozen inputs, original provider bytes and earlier acceptance-evidence
+    bytes. Repair only demonstrated revision-13 defects/coverage in declared paths, with actual
+    post-operation failure safeguards intact. No provider freshness or latency guarantee follows
+    from offline evidence.
+  requirement_refs:
+  - REQ-VERIFY-031
+  constraint_refs:
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-CLI-035
+  - REQ-CLI-032
+  - REQ-CLI-029
+  - REQ-CLI-036
+  - REQ-CACHE-008
+  - REQ-CACHE-006
+  - REQ-CACHE-005
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-005
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-DOM-001
+  - REQ-DOM-009
+  - REQ-DOM-006
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-MUT-001
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SYNC-013
+  - REQ-SYNC-021
+  - REQ-SYNC-026
+  - REQ-SYNC-025
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-REPORT-003
+  - REQ-REPORT-014
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-TIME-001
+  - REQ-OUT-020
+  - REQ-OUT-022
+  - REQ-VERIFY-003
+  - REQ-VERIFY-002
+  - REQ-VERIFY-013
+  - REQ-VERIFY-030
+  - REQ-CLI-012
+  - REQ-CLI-021
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-033
+  - REQ-DOM-007
+  - REQ-DOM-010
+  - REQ-DOM-013
+  - REQ-OUT-015
+  - REQ-OUT-021
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-SCHED-010
+  - REQ-NET-001
+  - REQ-CLI-024
+  - REQ-OUT-009
+  - REQ-OUT-019
+  - REQ-REPORT-006
+  exclusion_refs: *cached001
+  component_refs:
+  - workflows
+  - local
+  - adapter
+  - domain
+  - syntax
+  - presentation
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - cached-task-step-workflows
+  - routine-check
+  - public-cli
+  - reconciled-completion-reports
+  expected_paths:
+  - todo_lib/workflows/**
+  - todo_lib/local/**
+  - todo_lib/adapter/**
+  - todo_lib/domain/**
+  - todo_lib/syntax/**
+  - todo_lib/presentation/**
+  - todo_lib/cli.py
+  - tests/workflows/**
+  - tests/local/**
+  - tests/adapter/**
+  - tests/domain/**
+  - tests/syntax/**
+  - tests/presentation/**
+  - tests/cli/**
+  - tests/support/**
+  - tests/delivery/final/copy_probe.py
+  - docs/implementation/acceptance-evidence.md
+  denied_paths: *cached002
+  check_refs:
+  - t31-focused
+  - t15-focused
+  - t25-focused
+  required_evidence:
+  - t31-focused
+  - t15-focused
+  - t25-focused
+  - Append actual cached-ID request order, saved selection/preview, stale acceptance/rejection,
+    post-operation partial outcomes and report/cursor/history observations to docs/implementation/acceptance-evidence.md.
+  - 'Existing final-delivery must pass on the settled integrated subject: one complete offline
+    suite and distinct copied-runtime cached-selected-ID mutation/PATH/real-less probes.'
 stages:
 - id: release-1
   final_project: false
@@ -5775,6 +6335,11 @@ stages:
   - REQ-REPORT-017
   - REQ-REPORT-018
   - REQ-VERIFY-030
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-VERIFY-031
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -5921,6 +6486,11 @@ stages:
   - REQ-REPORT-017
   - REQ-REPORT-018
   - REQ-VERIFY-030
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-VERIFY-031
   check_refs:
   - final-delivery
 - id: todoist-coexistence
@@ -6067,6 +6637,11 @@ stages:
   - REQ-REPORT-017
   - REQ-REPORT-018
   - REQ-VERIFY-030
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-VERIFY-031
   check_refs:
   - final-delivery
 - id: request-conformance
@@ -6213,6 +6788,11 @@ stages:
   - REQ-REPORT-017
   - REQ-REPORT-018
   - REQ-VERIFY-030
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-VERIFY-031
   check_refs:
   - final-delivery
 - id: report-retrieval-reuse
@@ -6359,10 +6939,15 @@ stages:
   - REQ-REPORT-017
   - REQ-REPORT-018
   - REQ-VERIFY-030
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-VERIFY-031
   check_refs:
   - final-delivery
 - id: completion-reconciliation
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-REPORT-017
   - REQ-REPORT-018
@@ -6504,9 +7089,166 @@ stages:
   - REQ-SYNC-034
   - REQ-CACHE-011
   - REQ-VERIFY-029
+  deferred_requirement_refs:
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-VERIFY-031
+  check_refs:
+  - final-delivery
+- id: cached-selection
+  final_project: true
+  active_requirement_refs:
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-VERIFY-031
+  satisfied_requirement_refs:
+  - REQ-TIME-001
+  - REQ-VERIFY-024
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-LOCAL-007
+  - REQ-CLI-036
+  - REQ-VERIFY-023
+  - REQ-INIT-009
+  - REQ-VERIFY-025
+  - REQ-SYNC-028
+  - REQ-INIT-010
+  - REQ-VERIFY-026
+  - REQ-SYNC-031
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-COMMENT-009
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-CLI-037
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-OUT-022
+  - REQ-VERIFY-027
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-VERIFY-028
+  - REQ-REPORT-016
+  - REQ-SYNC-034
+  - REQ-CACHE-011
+  - REQ-VERIFY-029
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-VERIFY-030
   deferred_requirement_refs: []
   check_refs:
   - final-delivery
+
 verification:
   after_each_merge:
   - merge-hygiene

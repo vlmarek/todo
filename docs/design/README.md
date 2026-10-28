@@ -1,9 +1,35 @@
 # todo-3 product specification
 
-Design revision: **12 — completion evidence reconciliation and timestamp priority, 2026-10-28**.
-State: **accepted scoped revision; committed with Planning publication**.
+Design revision: **13 — cached task/step selection and mutation preflight, 2026-10-28**.
+State: **accepted scoped revision; Design amendment for authorized Planning**.
 
-## Current revision 12
+## Current revision 13
+
+Read [cached-selection.md](cached-selection.md) first. Every task/step selector
+uses the saved local snapshot and compatible retained history. Ordinary task/step
+mutations validate against that saved state and act on selected stable IDs without
+an automatic synchronization before applying the change. Missing matches require
+explicit refresh. Cached deletion previews may omit remotely added descendants;
+the operator explicitly accepts successful remote effects not shown in the cache.
+Existing post-mutation reconciliation, explicit refresh and report behavior remain.
+
+REQ-CLI-038, REQ-SYNC-035 and REQ-MUT-006/007 are narrow successors to the earlier
+fresh-selection, pre-mutation freshness and current-preview duties identified in
+the amendment. REQ-VERIFY-031 adds distinguishing verification outcomes. Preserve
+earlier definitions, accepted assignments and all unaffected behavior. Planning
+must assess shared workflows and prepare supported successor work, not reopen
+accepted tasks. No implementation, adoption or execution is authorized here.
+
+The operator chose "every task/step selector", then "just trust the cache" and
+accepted the cached-preview limitation. They answered "yes" to the complete
+agreement including unchanged post-mutation synchronization and reports, then
+instructed "do that, then use $cml-plan to update the plan". Actual excerpts and
+the confirmed summary are retained separately from interpretation in the external
+Design report and native decision `TX-4c163976ba22483dabf8b20b923e0ca8:0`.
+This authorizes the amendment and fresh Planning; existing-run
+adoption and execution remain separate. No repeated product confirmation is needed.
+
+## Preserved revision 12
 
 Read [completion-reconciliation.md](completion-reconciliation.md) first. The
 operator agreed to activity timestamps for report completion occurrences, with
