@@ -62,7 +62,7 @@ class SyncTests(unittest.TestCase):
         with exclusive_lock('init', self.root):
             self.store.publish_snapshot(prepare_candidates(observed.snapshot,
                 empty_history(observed.snapshot), account_display='Person',
-                current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=INITIAL, initial_cursor=CURSOR))
+                waiting_label_ids=observed.waiting_label_ids, current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=INITIAL, initial_cursor=CURSOR))
 
     def put(self, name, data):
         path = self.root / name

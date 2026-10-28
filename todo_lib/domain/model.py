@@ -285,7 +285,8 @@ def lookup_category(snapshot: Snapshot, name: str) -> Category:
     """Case-insensitive category lookup; scope never follows a renamed ID."""
     matches = [c for c in snapshot.categories.values() if title_key(c.name) == title_key(name)]
     if len(matches) != 1:
-        raise DomainError('category name missing or ambiguous')
+        raise DomainError('category name missing or ambiguous for selector ' + repr(name) +
+                          '; saved data was searched; run todo --refresh now then retry')
     return matches[0]
 
 

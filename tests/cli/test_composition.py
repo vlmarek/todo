@@ -246,6 +246,9 @@ class PublicMoves(unittest.TestCase):
         transport, _ = self.boundary([self.sync('delta-token', full(projects=self.projects,
             items=[*self.rows, item('ambiguous', content='other')], notes=self.notes)),
             self.sync('full-token', delta())])
+        from todo_lib.workflows.sync import Synchronizer
+        Synchronizer(transport, self.store, clock=lambda: move_fixture.NOW).refresh()
+        transport, _ = self.boundary([])
         status, out, err, _ = invoke(self, ['move', 'A', 'other'], transport, now=move_fixture.NOW)
         self.assertEqual(status, 1)
         self.assertIn('category', out.lower())
@@ -258,6 +261,7 @@ class PublicMoves(unittest.TestCase):
 class PublicEditor(unittest.TestCase):
     setUp = comment_fixture.WorkflowTests.setUp
     refresh = comment_fixture.WorkflowTests.refresh
+    queue_refresh = comment_fixture.WorkflowTests.queue_refresh
     editor = comment_fixture.WorkflowTests.editor
     operation = comment_fixture.WorkflowTests.operation
     cleaned = comment_fixture.WorkflowTests.cleaned
@@ -292,7 +296,7 @@ class PublicLifecycle(unittest.TestCase):
         comment = lifecycle_fixture.CommandRequest(self, 'note_add', {'item_id': 'B', 'content': 'Done: public progress'}, target='public')
         rest = [dict(id='public', content='Done: public progress', posted_at=sync_fixture.COMMENT,
                      file_attachment=None, is_deleted=False)]
-        steps = [f.sync('delta-token', delta()), complete.step(),
+        steps = [complete.step(),
             f.sync('delta-token', full(items=[item('A', added_at=sync_fixture.CREATED)])),
             f.sync('full-token', delta()), f.completed([sync_fixture.completed_b()]),
             *f.external(), comment.step(), f.sync('delta-token', delta()), self.comments('B', rest),
@@ -306,9 +310,7 @@ class PublicLifecycle(unittest.TestCase):
         self.assertTrue(self.store.load_consistent_state().snapshot.items['B'].completed)
         reopened = lifecycle_fixture.CommandRequest(self, 'item_uncomplete', {'id': 'B'})
         restored = [item('B', parent_id='A', added_at=sync_fixture.CREATED)]
-        transport, _ = f.boundary([f.sync('delta-token', delta()), f.completed([sync_fixture.completed_b()]),
-            self.comments('B', rest), f.completed([sync_fixture.completed_b()]),
-            reopened.step(), f.sync('delta-token', delta(items=restored)),
+        transport, _ = f.boundary([reopened.step(), f.sync('delta-token', delta(items=restored)),
             f.sync('*', full(items=[item('A'), *restored], notes=[note('public', 'B', content='Done: public progress', posted_at=sync_fixture.COMMENT)])),
             f.sync('full-token', delta()), f.sync('delta-token', delta(items=restored)),
             f.sync('*', full(items=[item('A'), *restored], notes=[note('public', 'B', content='Done: public progress', posted_at=sync_fixture.COMMENT)])),

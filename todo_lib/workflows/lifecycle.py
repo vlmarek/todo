@@ -103,7 +103,7 @@ def _recent_snapshot(synchronizer, result, hidden_names):
             account_display=result.state.binding.account_display,
             sync_token=result.state.sync_token, synced_at=result.state.synced_at,
             current_snapshot=result.state.current_snapshot,
-            current_reminder_ids=result.state.current_reminder_ids,
+            waiting_label_ids=result.state.waiting_label_ids, current_reminder_ids=result.state.current_reminder_ids,
             hidden_names=hidden_names)
         _publish_discoveries(synchronizer.store, candidates)
     return snapshot
@@ -177,10 +177,8 @@ class LifecycleWorkflow:
             settings = self.settings or load_config(self.synchronizer.store.root)
             color = p.Color.for_stdout(self.streams.stdout, request.option('color', 'auto'),
                                        slots=settings.colors)
-            state = self.synchronizer.refresh_locked()
+            state = self.synchronizer.read_local()
             snapshot, now, cursor = state.snapshot, state.now, state.state.cursor
-            if command in ('reopen', 'delete'):
-                snapshot = _recent_snapshot(self.synchronizer, state, settings.hidden_from_now)
             d.validate(snapshot, settings.hidden_from_now)
             candidates = (title_candidates(snapshot, request.selector, target=request.target) if command == 'done'
                 else recent_candidates(snapshot, request.selector, cursor, now, target=request.target) if command == 'reopen'
@@ -254,16 +252,24 @@ class LifecycleWorkflow:
 
     def _run(self, operations, snapshot, state, now, deliver):
         outcomes, receipts, failure, status = [], [], None, 0
+        selected_owners = dict(snapshot.items)
         identities = {i.id: i.role + ': ' + p.owner_title(snapshot, i) for i in snapshot.items.values()}
         for index, operation in enumerate(operations):
             result = None
             try:
                 result = self.gateway.execute(operation, before=Current(snapshot, state.state.sync_token, current_snapshot=state.state.current_snapshot,
-                reminder_ids=state.state.current_reminder_ids),
-                    known_owners=snapshot.items, start=state.state.cursor)
+                waiting_label_ids=state.state.waiting_label_ids, reminder_ids=state.state.current_reminder_ids),
+                    known_owners=selected_owners, start=state.state.cursor)
                 outcomes.append(LifecycleOperation(operation, result.outcome.value, result))
                 if result.accepted:
-                    owner = snapshot.items[operation.args.get('id', operation.args.get('item_id'))]
+                    identity = operation.args.get('id', operation.args.get('item_id'))
+                    owner = snapshot.items.get(identity) or selected_owners[identity]
+                    receipt_snapshot = snapshot
+                    if isinstance(result.actual, d.Item) and result.after is not None:
+                        actual_context = result.after.snapshot
+                        owner = result.actual
+                        receipt_snapshot = replace(actual_context,
+                            items={**snapshot.items, **actual_context.items, owner.id: owner})
                     if operation.type == 'note_add':
                         receipt = (p.render_comment_bodies(snapshot, owner, [result.actual.body], owner_identified=True)
                             if isinstance(result.actual, d.Comment) and result.actual.item_id == owner.id else p.document())
@@ -273,7 +279,7 @@ class LifecycleWorkflow:
                         if action is None:
                             action = 'Completed' if operation.args['is_forward'] else 'Reopened'
                         restored = result.restored_ancestors
-                        receipt = p.render_mutation(snapshot, owner, action, also_reopened=restored)
+                        receipt = p.render_mutation(receipt_snapshot, owner, action, also_reopened=restored)
                     receipts.append(receipt)
                     if deliver and receipt.stdout:
                         self._show(receipt.stdout.rstrip('\n'))

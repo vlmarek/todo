@@ -1,6 +1,6 @@
 """Identity-preserving moves of the complete known subtree.
 
-The caller may pass argv or a normalized syntax request. One lock covers refresh,
+The caller may pass argv or a normalized syntax request. One lock covers saved context,
 selection, validation, the single direct move and authoritative reconciliation.
 No lifecycle operation, rollback, retry, or report-cursor update occurs here.
 """
@@ -135,7 +135,7 @@ class MoveWorkflow:
         color = p.Color.for_stdout((self.streams or p.OriginalStreams.current()).stdout,
             request.option('color', 'auto'), slots=settings.colors)
         with exclusive_lock('move', sync.store.root):
-            result = sync.refresh_locked()
+            result = sync.read_local()
             snapshot = combined_snapshot(result)
             d.validate(snapshot, settings.hidden_from_now)
             source = (select_child(snapshot, request.parent, request.selector, result.now,
@@ -180,7 +180,7 @@ class MoveWorkflow:
             before = Current(snapshot, '*' if category != source.category_id
                              else result.state.sync_token,
                 current_snapshot=result.state.current_snapshot,
-                reminder_ids=result.state.current_reminder_ids)
+                waiting_label_ids=result.state.waiting_label_ids, reminder_ids=result.state.current_reminder_ids)
             context = ('move ' + self._item_context(snapshot, source) + ' to ' +
                 (self._item_context(snapshot, snapshot.items[parent_id]) if parent_id else
                  'standalone task in ' + snapshot.categories[category].name))
@@ -237,35 +237,41 @@ class MoveWorkflow:
                 current = retrieve(sync.transport, original.binding, prior=state.current_snapshot or original,
                                    sync_token=state.sync_token,
                                    replace=state.current_snapshot is None or candidate.items[source.id].category_id != source.category_id,
-                                   known=original, reminder_ids=state.current_reminder_ids,
+                                   known=original, waiting_label_ids=state.waiting_label_ids, reminder_ids=state.current_reminder_ids,
                                    hidden_names=settings.hidden_from_now)
             # An accepted direct move changes the known subtree's inherited
             # category. Retained completed descendants omitted by bounded history
             # keep their own fields; any newly returned fields remain authoritative.
+            retained = dict(candidate.items)
+            for item in d.subtree(candidate, source.id):
+                if item.id in current.snapshot.items:
+                    continue
+                # Omitted completed context inherits from its closest returned
+                # ancestor. That ancestor may have been reparented remotely.
+                ancestor = next((a for a in reversed(d.ancestors(candidate, item.id))
+                                 if a.id in current.snapshot.items), None)
+                if ancestor is not None:
+                    retained[item.id] = replace(item,
+                        category_id=current.snapshot.items[ancestor.id].category_id)
+            candidate = replace(candidate, items=retained)
             adapter = HistoryAdapter(sync.transport, timezone=current.account.timezone)
             snapshot, history = _reconcile(current, candidate, state.history, adapter,
                 min((state.cursor, state.synced_at or state.cursor), key=d.instant_key),
                 result.now, state.cursor, settings.hidden_from_now)
-            for item in d.subtree(candidate, source.id):
-                actual = snapshot.items.get(item.id)
-                if actual is None:
-                    if item.id == source.id:
-                        raise MoveError('accepted source unavailable')
-                    continue  # only authoritative deletion/scope departure removes known work
-                if (actual.parent_id, actual.category_id) != (item.parent_id, item.category_id):
-                    raise MoveError('accepted move differs from requested subtree hierarchy')
-            surviving = {i.id for i in d.subtree(candidate, source.id) if i.id in snapshot.items}
-            retained = {k: r for k, r in original.reminders.items() if r.item_id in surviving}
-            returned = {k: r for k, r in snapshot.reminders.items() if r.item_id in surviving}
-            if (retained.keys() != returned.keys()
-                    or any(not d.preserves_reminder(r, returned.get(k), snapshot.account.timezone)
-                           for k, r in retained.items())):
-                raise MoveError('accepted move changed preserved reminders')
+            actual = snapshot.items.get(source.id)
+            if actual is None:
+                raise MoveError('accepted source unavailable')
+            args = operation.operation.args
+            parent_id = args.get('parent_id')
+            category_id = (snapshot.items[parent_id].category_id if parent_id in snapshot.items
+                           else args.get('project_id'))
+            if (actual.parent_id, actual.category_id) != (parent_id, category_id):
+                raise MoveError('accepted move differs from requested destination')
             phase = 'candidate preparation'
             candidates = prepare_candidates(snapshot, history,
                 account_display=state.binding.account_display, sync_token=current.sync_token,
                 synced_at=result.now, hidden_names=settings.hidden_from_now,
-                current_snapshot=current.current_snapshot, current_reminder_ids=current.reminder_ids)
+                current_snapshot=current.current_snapshot, waiting_label_ids=current.waiting_label_ids, current_reminder_ids=current.reminder_ids)
             before_bytes = sync._bytes(('cache.json', 'history.json', 'binding.json'))
             phase = 'local publication'
             sync.store.publish_snapshot(candidates)

@@ -128,6 +128,7 @@ class CaptureTests(unittest.TestCase):
     def state(self, items=None, reminders=None, **kwargs):
         return full(items=self.wire_items if items is None else items,
                     reminders=self.wire_reminders if reminders is None else reminders,
+                    labels=getattr(self, 'wire_labels', [dict(id='waiting', name='waiting', is_deleted=False)]),
                     user={'id': 'u', 'tz_info': {'timezone': getattr(self, 'account_zone', 'UTC')}}, **kwargs)
 
     def seed(self):
@@ -136,10 +137,10 @@ class CaptureTests(unittest.TestCase):
         current = retrieve(self.http, d.Binding('u', 'root', frozenset({'cat'})))
         with exclusive_lock('test', self.root):
             self.store.publish_snapshot(prepare_candidates(current.snapshot, empty_history(current.snapshot),
-                account_display='Person', current_snapshot=current.snapshot, sync_token=current.sync_token, synced_at=NOW,
+                account_display='Person', waiting_label_ids=current.waiting_label_ids, current_snapshot=current.snapshot, sync_token=current.sync_token, synced_at=NOW,
                 initial_cursor=NOW if not (self.root / 'cursor').exists() and not (self.root / 'binding.json').exists() else None))
 
-    def refresh(self, state=None, *, synchronize=True):
+    def queue_refresh(self, state=None, *, synchronize=True):
         state = self.state() if state is None else state
         self.http.read(state)
         self.http.read(delta())
@@ -149,11 +150,16 @@ class CaptureTests(unittest.TestCase):
                                 if i['due'] and i['due']['is_recurring']):
                 self.http.activities(owner)
 
+    def refresh(self, state=None, *, synchronize=True):
+        """Legitimate explicit refresh setup, completed before command execution."""
+        self.queue_refresh(state, synchronize=synchronize)
+        self.sync.refresh()
+
     def operation(self, kind, args, state, identity='new', status='ok'):
         self.http.command(kind, args, identity, status)
-        self.refresh(state, synchronize=False)  # gateway's independent authoritative reads
+        self.queue_refresh(state, synchronize=False)  # gateway's independent authoritative reads
         if status == 'ok':
-            self.refresh(state)  # synchronized-state reconciliation/publication
+            self.queue_refresh(state)  # synchronized-state reconciliation/publication
 
     def run_request(self, argv):
         result = self.workflow.execute(parse(argv))
@@ -206,7 +212,7 @@ class CaptureTests(unittest.TestCase):
         self.operation('item_add', dict(project_id='cat', content='New parent', priority=3,
             description='', labels=[], auto_reminder=False, due=None), state)
         self.http.command('item_close', {'id': 'new'}, 'new')
-        self.refresh(self.state(), synchronize=False)  # archived owner absent from active Sync
+        self.queue_refresh(self.state(), synchronize=False)  # archived owner absent from active Sync
         self.http.completed([done])
         reconcile = self.sync.reconcile_accepted_locked
         calls = []
@@ -266,9 +272,9 @@ class CaptureTests(unittest.TestCase):
             description='', labels=[], auto_reminder=False, due=None), state)
         done = dict(parent, checked=True, completed_at='2026-10-22T12:00:01.123456789012350Z')
         self.http.command('item_close', {'id': 'new'}, 'new')
-        self.refresh(self.state(), synchronize=False)
+        self.queue_refresh(self.state(), synchronize=False)
         self.http.completed([done])
-        self.refresh(self.state(), synchronize=False)
+        self.queue_refresh(self.state(), synchronize=False)
         self.http.completed([done])
         self.http.comments('new')
         result = self.run_request(['add', 'cat', 'New parent', '--done'])
@@ -336,7 +342,10 @@ class CaptureTests(unittest.TestCase):
                                  (['rename', 'Parent', '--to', 'Parent'], 'unchanged'),
                                  (['rename', 'Parent', '--to', 'Known sibling'], 'sibling'),
                                  (['add', 'category', 'CAT'], 'exists')]:
-            self.refresh()
+            if args[:2] == ['add', 'category']:
+                self.queue_refresh()
+            else:
+                self.refresh()
             with self.assertRaisesRegex(d.DomainError, diagnostic):
                 self.run_request(args)
 
@@ -399,8 +408,6 @@ class CaptureTests(unittest.TestCase):
         self.wire_reminders = [reminder('r', 'parent')]
         self.seed()
         self.refresh()
-        self.http.read({'full_sync': True, 'sync_token': 'labels', 'labels': [{'id': 'l', 'name': 'waiting'}]}, '["labels"]')
-        self.http.read({'full_sync': False, 'sync_token': 'lf'}, '["labels"]')
         state = self.state(items=[dict(i, labels=['waiting']) if i['id'] == 'parent' else i for i in self.wire_items])
         self.operation('item_update', {'id': 'parent', 'labels': ['waiting']}, state, 'parent')
         result = self.run_request(['hide', 'Parent'])
@@ -416,21 +423,14 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(result.snapshot.reminders['r'].minutes, 0)
 
     def test_missing_waiting_label_advice_only_on_addition(self):
+        self.wire_labels = []
         self.refresh()
-        self.http.read({'full_sync': True, 'sync_token': 'labels', 'labels': []}, '["labels"]')
-        self.http.read({'full_sync': False, 'sync_token': 'lf'}, '["labels"]')
         with self.assertRaisesRegex(d.DomainError, 'todo init'):
             self.run_request(['hide', 'Parent', '--due', 'tomorrow'])
 
-    def real_boundary(self, label_steps, after_steps=()):
-        """Production signature and HTTP encoding for the shared hiding lookup."""
-        def read(token, resources, response):
-            return ExpectedRequest('POST', '/sync', 'secret', form={
-                'sync_token': token, 'resource_types': resources}), response
-        steps = [read('delta-token', RESOURCES, self.state()),
-                 read('full-token', RESOURCES, delta())]
-        steps += [read(token, '["labels"]', response) for token, response in label_steps]
-        steps += list(after_steps)
+    def real_boundary(self, after_steps=()):
+        """Strict operation-first transport for saved hiding preflight."""
+        steps = list(after_steps)
         http = ControlledHTTP([(expected, response if isinstance(response, Response)
             else Response(json.dumps(response).encode())) for expected, response in steps])
         self.addCleanup(http.assert_done)
@@ -449,10 +449,7 @@ class CaptureTests(unittest.TestCase):
             for token, response in [('delta-token', state), ('full-token', delta())]:
                 after.append((ExpectedRequest('POST', '/sync', 'secret', form={
                     'sync_token': token, 'resource_types': RESOURCES}), response))
-        workflow, http = self.real_boundary([
-            ('*', {'full_sync': True, 'sync_token': 'labels',
-                   'labels': [{'id': 'l', 'name': 'waiting'}]}),
-            ('labels', {'full_sync': False, 'sync_token': 'fresh'})], after)
+        workflow, http = self.real_boundary(after)
         result = workflow.execute(parse(['hide', 'Parent']))
         self.assertEqual(result.status, 0, result.document.stderr)
         self.assertIn('Hiding: off -> on', result.document.stdout)
@@ -463,26 +460,13 @@ class CaptureTests(unittest.TestCase):
 
     def test_real_waiting_label_refusals_before_mutation(self):
         self.wire_items[0]['due'] = due('2026-10-23')
+        self.wire_labels = []
         self.seed()
-        present = {'full_sync': True, 'sync_token': 'labels',
-                   'labels': [{'id': 'l', 'name': 'waiting'}]}
-        cases = [
-            ([('*', dict(present, labels=[])),
-              ('labels', {'full_sync': False, 'sync_token': 'fresh'})], d.DomainError, 'todo init'),
-            ([('*', present), ('labels', {'full_sync': False, 'sync_token': 'fresh',
-                'labels': [{'id': 'l', 'is_deleted': True}]})], d.DomainError, 'todo init'),
-            ([('*', Response(b'{"error":"denied"}', status=403))], HTTPFailure, 'read waiting label'),
-            ([('*', Response(b'not JSON'))], HTTPFailure, 'read waiting label'),
-            ([('*', dict(present, labels=None))], d.DomainError, 'invalid waiting label'),
-            ([('*', present), ('labels', {'full_sync': True, 'sync_token': 'bad'})],
-             d.DomainError, 'invalid waiting label')]
-        for steps, error, message in cases:
-            with self.subTest(message=message, steps=steps):
-                workflow, http = self.real_boundary(steps)
-                with self.assertRaisesRegex(error, message):
-                    workflow.execute(parse(['hide', 'Parent']))
-                http.assert_done()  # script has no mutation response
-                self.assertFalse(self.store.load_consistent_state().snapshot.items['parent'].waiting)
+        workflow, http = self.real_boundary()
+        with self.assertRaisesRegex(d.DomainError, 'todo init'):
+            workflow.execute(['hide', 'Parent'])
+        http.assert_done()
+        self.assertFalse(self.store.load_consistent_state().snapshot.items['parent'].waiting)
 
     def test_all_descendants_and_ancestor_chain_preflight(self):
         self.wire_items += [item('child', content='Child', parent_id='parent'),
@@ -533,7 +517,7 @@ class CaptureTests(unittest.TestCase):
         state = self.state(items=self.wire_items + [item('new', content='First task', priority=3)])
         self.http.command('item_add', dict(project_id='cat', content='First task', description='',
             priority=3, labels=[], auto_reminder=False, due=None))
-        self.refresh(state)
+        self.queue_refresh(state)
         failure = SyncError('local publication', OSError('history replacement'), publication_started=True,
                             remote_outcome='accepted')
         with patch.object(self.sync, 'reconcile_accepted_locked', side_effect=failure):
@@ -583,9 +567,6 @@ class CaptureTests(unittest.TestCase):
 
     def test_inline_steps_unscheduled_on_hidden_parent(self):
         self.refresh()
-        self.http.read({'full_sync': True, 'sync_token': 'labels',
-            'labels': [{'id': 'waiting', 'name': 'waiting', 'unexpected': []}]}, '["labels"]')
-        self.http.read({'full_sync': False, 'sync_token': 'fresh'}, '["labels"]')
         state = self.state(items=self.wire_items + [item('new', content='New parent', priority=3,
             due=due('2026-10-23'), labels=['waiting'])])
         self.operation('item_add', dict(project_id='cat', content='New parent', priority=3,
@@ -613,14 +594,14 @@ class CaptureTests(unittest.TestCase):
             description='', parent_id='new', labels=[], auto_reminder=False), state, 'child')
         child_done = dict(child, checked=True, completed_at=PRECISE)
         self.http.command('item_close', {'id': 'child'}, 'child')
-        self.refresh(self.state(items=self.wire_items + [parent, child_done]), synchronize=False)
+        self.queue_refresh(self.state(items=self.wire_items + [parent, child_done]), synchronize=False)
         self.http.completed([child_done])
-        self.refresh(self.state(items=self.wire_items + [parent, child_done]))
+        self.queue_refresh(self.state(items=self.wire_items + [parent, child_done]))
         parent_done = dict(parent, checked=True, completed_at=d.instant_text(NOW))
         self.http.command('item_close', {'id': 'new'}, 'new')
-        self.refresh(self.state(items=self.wire_items + [parent_done, child_done]), synchronize=False)
+        self.queue_refresh(self.state(items=self.wire_items + [parent_done, child_done]), synchronize=False)
         self.http.completed([parent_done])
-        self.refresh(self.state(items=self.wire_items + [parent_done, child_done]))
+        self.queue_refresh(self.state(items=self.wire_items + [parent_done, child_done]))
         result = self.run_request(['add', 'cat', 'New parent', '--step', 'Inline child', '--done'])
         self.assertEqual(result.status, 0, result.document.stderr)
         self.assertEqual([o.target_id for o in result.outcomes], ['new', 'child', 'child', 'new'])
@@ -675,11 +656,11 @@ class CaptureTests(unittest.TestCase):
                 reminders=self.wire_reminders if keep else [])
             self.operation('item_update', {'id': 'parent', 'due': {'string': 'next Friday 10:00', 'lang': 'en'}}, state, 'parent')
             result = self.run_request(['schedule', 'Parent', '--schedule=next Friday 10:00'])
-            self.assertEqual(result.status, 0 if keep else 1, result.document.stderr)
+            self.assertEqual(result.status, 0, result.document.stderr)
             if keep:
                 self.assertIn('Reminders retained: 0m', result.document.stdout)
             else:
-                self.assertIn('preserved reminder', result.document.stderr)
+                self.assertFalse(result.document.stderr)
 
     def test_exact_small_change_is_not_noop(self):
         self.wire_items[0]['due'] = due('2026-10-23T10:00:00.123456789012349Z')
@@ -748,7 +729,7 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(result.status, 0)
         self.assertIn('Parent -> New title', result.document.stdout)
         self.wire_items = state['items']
-        self.refresh()
+        self.queue_refresh()
         state2 = self.state(projects=[project('root', None), project(), project('new-category', name='New category')])
         self.operation('project_add', {'parent_id': 'root', 'name': 'New category'}, state2, 'new-category')
         result = self.run_request(['category', '--add', 'New', 'category'])

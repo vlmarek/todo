@@ -67,6 +67,7 @@ class Current:
     reminder_duplicates: tuple = ()
     reminder_ids: frozenset[str] | None = None
     current_snapshot: Snapshot | None = None
+    waiting_label_ids: frozenset[str] | None = None
 
     @property
     def account(self):
@@ -264,6 +265,14 @@ def _merge(state, response, full):
             raw = _object(value, name + ' record')
             identity = _id(_required(raw, 'id'), name + '.id')
             raw = {k: deepcopy(raw[k]) for k in _FIELDS[name] if k in raw}
+            if name == 'labels':
+                relevant = state.setdefault('_waiting_seen', set())
+                if raw.get('name') == 'waiting':
+                    relevant.add(identity)
+                if identity in relevant:
+                    raw['is_deleted'] = _bool(raw.get('is_deleted', False), 'label.is_deleted')
+                    if not raw['is_deleted']:
+                        _id(_required(raw, 'name'), 'label.name')
             if name == 'items' and isinstance(raw.get('due'), dict):
                 raw['due'] = {k: raw['due'][k] for k in _DUE_FIELDS if k in raw['due']}
             if raw.get('is_deleted') is not True:
@@ -294,7 +303,7 @@ def _check_duplicates(state, projects, items):
         elif name in ('notes', 'reminders'):
             relevant = _id(_required(right, 'item_id'), name + '.item_id') in items
         else:
-            relevant = False
+            relevant = right['id'] in state.get('_waiting_seen', ())
         if relevant and _signature(left, name) != _signature(right, name):
             raise CurrentError('contradictory live ' + name + ' representations ' + right['id'])
 
@@ -407,7 +416,7 @@ def _read(transport, token):
 
 def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
              sync_token: str | None = None, replace=False, hidden_names=(),
-             known=None, reminder_ids=None) -> Current:
+             known=None, reminder_ids=None, waiting_label_ids=None) -> Current:
     """Read a complete candidate. No mutation, files, retries beyond transport,
     or account history access. A full response receives exactly one freshness read.
 
@@ -440,6 +449,10 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
             items={}, comments={}, occurrences={},
             reminders={k: r for k, r in known.reminders.items() if k in reminder_ids}))
         state['reminders'].update(reminder_seed['reminders'])
+    labels_known = full or waiting_label_ids is not None
+    state['_waiting_seen'] = set(waiting_label_ids or ())
+    if not full and waiting_label_ids is not None:
+        state['labels'] = {k: dict(id=k, name='waiting', is_deleted=False) for k in waiting_label_ids}
     _merge(state, response, full)
     account = prior.account if prior else None
 
@@ -492,6 +505,7 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
             earlier_tombstones = {identity: raw for identity, raw in state['items'].items()
                                   if identity in (known or prior).items and raw.get('is_deleted') is True}
             state = {name: {} for name in _COLLECTIONS}
+            labels_known = True
             _merge(state, response, True)
             # Keep explicit deletion evidence across hydration, never stale live
             # objects. A later live representation supersedes that evidence.
@@ -516,4 +530,6 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     duplicates = tuple((left, right) for name, left, right in state.get('_duplicates', ())
         if name == 'reminders' and right['id'] in unresolved_ids)
     return Current(snapshot, token, missing, deleted, departed, unresolved, duplicates,
-                   frozenset(k for k, raw in state['reminders'].items() if raw.get('is_deleted') is not True), snapshot)
+                   frozenset(k for k, raw in state['reminders'].items() if raw.get('is_deleted') is not True), snapshot,
+                   frozenset(k for k, raw in state['labels'].items()
+                       if raw.get('is_deleted') is not True and raw.get('name') == 'waiting') if labels_known else None)

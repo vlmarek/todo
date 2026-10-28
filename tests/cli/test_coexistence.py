@@ -46,7 +46,7 @@ class PublicText(unittest.TestCase):
         self.assertEqual(out.count('Current text'), 1)
         original = self.store.load_consistent_state().snapshot.comments
         self.assertEqual(original['own'].body, '')
-        wire, _ = self.boundary([self.sync('delta-token', delta())])
+        wire, _ = self.boundary([])
         def unchanged(buffer):
             self.assertIn('[id: own posted:', buffer)
             self.assertNotIn('[no text]', buffer)
@@ -81,6 +81,7 @@ class PublicSets(unittest.TestCase):
     state = f.CaptureTests.state
     seed = f.CaptureTests.seed
     refresh = f.CaptureTests.refresh
+    queue_refresh = f.CaptureTests.queue_refresh
     operation = f.CaptureTests.operation
     mixed = reminders.ReminderWorkflowTests.mixed
 

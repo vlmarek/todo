@@ -12,7 +12,9 @@ UTC for datetime inputs; ExactInstant is intrinsically UTC.
 Optional cache current_resources stores only proven item/reminder membership,
 paired with that cache's token. Active owners' own comments come from the same
 validated merged snapshot; archived context never supplies active membership.
-Legacy caches omit membership and remain usable offline, requiring hydration
+waiting_label_ids independently records exact-name label membership proven at the
+same sync_token; it stores no unrelated label names. Missing means unknown.
+Legacy caches omit current membership and remain usable offline, requiring hydration
 before online incremental retrieval.
 """
 from dataclasses import dataclass, replace
@@ -48,6 +50,7 @@ class LocalState:
     # Reconstructed Sync resources only; None on compatible legacy caches.
     current_snapshot: d.Snapshot | None = None
     current_reminder_ids: frozenset[str] | None = None
+    waiting_label_ids: frozenset[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -141,7 +144,14 @@ def _cache(content, binding, context=None):
             baseline = d.validate(replace(s, **resources,
                 comments={k: c for k, c in s.comments.items() if c.item_id in active},
                 occurrences={}))
-        return s, token, parse_instant(raw['synced_at']), baseline, reminder_ids
+        waiting = raw.get('waiting_label_ids')
+        if 'waiting_label_ids' in raw:
+            if (not isinstance(waiting, list)
+                    or any(not isinstance(k, str) or not k for k in waiting)
+                    or len(set(waiting)) != len(waiting)):
+                raise LocalError('invalid saved waiting-label context; use --refresh')
+            waiting = frozenset(waiting)
+        return s, token, parse_instant(raw['synced_at']), baseline, reminder_ids, waiting
     except (TypeError, KeyError, d.DomainError):
         raise LocalError('invalid cache; use --refresh') from None
 
@@ -175,7 +185,7 @@ def _cursor(content):
 
 def prepare_candidates(snapshot, history, *, account_display, sync_token, synced_at,
                        initial_cursor=None, publication=None, hidden_names=(),
-                       current_snapshot=None, current_reminder_ids=None):
+                       current_snapshot=None, current_reminder_ids=None, waiting_label_ids=None):
     """Pure complete validation for init/sync, before publication or HTTP mutation.
 
     Repeat init/sync supplies merged existing history and omits initial_cursor.
@@ -219,6 +229,11 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
             members['reminders'] = sorted(set(current_reminder_ids) &
                 (snapshot.reminders.keys() | history.snapshot.reminders.keys()))
         cache_data['current_resources'] = members
+    if waiting_label_ids is not None and (not isinstance(waiting_label_ids, (set, frozenset))
+            or any(not isinstance(k, str) or not k for k in waiting_label_ids)):
+        raise LocalError('invalid saved waiting-label context')
+    if waiting_label_ids is not None:
+        cache_data['waiting_label_ids'] = sorted(waiting_label_ids)
     cache = dumps(cache_data)
     h = dumps(dict(schema=1, association=assoc, snapshot=snapshot_data(history.snapshot),
         observations=history.observations, coverage=[dict(start=c.start, end=c.end) for c in history.coverage], complete=history.complete))
@@ -267,15 +282,15 @@ class StateStore:
         binding = _binding(before)
         history = self.load_history(binding)
         cursor = self.load_cursor()
-        snapshot = token = synced = baseline = reminder_ids = None
+        snapshot = token = synced = baseline = reminder_ids = waiting = None
         if require_cache:
             try:
-                snapshot, token, synced, baseline, reminder_ids = _cache(read_bytes(self.root / 'cache.json'), binding, history.snapshot)
+                snapshot, token, synced, baseline, reminder_ids, waiting = _cache(read_bytes(self.root / 'cache.json'), binding, history.snapshot)
             except LocalError as error:
                 raise LocalError(f'{error}; use --refresh') from None
         if before != read_bytes(self.root / 'binding.json'):
             raise LocalError('publication changed while reading; retry')
-        return LocalState(binding, cursor, snapshot, history, token, synced, baseline, reminder_ids)
+        return LocalState(binding, cursor, snapshot, history, token, synced, baseline, reminder_ids, waiting)
 
     def publish_snapshot(self, candidates):
         """Caller holds the lock. Revalidate before any write; binding is last."""

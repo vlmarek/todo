@@ -142,7 +142,7 @@ class WorkflowTests(unittest.TestCase):
         observed = retrieve(self.wire, BINDING)
         with exclusive_lock('init', self.root):
             self.store.publish_snapshot(prepare_candidates(observed.snapshot,
-                empty_history(observed.snapshot), account_display='Person', current_snapshot=observed.snapshot, sync_token=observed.sync_token,
+                empty_history(observed.snapshot), account_display='Person', waiting_label_ids=observed.waiting_label_ids, current_snapshot=observed.snapshot, sync_token=observed.sync_token,
                 synced_at=NOW, initial_cursor=CURSOR))
         self.wire.lock_root = self.root
         self.streams = p.OriginalStreams(StringIO(), StringIO(), StringIO())
@@ -151,9 +151,14 @@ class WorkflowTests(unittest.TestCase):
         self.environ = {}
         self.workflow = CommentWorkflow(self.sync, streams=self.streams, environ=self.environ)
 
-    def refresh(self, notes=None):
+    def queue_refresh(self, notes=None):
         self.wire.sync('delta-token', tree(self.notes if notes is None else notes))
         self.wire.sync('full-token', delta())
+
+    def refresh(self, notes=None):
+        """Publish through explicit refresh before starting the selected command."""
+        self.queue_refresh(notes)
+        self.sync.refresh()
 
     def owner_comments(self):
         return tuple(c for c in self.store.load_consistent_state().snapshot.comments.values() if c.item_id == 'C')
@@ -191,10 +196,10 @@ class WorkflowTests(unittest.TestCase):
         self.wire.command(kind, args, status, identity)
         if status == 'interrupt':
             return
-        self.refresh(notes)
+        self.queue_refresh(notes)
         self.wire.comments(notes if actual is None else actual, pages=pages, malformed=malformed)
         if status == 'ok':
-            self.refresh(notes)
+            self.queue_refresh(notes)
 
     def test_unchanged_and_removed_starter_exact_timestamps_and_own_identity(self):
         for removed in (False, True):
@@ -254,7 +259,6 @@ class WorkflowTests(unittest.TestCase):
         self.save(saved)
         concurrent = [dict(n, content='external edit') if n['id'] == 'z-older' else n for n in self.notes]
         concurrent.append(note('external', 'C', content='external addition', posted_at=NEW))
-        self.refresh(concurrent)
         edited = [dict(n, content='my edit') if n['id'] == 'z-older' else n for n in concurrent]
         self.operation('note_update', {'id': 'z-older', 'content': 'my edit'}, edited)
         added = [*edited, note('new-comment', 'C', content='addition', posted_at=NEW)]
@@ -276,15 +280,16 @@ class WorkflowTests(unittest.TestCase):
         saved = saved.replace('[id: unknown posted: none]\nunknown\n\n', '')
         self.save(saved)
         concurrent = [n for n in self.notes if n['id'] != 'unknown']
-        self.refresh(concurrent)
         edited = [dict(n, content='changed') if n['id'] == 'z-older' else n for n in concurrent]
         self.operation('note_update', {'id': 'z-older', 'content': 'changed'}, edited)
+        self.operation('note_delete', {'id':'unknown'}, edited,
+                       status={'error_code':22, 'error':'comment was concurrently deleted'})
         result = self.edit()
         self.assertEqual(result.status, 1)
         self.assertEqual([o.status for o in result.outcomes], ['Accepted', 'Failed'])
         self.assertIn('Accepted: edited comment from 2026-10-21 12:00', result.document.stdout)
         self.assertIn('Failed: delete comment at position 3 — comment was concurrently deleted', result.document.stderr)
-        self.assertEqual(len(self.wire.commands), 1)
+        self.assertEqual(len(self.wire.commands), 2)
         self.cleaned()
 
     def test_editor_mid_add_rejection_stops_before_later_adds_and_deletions(self):
@@ -534,7 +539,7 @@ class WorkflowTests(unittest.TestCase):
         status = {'error_code': 22, 'error': 'Comment content too long'} if rejected else 'ok'
         self.wire.command('note_add', {'item_id': 'C', 'content': 'requested body'}, status)
         if scoped:
-            self.refresh([*self.notes, note('new-comment', 'C', content='requested body', posted_at=NEW)])
+            self.queue_refresh([*self.notes, note('new-comment', 'C', content='requested body', posted_at=NEW)])
             self.wire.steps.append(('GET', '/comments',
                 {'query': [('task_id', 'C'), ('limit', '200')]}, KeyboardInterrupt()))
         else:
@@ -564,7 +569,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((self.root / 'report-cursor').read_bytes(), before['report-cursor'])
         self.cleaned()
         # A subsequent explicit read-only refresh recovers without replay.
-        self.refresh()
+        self.queue_refresh()
         self.sync.refresh()
         self.assertEqual(len(self.wire.commands), 1)
 
@@ -709,7 +714,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((self.root / 'report-cursor').read_bytes(), before['report-cursor'])
         self.cleaned()
         # Recovery is read-only and does not replay the rejected/unknown command.
-        self.refresh()
+        self.queue_refresh()
         self.sync.refresh()
         self.assertEqual(len(http.requests), 2 if interrupted else 3)
 

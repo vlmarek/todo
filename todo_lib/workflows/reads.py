@@ -125,7 +125,8 @@ def choose(snapshot, query, candidates, now, *, streams=None, color=p.Color()):
     """Shared exact chooser. Return the original stable object, not display data."""
     candidates = tuple(candidates)
     if not candidates:
-        raise NoMatch('no matching item for selector ' + query_text(query))
+        raise NoMatch('no matching item for selector ' + query_text(query) +
+            '; saved data was searched; run todo --refresh now then retry')
     if len(candidates) == 1:
         return candidates[0]
     streams = streams or p.OriginalStreams.current()

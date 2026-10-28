@@ -76,11 +76,11 @@ class ReadsTests(unittest.TestCase):
         path.write_bytes(data)
         path.chmod(0o600)
 
-    def publish(self, snapshot, history=None, *, synced_at=NOW):
+    def publish(self, snapshot, history=None, *, synced_at=NOW, waiting_label_ids=None):
         with exclusive_lock('test', self.root):
             self.store.publish_snapshot(prepare_candidates(snapshot,
                 history or empty_history(snapshot), account_display='Person',
-                current_snapshot=snapshot, sync_token='full-token', synced_at=synced_at, initial_cursor=None if (self.root / 'binding.json').exists() else CURSOR))
+                waiting_label_ids=waiting_label_ids, current_snapshot=snapshot, sync_token='full-token', synced_at=synced_at, initial_cursor=None if (self.root / 'binding.json').exists() else CURSOR))
 
     def edit(self, **items):
         self.snapshot = replace(self.snapshot, items={**self.snapshot.items, **items})
@@ -103,7 +103,7 @@ class ReadsTests(unittest.TestCase):
         from todo_lib.adapter.current import retrieve
         observed = retrieve(self.sync.transport, d.Binding('u', 'root', frozenset({'cat'})))
         self.snapshot = observed.snapshot
-        self.publish(observed.snapshot, synced_at=CURSOR)
+        self.publish(observed.snapshot, synced_at=CURSOR, waiting_label_ids=observed.waiting_label_ids)
 
     def discover_completed_branch(self):
         self.seed_wire_tree()

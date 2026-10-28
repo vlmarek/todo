@@ -20,6 +20,7 @@ class ReminderWorkflowTests(unittest.TestCase):
     state = f.CaptureTests.state
     seed = f.CaptureTests.seed
     refresh = f.CaptureTests.refresh
+    queue_refresh = f.CaptureTests.queue_refresh
     operation = f.CaptureTests.operation
     run_request = f.CaptureTests.run_request
 

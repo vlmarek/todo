@@ -14,6 +14,7 @@ from tests.adapter.current.test_current import note
 
 class ToleranceTests(unittest.TestCase):
     setUp = base.WorkflowTests.setUp
+    queue_refresh = base.WorkflowTests.queue_refresh
     refresh = base.WorkflowTests.refresh
     owner_comments = base.WorkflowTests.owner_comments
     editor = base.WorkflowTests.editor

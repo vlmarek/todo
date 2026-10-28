@@ -61,7 +61,7 @@ DESCRIPTIONS = {
     'comment': 'View or record progress on the selected task or step. --edit uses the configured editor.',
     'done': 'Complete selected work; descendants complete before parents. Accepted work is never rolled back.',
     'reopen': 'Reopen recently completed work. Accepts no comment creation; recurring undo affects an occurrence.',
-    'delete': 'Delete selected work after confirmation; --yes bypasses only this confirmation. Deletion is destructive.',
+    'delete': 'Delete selected work after confirmation; --yes bypasses only this confirmation. Deletion is destructive. Previews describe saved data; use todo --refresh now for a more current preview.',
     'schedule': 'Set attention, hiding or reminders. Use clear to remove scheduling; relative reminders require timed attention; absolute reminders are independent.',
     'hide': 'Hide until a future attention day, with an optional reason. Inherited hiding applies to steps.',
     'unhide': 'Remove own hiding while preserving attention and reminders; parent hiding may still apply.',
@@ -112,7 +112,7 @@ def render_help(command=None):
                 'Usage: todo [--color=auto|always|never] [--refresh] [--clear-cache] COMMAND ...\n'
                 'No arguments means todo now. Inspect a title with todo "Release plan". Use todo help COMMAND.\n'
                 '--color VALUE also works; auto uses terminal detection with NO_COLOR and TERM=dumb.\n'
-                '--refresh applies only to cache-backed reads; --clear-cache requires --refresh and deletes only current cache.\n'
+                'Task/step selection and previous receipt values use saved data. --refresh applies only to cache-backed reads; --clear-cache requires --refresh and deletes only current cache.\n'
                 'Choices require stdin and stdout terminals. Exit: 0 success, 2 syntax, 1 failure, 130 SIGINT.\n')
     if command not in SYNOPSES:
         raise ValueError('unknown help command: ' + command)
@@ -163,5 +163,7 @@ def render_help(command=None):
                    'Direct --reminder clear removes both reminder types; schedule SELECTOR clear also removes attention, recurrence and hiding. '
                    '--reminder-at clear is invalid. Task/step leading --reminder-at VALUE takes its adjacent value before selector operands.\n')
     if command in ('task', 'step', 'add', 'comment', 'done', 'reopen', 'delete', 'schedule', 'hide', 'unhide', 'priority', 'rename', 'move', 'search'):
-        result += '--literal ARG preserves an argument without option interpretation.\n'
+        result += ('Task/step selection and preflight use saved data. Previous receipt values are last-saved values. '
+                   'Use todo --refresh now before retrying when current context is needed.\n'
+                   '--literal ARG preserves an argument without option interpretation.\n')
     return result

@@ -589,7 +589,7 @@ class Initializer:
                 phase = 'candidate preparation'
                 candidates = prepare_candidates(live.snapshot, history, account_display=after.display,
                     sync_token=live.sync_token, synced_at=now,
-                    current_snapshot=live.current_snapshot, current_reminder_ids=live.reminder_ids,
+                    current_snapshot=live.current_snapshot, waiting_label_ids=live.waiting_label_ids, current_reminder_ids=live.reminder_ids,
                     initial_cursor=None if state else now, hidden_names=config.hidden_from_now)
                 phase = 'local publication'
                 before = {name: read_bytes(root / name) if regular(root / name, missing=True) else None

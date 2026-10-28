@@ -37,7 +37,7 @@ class ToleranceTests(unittest.TestCase):
         from todo_lib.workflows.reads import search_candidates
         self.assertEqual(search_candidates(restored, '[no text]', all_items=True), ())
         self.assertIn('[no text]', p.render_comments(restored, restored.items['B']).stdout)
-        transport, _ = self.boundary([self.sync('delta-token', delta())])
+        transport, _ = self.boundary([])
         workflow = CommentWorkflow(Synchronizer(transport, self.store, clock=lambda: base.NOW), streams=self.streams())
         def unchanged(text):
             self.assertIn('[id: own posted:', text)
