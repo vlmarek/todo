@@ -490,3 +490,19 @@ interfaces:
     recovery. Full/delta metadata publication preserves token provenance and pending data. Report/init
     and post-acceptance refresh paths keep their fresh retrieval duties. Concrete API navigation,
     compatible-context extension and consumer adaptation are in docs/design/external/todoist/cached-selection-notes.md.
+- id: item-date-rendering
+  owner: presentation
+  supersedes_ref: coexistence-rendering
+  description: Narrow successor to existing pure presentation functions for Steps, search/someday
+    and task/step chooser rows under REQ-OUT-023/024. Accept the existing Snapshot, selected
+    population/candidates and one supplied aware view time, using binding account timezone.
+    Open dated rows use own actual attention plus existing countdown/recurrence/reminder formatting;
+    undated rows omit the date and its separator while retaining applicable independent metadata;
+    completed rows use only compact retained completion time. Shared choose() keeps original
+    stable candidate objects, including selected lifecycle occurrence timestamps. ReadWorkflow
+    supplies its existing result.now and color policy to the affected renderers. Preserve complete
+    Document stdout/stderr, sorting, context, coverage, safe title encoding, delivery and all
+    unamended rendering APIs/formats. No I/O, clock capture, retrieval, model validation or
+    state mutation belongs in the renderer. Concrete existing exports are in todo_lib/presentation/render.py,
+    formatting.py and todo_lib/workflows/reads.py.
+  status: provisional

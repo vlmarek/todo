@@ -1,3 +1,30 @@
+# Current continuation: TODO3-PLAN-014
+
+Reuse the completed cached-selection application at
+`566f8d1cec7c96feb2ca5136d2c08f290c931db4`. Confirmed Design revision 14 in
+`docs/design/item-date-display.md` governs only the date fragments in nested
+Steps, search/someday and task/step candidates. T33 owns the single presentation
+increment, read-time/caller adaptations, affected fixture migration and observed
+acceptance evidence. Its successor interface extends the existing rendering stack.
+All 32 accepted effective assignments and their original definitions/checks remain
+unchanged; the new final stage satisfies all 144 earlier requirements and activates
+three successors, with nothing deferred.
+
+Keep one supplied view time and binding account timezone. Preserve independent
+metadata, selection/eligibility, full-precision ordering, nested comments/context,
+cached preflight and authoritative post-operation/report behavior. Unchanged now,
+waiting, top-level Due, comments, report and ordinary receipt formats retain their
+existing contracts. No storage, synchronization, model-validation or timing redesign
+is part of this increment. Missing completion display does not permit invalid data.
+
+T33 includes directly affected fixture migrations before its required gate, with
+focused presentation/read/cache feedback. The runner retains final-delivery: one
+complete offline suite followed by distinct unchanged-copy/PATH/real-less probes.
+It also verifies one representative affected copied row, using the existing harness.
+Preserve earlier acceptance evidence and unrelated README/examples drafts.
+This preparation authorizes no adoption, resume or paid execution. Earlier
+continuation sections below describe their historical scopes.
+
 # Current continuation: TODO3-PLAN-013
 
 Design revision 13 and all accepted assignments remain unchanged. T31 also owns

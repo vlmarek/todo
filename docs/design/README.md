@@ -1,9 +1,36 @@
 # todo-3 product specification
 
-Design revision: **13 — cached task/step selection and mutation preflight, 2026-10-28**.
-State: **accepted scoped revision; Design amendment for authorized Planning**.
+Design revision: **14 — attention and completion dates in item rows, 2026-10-28**.
+State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 13
+## Current revision 14
+
+Read [item-date-display.md](item-date-display.md) first. In nested Steps lists,
+search, someday and task/step selection menus, open dated items show their own
+attention date/time plus countdown; open undated items have no date field or
+leftover separator. Completed items show their completion date/time without a
+countdown, rather than creation or attention dates. Account timezone and existing
+ordering remain authoritative. The selected item's top-level Due line, now,
+waiting, comment timestamps and reports keep their current formats.
+
+REQ-OUT-023/024 narrowly succeed the affected date fragments in REQ-OUT-015,
+REQ-OUT-020's TPL-DETAIL/TPL-LIST/TPL-AMBIGUITY, and REQ-OUT-021's candidate
+timing reuse. REQ-VERIFY-032 states distinguishing outcomes. Preserve earlier
+definitions and accepted effective assignments; Planning owns impact assessment
+and supported successor work. There is no command, storage, sorting, retrieval,
+eligibility or report change.
+
+The operator selected actual attention dates plus countdowns, explicitly rejected
+all absent-date text and separators, chose completion dates for completed steps,
+extended the rules to search/someday/selection menus, and answered "yes" to the
+complete scope and request to document it. Actual excerpts, confirmation context,
+evidence and interpretation are retained separately in the external Design report
+and native decision history. Product confirmation authorizes this documentation;
+it does not authorize a commit, Planning, implementation, adoption or execution.
+The complete Design tree remains the next Planning input, including all unaffected
+revision-13 cached-selection guarantees.
+
+## Preserved revision 13
 
 Read [cached-selection.md](cached-selection.md) first. Every task/step selector
 uses the saved local snapshot and compatible retained history. Ordinary task/step
@@ -347,7 +374,8 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped clarification
-and successor precedence in request-conformance.md,
+and successor precedence in item-date-display.md, cached-selection.md,
+completion-reconciliation.md, report-retrieval-reuse.md, request-conformance.md,
 historical-reminder-contradiction.md, todoist-tolerance.md,
 project-sharing-field.md, partial-initialization-failure.md,
 command-time-precision.md and

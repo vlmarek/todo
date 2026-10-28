@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-013
-predecessor_revision_id: TODO3-PLAN-012
+revision_id: TODO3-PLAN-014
+predecessor_revision_id: TODO3-PLAN-013
 contract_sources:
+- docs/design/item-date-display.md
 - docs/design/report-retrieval-reuse.md
 - docs/design/external/todoist/report-retrieval-notes.md
 - docs/design/request-conformance.md
@@ -496,6 +497,22 @@ interfaces:
     recovery. Full/delta metadata publication preserves token provenance and pending data. Report/init
     and post-acceptance refresh paths keep their fresh retrieval duties. Concrete API navigation,
     compatible-context extension and consumer adaptation are in docs/design/external/todoist/cached-selection-notes.md.
+  source_path: COMPONENTS.yaml
+- id: item-date-rendering
+  owner: presentation
+  supersedes_ref: coexistence-rendering
+  description: Narrow successor to existing pure presentation functions for Steps, search/someday
+    and task/step chooser rows under REQ-OUT-023/024. Accept the existing Snapshot, selected
+    population/candidates and one supplied aware view time, using binding account timezone.
+    Open dated rows use own actual attention plus existing countdown/recurrence/reminder formatting;
+    undated rows omit the date and its separator while retaining applicable independent metadata;
+    completed rows use only compact retained completion time. Shared choose() keeps original
+    stable candidate objects, including selected lifecycle occurrence timestamps. ReadWorkflow
+    supplies its existing result.now and color policy to the affected renderers. Preserve complete
+    Document stdout/stderr, sorting, context, coverage, safe title encoding, delivery and all
+    unamended rendering APIs/formats. No I/O, clock capture, retrieval, model validation or
+    state mutation belongs in the renderer. Concrete existing exports are in todo_lib/presentation/render.py,
+    formatting.py and todo_lib/workflows/reads.py.
   source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
@@ -6225,6 +6242,215 @@ tasks:
     post-operation partial outcomes and report/cursor/history observations to docs/implementation/acceptance-evidence.md.
   - 'Existing final-delivery must pass on the settled integrated subject: one complete offline
     suite and distinct copied-runtime cached-selected-ID mutation/PATH/real-less probes.'
+- id: T33
+  title: Display attention and completion dates consistently in item rows
+  origin_stage_ref: item-date-display
+  observable_outcome: Nested Steps, search/someday and every task/step chooser show own attention
+    plus countdown for open dated items, no date placeholder/separator for undated items, and
+    a single compact completion field for completed items, with existing context and unrelated
+    views preserved.
+  dependencies:
+  - task_ref: T24
+    kind: interface
+    interface_ref: coexistence-rendering
+    reason: Extend accepted pure rendering and complete mixed reminder/title handling.
+  - task_ref: T10
+    kind: interface
+    interface_ref: read-commands
+    reason: Adapt existing ReadWorkflow render calls and the shared chooser without changing
+      selection.
+  - task_ref: T31
+    kind: interface
+    interface_ref: cached-task-step-workflows
+    reason: Preserve saved selection, command time, direct operations and current lifecycle-candidate
+      plumbing.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Verify affected public read/ambiguity routes and unchanged statuses/delivery;
+      reuse T16's routine-check capability without another broad suite.
+  - task_ref: T32
+    kind: repository_state
+    interface_ref: null
+    reason: Start from the completed cached-selection release and preserve its copied-runtime
+      fixtures and evidence.
+  goal: 'Implement the three revision-14 requirements as one presentation increment on the accepted
+    application. Read docs/design/item-date-display.md first; its narrow precedence replaces
+    only the named date fragments in the historical output contracts. Reuse existing renderers,
+    timing/actual_due/compact helpers and supplied model values. Do not create a second rendering
+    stack or change accepted task assignments.
+
+
+    Update every recursive Steps row in render_detail, every task/step row (including context
+    ancestors) emitted by render_search/render_someday and every task/step render_ambiguity
+    candidate used by reads or mutations. Open dated items use their own due:ACTUAL · RELATIVE,
+    with exact row/candidate separators from REQ-OUT-024, existing account-zone actual date/timed
+    representation, countdown semantics, authoritative recurrence and applicable reminder order/wording.
+    Never inherit a parent''s attention or invent midnight. Undated items omit the whole date
+    field and its separator/empty spacing. Preserve independent metadata where already applicable:
+    in particular undated candidate absolute reminders remain a reminder-only block without
+    due:none; do not add a new undated reminder summary to list surfaces that did not have one.
+    Retain separate existing Hidden until/Reason list metadata and its formatting.
+
+
+    Completed rows/candidates show only completed YYYY-MM-DD HH:MM from their retained completion
+    timestamp in the account timezone; remove the old separate chooser completion suffix and
+    never substitute added/attention dates or a countdown. Missing completion time omits the
+    display field without relaxing domain/provider validation. Keep recurring active objects
+    open with their active attention; choose() already replaces LifecycleCandidate display values
+    with the selected occurrence''s completed_at, which must remain authoritative for the candidate
+    while selection returns the original object.
+
+
+    ReadWorkflow.execute already captures now from SyncResult.now and resolves color against
+    original stdout. Pass that same time and applicable existing color policy into search/someday
+    rendering; assess and adapt all direct callers/tests if the renderer signatures change.
+    Do not capture datetime.now inside renderers or add a second clock. Reuse existing red-overdue/blue-present
+    block styling where view policy enables it; color-stripped text is identical and completion
+    fields have no countdown/overdue styling. Preserve ancestor/category separators even when
+    the date is absent, category-only candidates, numbering, prompt/input/cancellation, full
+    escaped titles, priorities, state markers, nested comments, grouping, warnings, filtering
+    and existing full-precision ordering. Keep selected-item top-level Due, now, waiting, comments,
+    reports/cursors and mutation receipts/previews outside candidate menus unchanged.
+
+
+    Own the directly affected consumer and fixture migrations in this same task before required
+    shared gates. Inspect presentation/test_render.py (recursive added/unknown goldens, submicrosecond
+    sibling/comment order, search/someday absence, ambiguity completion, colors and Hidden until
+    metadata), presentation/test_coexistence.py, workflow read/reminder tests, composed CLI/cache
+    tests and tests/delivery/final/copy_probe.py. Change only expectations/callers superseded
+    by this amendment; retain all unrelated assertions. Keep existing pure helper/renderer behavior
+    used by unchanged now/detail-top-line/report/reminder receipts, adapting scoped row construction
+    rather than globally changing time_block semantics. No adapter, domain, persistence, eligibility,
+    synchronization or history-policy change is needed or authorized.
+
+
+    Add representative offline evidence under tests/presentation/test_item_dates.py and existing
+    read/CLI suites as useful. Distinguish actual attention from added/completed values; include
+    nested differing own dates or undated child, completed row with all three dates different,
+    completed missing-time renderer fallback without admitting malformed stored records, timed
+    account-zone attention, and date-only countdown with no fabricated time. Establish shared
+    search/someday behavior (including search --all coverage), candidate context and single
+    completed field, open recurring versus selected completed occurrence, reminder-only undated
+    candidate preservation, and color-stripped spacing. Reuse existing countdown/DST/color and
+    full-instant-order tests; keep their meaningful assertions after golden updates. Through
+    real ReadWorkflow/public composition verify the supplied command time reaches list countdowns
+    and an ambiguous mutation still displays locally and exits/cancels before writes. Strict
+    controlled fakes must reject unintended HTTP; do not add provider reads to decorate output.
+
+
+    Extend the existing copied-runtime probe with one representative affected date-display observation
+    using its saved state and controlled clock/HTTP boundary; retain existing cached-ID mutation,
+    report, editor, PATH and real-less checks. Migrate any stale affected copied expectations
+    in this task before its final-delivery gate, without weakening the fake or gate. Representative
+    copy evidence supplements detailed pure/read evidence; do not replicate every case across
+    every command/layer or create a new harness. Append observed subjects, directed commands/results,
+    coverage reuse and limitations to docs/implementation/acceptance-evidence.md, preserving
+    earlier bytes and the protected contract-map ledger.
+
+
+    Directed worker feedback starts with existing t09-focused (presentation), t10-focused (reads)
+    and t31-focused (cached selection), adding relevant existing CLI/reminder tests for actual
+    caller repairs. The runner''s unchanged final-delivery executes scripts/verify-clean on
+    the settled integrated subject: exactly one complete offline scripts/check suite, then distinct
+    unchanged-copy/PATH/real-less probes. Task evidence does not require a duplicate worker
+    full-suite run. Report blockers rather than editing frozen inputs, skipping tests or claiming
+    future independent review/live-account evidence.'
+  failure_domain: State-dependent date selection and formatting through shared presentation/read/chooser
+    boundaries.
+  verification_rationale: The renderer and read-time plumbing form one cohesive observable outcome.
+    Existing presentation/read/cache checks provide focused feedback and preserve selection/error
+    behavior; representative composed and copied observations distinguish integration from pure
+    output. T33 owns fixture migration before the same unchanged final-delivery gate. Existing
+    gate self-tests use mini-suites, so one settled-subject full suite is followed by distinct
+    copied-runtime evidence without recursive broad executions or an additional audit task.
+  correction_instructions: Keep historical accepted requirements/assignments and original evidence
+    intact. The explicit revision-14 fragment precedence governs date display only; preserve
+    all other clauses of inherited output requirements, including independent undated absolute
+    reminders and list hiding metadata. A missing-time display fallback is presentation-only,
+    never a validation relaxation. Resolve only demonstrated rendering/caller/test gaps within
+    declared paths; report a needed protected-contract or product change. Do not import unrelated
+    README/examples drafts.
+  requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
+  constraint_refs:
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-027
+  - REQ-CLI-030
+  - REQ-CLI-032
+  - REQ-CLI-035
+  - REQ-CLI-038
+  - REQ-SYNC-035
+  - REQ-DOM-006
+  - REQ-DOM-014
+  - REQ-DOM-018
+  - REQ-LOCAL-005
+  - REQ-TIME-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  exclusion_refs:
+  - OUT-OUTPUT-005
+  - OUT-SELECT-001
+  - OUT-SEARCH-001
+  - OUT-TEST-001
+  - OUT-TIME-002
+  - OUT-PRIVACY-001
+  component_refs:
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - item-date-rendering
+  consumes_interface_refs:
+  - coexistence-rendering
+  - read-commands
+  - cached-task-step-workflows
+  - public-cli
+  - routine-check
+  expected_paths:
+  - todo_lib/presentation/**
+  - todo_lib/workflows/reads.py
+  - todo_lib/cli.py
+  - tests/presentation/**
+  - tests/workflows/**
+  - tests/cli/**
+  - tests/delivery/final/copy_probe.py
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - todo_lib/adapter/**
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - README.md
+  - docs/user/**
+  check_refs:
+  - t09-focused
+  - t10-focused
+  - t31-focused
+  required_evidence:
+  - t09-focused
+  - t10-focused
+  - t31-focused
+  - Representative exact date/omission/completion outcomes, shared supplied view-time and cached
+    chooser behavior, plus unchanged unrelated formats/order; append observed commands/subjects
+    and limitations to docs/implementation/acceptance-evidence.md.
+  - Existing final-delivery must pass with one complete offline suite and a representative affected-row
+    observation in the unchanged copied runtime; preserve all prior copy/PATH/real-less probes.
 stages:
 - id: release-1
   final_project: false
@@ -6344,6 +6570,9 @@ stages:
   - REQ-VERIFY-025
   satisfied_requirement_refs: []
   deferred_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
   - REQ-SYNC-031
   - REQ-SYNC-028
   - REQ-INIT-010
@@ -6498,6 +6727,9 @@ stages:
   - REQ-INIT-009
   - REQ-VERIFY-025
   deferred_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
   - REQ-SYNC-031
   - REQ-SYNC-029
   - REQ-SYNC-030
@@ -6662,6 +6894,9 @@ stages:
   - REQ-INIT-010
   - REQ-VERIFY-026
   deferred_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
   - REQ-SYNC-032
   - REQ-SYNC-033
   - REQ-VERIFY-028
@@ -6816,6 +7051,9 @@ stages:
   - REQ-OUT-022
   - REQ-VERIFY-027
   deferred_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
   - REQ-REPORT-016
   - REQ-SYNC-034
   - REQ-CACHE-011
@@ -6971,6 +7209,9 @@ stages:
   - REQ-SYNC-033
   - REQ-VERIFY-028
   deferred_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
   - REQ-REPORT-017
   - REQ-REPORT-018
   - REQ-VERIFY-030
@@ -7125,6 +7366,9 @@ stages:
   - REQ-CACHE-011
   - REQ-VERIFY-029
   deferred_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
   - REQ-CLI-038
   - REQ-SYNC-035
   - REQ-MUT-006
@@ -7133,7 +7377,7 @@ stages:
   check_refs:
   - final-delivery
 - id: cached-selection
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-CLI-038
   - REQ-SYNC-035
@@ -7280,10 +7524,167 @@ stages:
   - REQ-REPORT-017
   - REQ-REPORT-018
   - REQ-VERIFY-030
-  deferred_requirement_refs: []
+  deferred_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
   check_refs:
   - final-delivery
 
+- id: item-date-display
+  final_project: true
+  active_requirement_refs:
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-VERIFY-032
+  satisfied_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-036
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-INIT-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-TIME-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-024
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-VERIFY-027
+  - REQ-VERIFY-028
+  - REQ-VERIFY-029
+  - REQ-VERIFY-030
+  - REQ-VERIFY-031
+  deferred_requirement_refs: []
+  check_refs:
+  - final-delivery
 verification:
   after_each_merge:
   - merge-hygiene
