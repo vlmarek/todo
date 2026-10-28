@@ -1,7 +1,7 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-012
-predecessor_revision_id: TODO3-PLAN-011
+revision_id: TODO3-PLAN-013
+predecessor_revision_id: TODO3-PLAN-012
 contract_sources:
 - docs/design/report-retrieval-reuse.md
 - docs/design/external/todoist/report-retrieval-notes.md
@@ -5799,6 +5799,29 @@ tasks:
     uncovered risk.
 
 
+    Migrate the existing task/step request fixtures in tests/delivery/final/copy_probe.py
+    as part of this implementation, before T31 can reach its required final-delivery gate.
+    INC-b0a2df933ac4482d exposed mutation phase expecting a read Sync before item_update;
+    assess every existing task/step editor/reminder/mutation phase, including tolerance and
+    tolerance-read, rather than deleting only that first observed read. Seed valid saved
+    context through the existing legitimate init/explicit-refresh phases. Require the cached-ID
+    operation-bearing request first, zero requests for unchanged editor/local refusal, and
+    exact authoritative post-operation reads/publication. Keep Boundary strict: no optional
+    reads, request skipping, accepting both freshness policies or source-runtime imports.
+    Preserve initialization, explicit refresh, category-only and revision-12 fresh-report
+    request/evidence behavior, output/status assertions and copied-runtime isolation. T32
+    retains the distinguishing new copied scenario and acceptance audit; it cannot own
+    prerequisite fixture migration needed for T31 acceptance.
+
+
+    For directed fixture feedback, copy unchanged todo and todo_lib to a disposable installation,
+    use a temporary home and the existing scripts/verify_clean.py environment allowlist,
+    put that installation first on PATH and invoke python3.11 -I -B COPY_PROBE INSTALL for
+    all existing copy_probe phases. This runs copied probes without scripts/check or another
+    complete suite; retain its command and result. The runner still runs the complete
+    unchanged final-delivery gate on the integrated subject.
+
+
     Use t31-focused for early directed feedback, t02-focused/t05-focused/t08-focused for compatible
     metadata/store/current/refresh regression, and affected existing focused test cases for
     actual caller repairs. Tests/workflows/capture, moves, lifecycle, comments and tests/cli
@@ -5816,7 +5839,8 @@ tasks:
     product regressions run through the existing settled-subject final-delivery gate.
   correction_instructions: Apply only Design revision 13 freshness precedence. Preserve all
     30 accepted effective assignments, retained provider bytes and earlier evidence. Repair
-    all directly affected callers/fakes in scope; no fresh preflight hidden behind a helper,
+    all directly affected callers/fakes, including prerequisite copied-runtime fixtures, in scope;
+    no fresh preflight hidden behind a helper,
     no stale-report mode, no relaxation of actual post-operation validation or protected-history
     failure. Missing legacy cache facts require explicit refresh when needed; never reset protected
     state.
@@ -5887,6 +5911,9 @@ tasks:
   - REQ-OUT-020
   - REQ-OUT-022
   - REQ-VERIFY-003
+  - REQ-VERIFY-002
+  - REQ-VERIFY-013
+  - REQ-VERIFY-030
   - REQ-CLI-012
   - REQ-CLI-021
   - REQ-CLI-030
@@ -5929,6 +5956,7 @@ tasks:
   - syntax
   - presentation
   - cli
+  - delivery
   provides_interface_refs:
   - cached-task-step-workflows
   consumes_interface_refs:
@@ -5960,6 +5988,7 @@ tasks:
   - tests/presentation/**
   - tests/cli/**
   - tests/support/**
+  - tests/delivery/final/copy_probe.py
   denied_paths: &cached002
   - TASK.md
   - TASK_GRAPH.yaml
@@ -5979,8 +6008,12 @@ tasks:
   - t08-focused
   - Request trace through actual transport proves cached stable-ID first write and only post-operation
     reads for representative task/step parent/subtree, editor and move/create paths.
+  - All existing isolated copied-runtime phases pass after prerequisite request-fixture migration,
+    with strict cached first-write order and unchanged fresh init/refresh/report behavior.
   - Compatible context round-trip and missing-fact recovery preserve pending history, current-resource/token
     association, fresh reports and actual-outcome classification.
+  repair_incident_refs:
+  - INC-b0a2df933ac4482d
 - id: T32
   title: Verify cached selection through composed and copied commands
   origin_stage_ref: cached-selection
@@ -6025,7 +6058,9 @@ tasks:
     exact receipts and report cursor/output safeguards.
 
 
-    Add a representative cached-selected-ID mutation to tests/delivery/final/copy_probe.py through
+    Audit T31''s prerequisite migration of all existing copied task/step fixtures; do not defer
+    any fixture required by its final-delivery gate to this downstream task. Add a representative
+    cached-selected-ID mutation to tests/delivery/final/copy_probe.py through
     the unchanged copied launcher/runtime and its controlled real HTTP boundary. Its fixture
     must seed saved state, then reject any read before the intended operation-bearing request
     and supply authoritative post-operation evidence; verify observable output/status and subsequent

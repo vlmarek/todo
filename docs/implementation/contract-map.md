@@ -2,7 +2,9 @@
 
 Confirmed Design revision 13 governs cached task/step selection, saved mutation
 preflight and cached deletion scope. T31 owns the coupled implementation and
-consumer adaptations; T32 owns composed/copied acceptance. All 139 earlier
+consumer adaptations, including existing copied-runtime fixture migration before its
+required final-delivery gate; T32 owns the additional composed/copied acceptance
+scenario and audit. All 139 earlier
 requirements remain satisfied with accepted historical owners preserved. Five
 successors are active; nothing is deferred in the final stage. This protected
 ledger records planned coverage; observed results append only to

@@ -1,3 +1,31 @@
+# Current continuation: TODO3-PLAN-013
+
+Design revision 13 and all accepted assignments remain unchanged. T31 also owns
+migration of every existing affected task/step fixture in
+`tests/delivery/final/copy_probe.py`, with delivery component/path scope, before
+its required final-delivery gate. T32 retains the additional distinguishing
+copied scenario and composed acceptance/evidence audit after the usable T31
+result. No check, prerequisite of a check, trigger, limit or product promise is
+weakened. The five active requirements and their primary owners are unchanged.
+
+This revision addresses the fixture/order gap exposed by
+`INC-b0a2df933ac4482d`: the old copied mutation fixture expected a read Sync before
+`item_update`, and existing editor/reminder phases also need assessment. Strict
+operation ordering, real copied runtime isolation, fresh init/explicit refresh/
+reports and authoritative post-operation reconciliation remain mandatory.
+
+The earlier T31 candidate `8edbd7842f86b5362353198038c3ce66fc8e958f` and report
+`ATT-a71b738402804518` remain retained historical evidence, not accepted code or
+an installed base. The changed T31 assignment restarts through supported adoption;
+archival preservation does not grant automatic continuation or reuse of abandoned
+work. The runner owns incident disposition and all new implementation, verification,
+integrated review and acceptance. Planning imports no candidate code or tests.
+
+This preparation authorizes no adoption/resume, incident retry or paid work.
+Preserve unrelated README/examples drafts and all earlier evidence. Earlier
+continuation sections below are historical; their task ownership is superseded
+only by the correction described here.
+
 # Current continuation: TODO3-PLAN-012
 
 Reuse the accepted integrated application at `35ac02cf7fb6dc1ba8cc82b71400c02be7d91c35`;
