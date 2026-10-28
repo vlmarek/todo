@@ -13,6 +13,7 @@ from decimal import Decimal
 import json
 from todo_lib import domain as d
 from .safety import LocalError
+from .occurrence import ObservedOccurrence
 
 
 def instant(value):
@@ -110,6 +111,6 @@ def snapshot_from(data, zone):
             {k: d.Project(**v) for k, v in data['categories'].items()}, items,
             timed(data['comments'], d.Comment, 'added_at'),
             {k: d.Reminder(**{**v, 'due': attention_from(v['due']) if v.get('due') is not None else None}) for k, v in data['reminders'].items()},
-            timed(data['occurrences'], d.Occurrence, 'completed_at')))
+            timed(data['occurrences'], ObservedOccurrence, 'completed_at')))
     except (ValueError, TypeError, KeyError, AttributeError, ArithmeticError):
         raise LocalError('invalid stored managed snapshot') from None

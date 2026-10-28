@@ -357,7 +357,18 @@ class Reports(unittest.TestCase):
     def test_final_output_flush_cursor_cleanup_and_newer_pending_context(self):
         # Produce pending observations through T08, then finalize within that same
         # microsecond. No preseeded history/eligibility substitutes for discovery.
-        transport, _ = self.boundary([self.sync('delta-token', full(items=[item('A'), item('B', parent_id='A')], user_plan_limits=limits())), self.sync('full-token', delta())])
+        active = [item('A'), item('B', parent_id='A', due=due(is_recurring=True))]
+        transport, _ = self.boundary([
+            self.sync('delta-token', full(items=active, user_plan_limits=limits())),
+            self.sync('full-token', delta()),
+            (Expected('/tasks/completed/by_completion_date',
+                [('project_id', 'cat'), ('since', '2026-10-20T00:00:00Z'),
+                 ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]), {'items': []}),
+            (Expected('/activities', [('object_type', 'item'), ('object_id', 'B'),
+                ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
+                ('limit', '200'), ('object_event_types',
+                 '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+                {'results': [event(77, NEWER, 'completed', obj='B', typ='item')], 'next_cursor': None})])
         Synchronizer(transport, self.store, clock=lambda: d.instant_from_wire(NEWER)).refresh()
         self.store.write_cursor(d.instant_from_wire(START))
         self.assertEqual(d.instant_text(self.store.load_history().observations['B']), NEWER)
@@ -365,13 +376,13 @@ class Reports(unittest.TestCase):
         cursor_bytes = (self.root / 'report-cursor').read_bytes()
         with patch('todo_lib.workflows.report.prune_history', side_effect=AssertionError('preview pruning')):
             self.run_report(self.requests(events=[event(900, FIRST), event(1, LAST), event(3, NEWER)],
-                cursor=d.instant_from_wire(START)))
+                cursor=d.instant_from_wire(START), current_items=active))
         self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor_bytes)
         preview_history = self.store.load_history()
         self.assertEqual(d.instant_text(preview_history.observations['B']), NEWER)
         self.assertIn('own', preview_history.snapshot.comments)
         # New synchronization does not reduce the newer pending observation.
-        steps = self.requests(events=[event(900, FIRST), event(1, LAST), event(3, NEWER)], cursor=d.instant_from_wire(START))
+        steps = self.requests(events=[event(900, FIRST), event(1, LAST), event(3, NEWER)], cursor=d.instant_from_wire(START), current_items=active)
         order = []
         original_cursor = self.store.write_cursor
         original_history = self.store.save_history
@@ -396,6 +407,10 @@ class Reports(unittest.TestCase):
         self.assertEqual(d.instant_text(loaded.cursor), END)
         self.assertEqual(d.instant_text(loaded.history.observations['B']), NEWER)
         self.assertEqual(set(loaded.history.snapshot.items), {'A', 'B'})
+        newer = list(loaded.history.snapshot.occurrences.values())
+        self.assertEqual(len(newer), 1)
+        self.assertEqual(newer[0].activity_id, '77')
+        self.assertEqual(d.instant_text(newer[0].completed_at), NEWER)
 
     def test_empty_final_advances_and_prunes(self):
         result, streams = self.run_report(self.requests(comments=[]), ['--final'])
@@ -854,6 +869,99 @@ else:
                 _, streams = self.run_report(steps)
                 finished = streams.stdout.getvalue().split('Progress')[0]
                 self.assertEqual(finished.count(' — A'), count)
+
+    def test_unequal_completion_sources_use_activity_for_task_step_and_cutoffs(self):
+        completed_at = '2026-10-21T18:11:14.704186Z'
+        activity_at = '2026-10-21T18:11:14.719113Z'
+        midpoint = '2026-10-21T18:11:14.710000Z'
+        from todo_lib.workflows.report import render_report
+        for parent in (None, 'A'):
+            for args, expected in (([], 1), (['--since', midpoint], 1),
+                                   (['--until', midpoint], 0)):
+                with self.subTest(parent=parent, args=args):
+                    row = item('B', parent_id=parent, checked=True,
+                               completed_at=completed_at)
+                    completion = event(601, activity_at, 'completed', obj='B', typ='item')
+                    with patch('todo_lib.workflows.report.render_report', wraps=render_report) as render:
+                        _, streams = self.run_report(self.requests(current_items=[item('A')],
+                            rows=[row], events=[completion], comments=[]), args)
+                    entries = render.call_args.kwargs['progress' if parent else 'finished']
+                    self.assertEqual(len(entries), expected)
+                    self.assertEqual(len(render.call_args.kwargs['finished' if parent else 'progress']), 0)
+                    if expected:
+                        self.assertEqual(d.instant_text(entries[0].instant), activity_at)
+                        self.assertEqual(streams.stdout.getvalue().count(' — '), 1)
+
+    def test_recurring_partial_overlap_fallback_and_dual_source_undo(self):
+        from todo_lib.workflows.report import render_report
+        active = [item('A', due=due(is_recurring=True)), item('B', parent_id='A')]
+        older = '2026-10-21T10:00:00Z'
+        completed_at = '2026-10-21T18:11:14.704186Z'
+        activity_at = '2026-10-21T18:11:14.719113Z'
+        rows = [item('A', completed_at=value, due=due(is_recurring=True))
+                for value in (older, completed_at)]
+        completion = event(602, activity_at, 'completed', obj='A', typ='item')
+        for records, events, expected in (
+                (rows, [completion], [older, activity_at]),
+                (rows, [], [older, completed_at]),
+                (rows[1:], [completion, event(603, FIRST, 'uncompleted', obj='A', typ='item')], [])):
+            with self.subTest(expected=expected):
+                with patch('todo_lib.workflows.report.render_report', wraps=render_report) as render:
+                    self.run_report(self.requests(current_items=active, rows=records, events=events))
+                self.assertEqual(sorted(d.instant_text(e.instant) for e in render.call_args.kwargs['finished']), expected)
+
+    def test_activity_only_recurring_omitted_metadata_distinct_close_events(self):
+        active = [item('A', due=due(is_recurring=True)), item('B', parent_id='A')]
+        for identities, times in (((701, 702), (FIRST, LAST)),
+                                  ((701, 702), (FIRST, FIRST)),
+                                  ((None, None), (FIRST, FIRST)),
+                                  ((701, 701), (FIRST, FIRST))):
+            with self.subTest(identities=identities, times=times):
+                events = [event(identity, time, 'completed', obj='A', typ='item')
+                          for identity, time in zip(identities, times)]
+                for row in events:
+                    row.pop('extra_data')
+                _, streams = self.run_report(self.requests(current_items=active, events=events))
+                self.assertEqual(streams.stdout.getvalue().split('Progress')[0].count(' — A'),
+                                 1 if identities == (701, 701) else 2)
+
+    def test_anonymous_pending_identity_survives_scoped_and_global_evidence_reuse(self):
+        active = [item('A'), item('B', parent_id='A', due=due(is_recurring=True))]
+        events = [event(50, CREATED),
+                  event(None, FIRST, 'completed', obj='B', typ='item'),
+                  event(None, FIRST, 'completed', obj='B', typ='item'),
+                  event(None, LAST, 'uncompleted', obj='B', typ='item')]
+        from todo_lib.workflows.report import render_report
+        for _ in range(2):
+            with patch('todo_lib.workflows.report.render_report', wraps=render_report) as render:
+                self.run_report(self.requests(current_items=active, events=events))
+            self.assertEqual(sum(e.kind == 'completed' for e in render.call_args.kwargs['progress']), 1)
+            observed = list(StateStore(self.root).load_history().snapshot.occurrences.values())
+            self.assertEqual(len(observed), 2)
+            self.assertEqual(sum(o.undone for o in observed), 1)
+            self.assertEqual(sum(len(o.undo_ids) for o in observed), 1)
+
+    def test_final_cleanup_retains_newer_activity_backed_ordinary_context(self):
+        # Cleanup at a boundary between the source times must preserve context
+        # for the activity-backed occurrence, including its ancestor.
+        from todo_lib.local import prune_history
+        completed_at = '2026-10-21T18:11:14.704186Z'
+        activity_at = '2026-10-21T18:11:14.719113Z'
+        boundary = d.instant_from_wire('2026-10-21T18:11:14.710000Z')
+        row = item('B', parent_id='A', checked=True, completed_at=completed_at)
+        completion = event(601, activity_at, 'completed', obj='B', typ='item')
+        self.run_report(self.requests(current_items=[item('A')], rows=[row],
+                                     events=[completion], comments=[]))
+        pending = StateStore(self.root).load_history()
+        observed = list(pending.snapshot.occurrences.values())
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(d.instant_text(observed[0].completed_at), activity_at)
+        # Remove observation-time retention to distinguish the occurrence-time
+        # rule itself, then use the existing authorized cleanup boundary.
+        pending = replace(pending, observations={})
+        cleaned = prune_history(pending, boundary, output_finalized=True, saved_cursor=boundary)
+        self.assertEqual(set(cleaned.snapshot.items), {'A', 'B'})
+        self.assertEqual(list(cleaned.snapshot.occurrences.values()), observed)
 
     def test_anonymous_same_instant_undo_respects_source_order(self):
         active = [item('A', due=due(is_recurring=True)), item('B', parent_id='A')]

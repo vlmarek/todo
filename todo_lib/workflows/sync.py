@@ -16,6 +16,7 @@ from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import (StateStore, LocalState, LocalError, History, load_config,
                             exclusive_lock, merge_history, prepare_candidates)
 from todo_lib.local.safety import read_bytes
+from .completion import reconcile_completions
 
 
 @dataclass(frozen=True)
@@ -100,9 +101,9 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
     missing = set(known.items) - s.items.keys() - removed
     items, occurrences = dict(s.items), dict(s.occurrences)
     recurring = {i.id for i in s.items.values() if i.recurring}
+    records = []
     if missing or recurring:
         # A bounded supported endpoint, never active absence, proves completion.
-        records = []
         for category in sorted(s.categories):
             records.extend(adapter.completed(start, end, {'project_id': category}).records)
         latest = {}
@@ -111,8 +112,6 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
             # Do not retain unrelated returned data, even from an overbroad server.
             if item.category_id not in s.categories or item.id in removed:
                 continue
-            if item.id in recurring and not record.deleted:
-                occurrences.setdefault(record.occurrence.id, record.occurrence)
             if item.id in s.items:
                 continue  # current truth always supersedes historical fields
             if item.id not in missing:
@@ -139,7 +138,6 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
                 if not record.item.completed:
                     raise d.DomainError('unresolved disappeared recurring/open item ' + identity)
                 items[identity] = record.item
-                occurrences[record.occurrence.id] = record.occurrence
             elif identity in known.items and known.items[identity].completed:
                 # Omission does not retract an already established completion.
                 item = known.items[identity]
@@ -175,18 +173,11 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
             occurrences.setdefault(key, occurrence)
     occurrences = {k: o for k, o in occurrences.items() if o.item_id in items
                    and (items[o.item_id].completed or items[o.item_id].recurring)}
+    events = []
     for identity in sorted(recurring):
-        if not any(o.item_id == identity for o in occurrences.values()):
-            continue
-        events = adapter.activities(start, end, {'object_type': 'item', 'object_id': identity})
-        for event in sorted(events.records, key=lambda e: d.instant_key(e.event_date)):
-            if event.object_type != 'item' or event.object_id != identity or event.event_type != 'uncompleted':
-                continue
-            candidates = [o for o in occurrences.values() if o.item_id == identity
-                          and d.instant_key(o.completed_at) <= d.instant_key(event.event_date)]
-            latest = max(candidates, key=lambda o: d.instant_key(o.completed_at), default=None)
-            if latest is not None:
-                occurrences[latest.id] = replace(latest, undone=True)
+        events.extend(adapter.activities(start, end,
+            {'object_type': 'item', 'object_id': identity}).records)
+    occurrences = reconcile_completions(items, records, events, occurrences.values())
     reminders = {k: r for k, r in known.reminders.items()
                  if r.item_id in items and r.item_id not in s.items
                  and (current.reminder_ids is None or k in current.reminder_ids)}
