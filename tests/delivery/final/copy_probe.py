@@ -26,7 +26,8 @@ EARLY = '2026-10-21T12:00:00.123456789012348Z'
 LATE = '2026-10-21T12:00:00.123456789012349Z'
 INITIAL = '2026-10-20T13:00:00Z'
 CURSOR = '2026-10-20T00:00:00Z'
-DONE = '2026-10-21T13:00:00.123456789012349Z'
+DONE = '2026-10-21T13:00:00.994186Z'
+ACTIVITY_DONE = '2026-10-21T13:00:01.009113Z'
 END = '2026-10-22T12:00:00.123456789012350Z'
 NEWER = '2026-10-22T12:00:00.123456789012351Z'
 FINAL = '2026-10-22T12:00:01.123456789012352Z'
@@ -191,6 +192,12 @@ def phase(install, name):
         steps[0] = sync('delta-token', delta(notes=[active]))
         events = [] if last else [dict(id=17, object_type='note', object_id='active',
             event_type='updated', event_date=LATE, parent_item_id='D', parent_project_id='cat')]
+        if not last:
+            # Independent source timestamps; no shared occurrence ID or extra_data.
+            # Repeated supplied activity ID also exercises real adapter deduplication.
+            completion = dict(id=18, object_type='item', object_id='B',
+                event_type='completed', event_date=ACTIVITY_DONE)
+            events += [completion, dict(completion)]
         steps[-1] = (method, path, query, {'results': events, 'next_cursor': None})
         return steps + [own('B', True)]
 
@@ -336,6 +343,10 @@ def phase(install, name):
                    FINAL if name == 'cleanup' else END, failure=name == 'failure')
         if name != 'cleanup':
             assert 'B' in out and 'Alpha' in out
+            assert out.count('Completed step: B') == 1
+            assert 'Wed 21 Oct 2026, 15:00:01 — Completed step: B' in out
+            assert '15:00:00 — Completed step: B' not in out
+            assert out.endswith('Hidden\n  None.\n')
             assert out.count('Fresh synchronized active text') == 1
             assert 'Comment on step: D' in out
             assert 'Newer pending work' not in out
@@ -346,6 +357,9 @@ def phase(install, name):
         if name in ('preview', 'failure'):
             assert (store.root / 'report-cursor').read_bytes() == before
             assert 'B' in state.history.snapshot.items and 'late' in state.history.snapshot.comments
+            occurrences = list(state.history.snapshot.occurrences.values())
+            assert len(occurrences) == 1
+            assert d.instant_text(occurrences[0].completed_at) == ACTIVITY_DONE
         elif name == 'final':
             assert d.instant_text(state.cursor) == END
             assert set(state.history.snapshot.items) == {'A', 'D'}
