@@ -361,7 +361,10 @@ def phase(install, name):
     elif name == 'read':
         out = call(['Alpha'])
         assert out.index('Earlier own text') < out.index('Later own text')
-        assert 'B' in call(['search', '--all', 'Later own text'])
+        search = call(['search', '--all', 'Later own text'])
+        assert '  [ ] P1 Alpha\n' in search
+        assert '    [x] P1 B — completed 2026-10-21 15:00\n' in search
+        assert 'due:none' not in search and ' — none' not in search
         assert 'Alpha' in call(['now'])
     elif name in ('preview', 'failure', 'final', 'cleanup'):
         before = (store.root / 'report-cursor').read_bytes()

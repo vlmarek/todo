@@ -243,7 +243,7 @@ class ReadWorkflow:
         elif command == 'waiting':
             document = p.render_waiting(snapshot, now, hidden_names=settings.hidden_from_now)
         elif command == 'someday':
-            document = p.render_someday(snapshot, hidden_names=settings.hidden_from_now)
+            document = p.render_someday(snapshot, now, hidden_names=settings.hidden_from_now, color=color)
         elif command == 'category':
             document = p.render_categories(snapshot)
         elif command == 'search':
@@ -251,7 +251,7 @@ class ReadWorkflow:
             completed = [i.completed_at for i in snapshot.items.values() if i.completed]
             completed.extend(o.completed_at for o in snapshot.occurrences.values() if not o.undone)
             document = p.render_search(snapshot, search_candidates(snapshot, request.selector, all_items=all_items),
-                all_items=all_items, earliest_completion=min(completed, key=d.instant_key, default=None))
+                now, all_items=all_items, earliest_completion=min(completed, key=d.instant_key, default=None), color=color)
         else:
             target = command if command in ('task', 'step') else request.target
             if request.parent:

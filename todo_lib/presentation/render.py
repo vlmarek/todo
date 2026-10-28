@@ -95,6 +95,27 @@ def _waiting_section(snapshot, item, now):
     return ('Waiting: inactive (no attention date)\n' if inactive else '') + 'Waiting\n' + '\n'.join(entries)
 
 
+def _item_date(snapshot, item, now, color, *, candidate=False):
+    """Revision-14 row field; unchanged top-level timing stays in time_block."""
+    zone = snapshot.account.timezone
+    if item.completed:
+        return 'completed ' + compact(item.completed_at, zone) if item.completed_at is not None else ''
+    reminders = _reminders(snapshot, item)
+    if item.attention is not None:
+        return _due_date(item.attention, reminders, now, zone, color)
+    if candidate and reminders:
+        from .formatting import reminders_text
+        return color.paint('reminders:' + reminders_text(reminders, zone), 'blue')
+    return ''
+
+
+def _due_date(attention, reminders, now, zone, color):
+    from .formatting import actual_due, timing
+    relative, overdue = timing(attention, reminders, now, zone)
+    return color.paint('due:' + actual_due(attention, zone) + ' · ' + relative,
+                       'red' if overdue else 'blue')
+
+
 def render_detail(snapshot, item, now, *, color=Color()):
     item = _item(snapshot, item)
     zone = snapshot.account.timezone
@@ -107,8 +128,8 @@ def render_detail(snapshot, item, now, *, color=Color()):
     def visit(parent, depth):
         for child in ordered_siblings(snapshot, item.category_id, parent.id):
             indent = '  ' * depth
-            added = compact(child.added_at, zone) if child.added_at is not None else 'unknown'
-            steps.append(f'{indent}- [{"x" if child.completed else " "}] P{child.priority} {scalar_title(child.title)} — added {added}')
+            field = _item_date(snapshot, child, now, color)
+            steps.append(f'{indent}- [{"x" if child.completed else " "}] P{child.priority} {scalar_title(child.title)}' + (' — ' + field if field else ''))
             comments = _comments(snapshot, child, indent + '  ')
             if comments:
                 steps.extend([indent + '  Comments', *comments])
@@ -163,7 +184,7 @@ def render_waiting(snapshot, now, *, items=None, hidden_names=()):
     return document('\n'.join(lines), convention_warnings(snapshot, population.values()))
 
 
-def _list(snapshot, items, empty):
+def _list(snapshot, items, empty, now, color):
     selected, population = _population(snapshot, items)
     if not selected:
         return empty
@@ -175,7 +196,8 @@ def _list(snapshot, items, empty):
     last_category = None
     def visit(item, depth):
         indent = '  ' * depth
-        lines.append(f'{indent}[{"x" if item.completed else " "}] P{item.priority} {scalar_title(item.title)} — ' + _list_due(item, snapshot.account.timezone))
+        field = _item_date(snapshot, item, now, color)
+        lines.append(f'{indent}[{"x" if item.completed else " "}] P{item.priority} {scalar_title(item.title)}' + (' — ' + field if field else ''))
         if item.waiting and item.attention is not None and item.id in selected:
             _, reason = item_description(item)
             lines.append(indent + '  Hidden until: ' + _list_due(item, snapshot.account.timezone))
@@ -201,20 +223,20 @@ def _list_due(item, zone):
     return item.attention.date_value.isoformat()
 
 
-def render_someday(snapshot, *, hidden_names=(), items=None):
+def render_someday(snapshot, now, *, hidden_names=(), items=None, color=Color()):
     if items is None:
         items = [i for i in snapshot.items.values() if not i.completed and snapshot.categories[i.category_id].name in hidden_names]
     items = tuple(items)
-    return document(_list(snapshot, items, 'No someday items.'), convention_warnings(snapshot, items))
+    return document(_list(snapshot, items, 'No someday items.', now, color), convention_warnings(snapshot, items))
 
 
-def render_search(snapshot, items, *, all_items=False, earliest_completion=None):
+def render_search(snapshot, items, now, *, all_items=False, earliest_completion=None, color=Color()):
     warning = ''
     if all_items:
         warning = 'todo: completed search uses retained history; earliest retained completion: ' + absolute(earliest_completion, snapshot.account.timezone) + '; coverage may be incomplete'
     empty = 'No matches in open or retained completed items.' if all_items else 'No matches.'
     items = tuple(items)
-    return document(_list(snapshot, items, empty), '\n'.join(filter(None, (warning, convention_warnings(snapshot, items)))))
+    return document(_list(snapshot, items, empty, now, color), '\n'.join(filter(None, (warning, convention_warnings(snapshot, items)))))
 
 
 def render_ambiguity(snapshot, query, candidates, now, *, interactive=True, color=Color()):
@@ -223,12 +245,11 @@ def render_ambiguity(snapshot, query, candidates, now, *, interactive=True, colo
         if not hasattr(candidate, 'title'):
             lines.append(f'  {n}. category: {candidate.name}')
             continue
-        text = f'  {n}. {candidate.role}: {scalar_title(candidate.title)}  ' + time_block(candidate.attention, _reminders(snapshot, candidate), now, snapshot.account.timezone, color)
+        field = _item_date(snapshot, candidate, now, color, candidate=True)
+        text = f'  {n}. {candidate.role}: {scalar_title(candidate.title)}' + ('  ' + field if field else '')
         if candidate.parent_id is not None:
             text += color.context(' — ' + ancestor_path(snapshot, candidate))
         text += ' — ' + snapshot.categories[candidate.category_id].name
-        if candidate.completed:
-            text += ' — completed ' + absolute(candidate.completed_at, snapshot.account.timezone)
         lines.append(text)
     if interactive:
         lines.append(f'Select 1-{len(candidates)}, or q to cancel:')

@@ -160,10 +160,10 @@ Description
   last
 
 Steps
-- [ ] P2 Collect figures — added 2026-10-24 10:00
+- [ ] P2 Collect figures
   Comments
   - 2026-10-24 10:30  Use the current figures
-  - [x] P2 Check sources — added 2026-10-24 10:15
+  - [x] P2 Check sources — completed 2026-10-19 08:00
     Comments
     - 2026-10-24 10:45  Verified
 
@@ -191,10 +191,10 @@ Due: none
 Waiting: none
 
 Steps
-- [ ] P2 Later — added 2026-08-14 12:00
-- [ ] P2 Earlier — added 2026-08-14 12:00
-- [ ] P2 Tie B — added 2026-08-14 12:00
-- [ ] P2 Unknown — added unknown
+- [ ] P2 Later
+- [ ] P2 Earlier
+- [ ] P2 Tie B
+- [ ] P2 Unknown
 
 Comments
 - 2026-08-14 12:00  Earlier comment
@@ -289,17 +289,17 @@ class OtherViewTests(unittest.TestCase):
         rows = [Item('r', 's', 'Launch', priority=1), Item('s', 's', 'Prepare', 'r', priority=4),
                 Item('g', 's', 'Figures', 's'), Item('x', 's', 'Unmatched', 'r')]
         state = snap(rows)
-        self.assertEqual(render_search(state, [rows[2]]).stdout, '''Someday
-  [ ] P1 Launch — none
-    [ ] P4 Prepare — none
-      [ ] P2 Figures — none''')
-        self.assertEqual(render_search(state, [rows[0]]).stdout, 'Someday\n  [ ] P1 Launch — none')
-        self.assertIn('    [ ] P2 Unmatched — none\n    [ ] P4 Prepare — none', render_someday(state, hidden_names=('Someday',)).stdout)
-        self.assertEqual(render_someday(state).stdout, 'No someday items.')
-        empty = render_search(state, [], all_items=True)
+        self.assertEqual(render_search(state, [rows[2]], NOW).stdout, '''Someday
+  [ ] P1 Launch
+    [ ] P4 Prepare
+      [ ] P2 Figures''')
+        self.assertEqual(render_search(state, [rows[0]], NOW).stdout, 'Someday\n  [ ] P1 Launch')
+        self.assertIn('    [ ] P2 Unmatched\n    [ ] P4 Prepare', render_someday(state, NOW, hidden_names=('Someday',)).stdout)
+        self.assertEqual(render_someday(state, NOW).stdout, 'No someday items.')
+        empty = render_search(state, [], NOW, all_items=True)
         self.assertEqual(empty.stdout, 'No matches in open or retained completed items.')
         self.assertEqual(empty.stderr, 'todo: completed search uses retained history; earliest retained completion: none; coverage may be incomplete')
-        self.assertEqual(render_search(state, []).stdout, 'No matches.')
+        self.assertEqual(render_search(state, [], NOW).stdout, 'No matches.')
 
     def test_mixed_ambiguity_exact_and_noninteractive(self):
         rows = [Item('r', 'w', 'Weekly review'), Item('s', 'w', 'Prepare', 'r'),
@@ -310,9 +310,9 @@ class OtherViewTests(unittest.TestCase):
         candidates = [Project('cat', 'Release'), rows[3], rows[2], rows[4]]
         expected = '''Multiple items match "report":
   1. category: Release
-  2. task: Report  due:today — Work
-  3. step: Write report  due:in 2d — Weekly review > Prepare — Work
-  4. task: Old report  due:none — Work — completed Fri 14 Aug 2026, 10:00:00'''
+  2. task: Report  due:2026-10-19 · today — Work
+  3. step: Write report  due:2026-10-21 · in 2d — Weekly review > Prepare — Work
+  4. task: Old report  completed 2026-08-14 10:00 — Work'''
         self.assertEqual(render_ambiguity(state, 'report', candidates, NOW).stdout, expected + '\nSelect 1-4, or q to cancel:')
         result = render_ambiguity(state, 'report', candidates, NOW, interactive=False)
         self.assertEqual(result.stdout, expected)
@@ -360,7 +360,7 @@ Due: none
 Waiting: none
 
 Steps
-- [ ] P2 Child — added unknown
+- [ ] P2 Child
   Comments
   - 2026-08-14 12:00  earlier
   - 2026-08-14 12:00  later
@@ -374,5 +374,5 @@ Comments: none''')
         child = Item('s', 'w', '子', 'r', description=waiting('Reason: first\n\nlast\nSince: 2026-07-13'),
                      attention=parse_attention('2026-10-23T10:00:00Z', NOW, 'Europe/Prague'), labels=frozenset(('waiting',)))
         state = snap([root, child])
-        self.assertEqual(render_search(state, [child]).stdout, 'Work\n  [ ] P2 ' + root.title + ' — none\n    [ ] P2 子 — Fri 23 Oct 2026, 12:00:00\n      Hidden until: Fri 23 Oct 2026, 12:00:00\n      Reason: Reason: first\n        \n        last\n        Since: 2026-07-13')
+        self.assertEqual(render_search(state, [child], NOW).stdout, 'Work\n  [ ] P2 ' + root.title + '\n    [ ] P2 子 — due:2026-10-23 12:00:00 Europe/Prague · 4d 4h left\n      Hidden until: Fri 23 Oct 2026, 12:00:00\n      Reason: Reason: first\n        \n        last\n        Since: 2026-07-13')
         self.assertIn(' — ' + root.title, render_now(state, NOW, all_items=True).stdout)

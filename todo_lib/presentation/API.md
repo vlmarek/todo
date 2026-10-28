@@ -20,9 +20,9 @@ A failed refresh must never invoke normal rendering/delivery.
 - `render_waiting(snapshot, now, *, items=None, hidden_names=())` derives the
   current own-hidden population unless the caller supplies it. Intermediate
   ancestors are structural context only.
-- `render_someday(snapshot, *, hidden_names=(), items=None)` defaults to open
-  items in the configured hidden categories. `render_search(snapshot, items, *,
-  all_items=False, earliest_completion=None)` consumes matched owners selected by
+- `render_someday(snapshot, now, *, hidden_names=(), items=None, color=Color())` defaults to open
+  items in the configured hidden categories. `render_search(snapshot, items, now, *,
+  all_items=False, earliest_completion=None, color=Color())` consumes matched owners selected by
   the search component. Both preserve hierarchy, including context ancestors,
   and sort groups/children by their specified own values. They do not perform
   matching. Search-all coverage is always emitted, including for an empty result.
