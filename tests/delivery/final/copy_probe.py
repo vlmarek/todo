@@ -219,7 +219,9 @@ def phase(install, name):
                         notify_uid='u', is_urgent=False, is_deleted=False)
         def accepted(kind, args, created=False):
             def response(form):
-                assert set(form) == {'commands'}
+                assert set(form) == {'commands', 'sync_token', 'resource_types'}
+                assert form['resource_types'] == [RESOURCES]
+                assert form['sync_token'] == [store.load_consistent_state().sync_token]
                 commands = json.loads(form['commands'][0]); assert len(commands) == 1
                 op = commands[0]
                 assert set(op) == ({'type', 'uuid', 'args', 'temp_id'} if created else
@@ -303,7 +305,9 @@ def phase(install, name):
         call(['report', '--set-cursor', CURSOR, '--yes'])
     elif name == 'mutation':
         def accepted(form):
-            assert set(form) == {'commands'}
+            assert set(form) == {'commands', 'sync_token', 'resource_types'}
+            assert form['resource_types'] == [RESOURCES]
+            assert form['sync_token'] == [store.load_consistent_state().sync_token]
             commands = json.loads(form['commands'][0]); assert len(commands) == 1
             op = commands[0]
             assert set(op) == {'type', 'uuid', 'args'}
@@ -320,7 +324,9 @@ def phase(install, name):
         before = store.load_consistent_state()
         cursor = (store.root / 'report-cursor').read_bytes()
         def accepted(form):
-            assert set(form) == {'commands'}
+            assert set(form) == {'commands', 'sync_token', 'resource_types'}
+            assert form['resource_types'] == [RESOURCES]
+            assert form['sync_token'] == [store.load_consistent_state().sync_token]
             commands = json.loads(form['commands'][0]); assert len(commands) == 1
             op = commands[0]
             assert set(op) == {'type', 'uuid', 'temp_id', 'args'}
@@ -329,15 +335,17 @@ def phase(install, name):
             assert op['type'] == 'item_add'
             assert op['args'] == dict(project_id='cat', content='Copied affected',
                 priority=3, description='', labels=[], auto_reminder=False, due=None)
-            return {'sync_status': {op['uuid']: 'ok'},
-                    'temp_id_mapping': {op['temp_id']: 'copied-created'}}
+            return dict(delta(items=[row]), sync_token='copied-created-token',
+                    sync_status={op['uuid']: 'ok'},
+                    temp_id_mapping={op['temp_id']: 'copied-created'})
         row = item('copied-created'); row.update(content='Copied affected', priority=3)
-        steps = [('POST', '/sync', None, accepted),
-                 sync(before.sync_token, dict(delta(items=[row]), sync_token='copied-created-token'))]
+        steps = [('POST', '/sync', None, accepted)]
         assert 'Copied affected' in call(['add', 'cat', 'Copied affected'], steps, FINAL)
         after = StateStore().load_consistent_state()
         assert after.sync_token == 'copied-created-token'
         assert after.snapshot.items['copied-created'].title == 'Copied affected'
+        assert after.snapshot.items['copied-created'].priority == 2
+        assert d.instant_text(after.snapshot.items['copied-created'].added_at) == CREATED
         assert 'copied-created' in after.current_snapshot.items
         assert (store.root / 'report-cursor').read_bytes() == cursor
         for identity, observed in before.history.observations.items():
@@ -356,7 +364,9 @@ def phase(install, name):
         assert before.snapshot.items['A'].title == 'Alpha'
         assert before.snapshot.items['B'].parent_id == 'A'
         def accepted(form):
-            assert set(form) == {'commands'}
+            assert set(form) == {'commands', 'sync_token', 'resource_types'}
+            assert form['resource_types'] == [RESOURCES]
+            assert form['sync_token'] == [store.load_consistent_state().sync_token]
             commands = json.loads(form['commands'][0]); assert len(commands) == 1
             op = commands[0]
             assert set(op) == {'type', 'uuid', 'args'}

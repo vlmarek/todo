@@ -104,6 +104,40 @@ class CurrentTests(unittest.TestCase):
         return retrieve(transport, prior.binding, prior=prior.snapshot,
                         sync_token=prior.sync_token)
 
+    def test_supplied_response_matches_baseline_and_preserves_omitted_resources(self):
+        first = self.initial(full(notes=[note()]))
+        transport, http = self.boundary([])
+        result = retrieve(transport, first.binding, prior=first.current_snapshot,
+            sync_token=first.sync_token, waiting_label_ids=first.waiting_label_ids,
+            supplied_token=first.sync_token,
+            supplied_response=delta(sync_token='combined', items=[item(content='Changed')]))
+        self.assertEqual(result.snapshot.items['task'].title, 'Changed')
+        self.assertEqual(result.snapshot.comments, first.snapshot.comments)
+        self.assertEqual(result.account, first.account)
+        self.assertEqual(result.sync_token, 'combined')
+        self.assertEqual(len(http.requests), 0)
+        with self.assertRaisesRegex(CurrentError, 'baseline token differs'):
+            retrieve(transport, first.binding, prior=first.current_snapshot,
+                sync_token=first.sync_token, supplied_token='other-operation',
+                supplied_response=delta())
+
+    def test_supplied_server_full_still_requires_one_freshness_delta(self):
+        first = self.initial()
+        for fresh, fails in ((delta(items=[item(content='Fresh')]), False),
+                             (full(), True), (Response(b'{invalid'), True)):
+            with self.subTest(fresh=fresh):
+                transport, http = self.boundary([('full-token', fresh)])
+                def consume():
+                    return retrieve(transport, first.binding, prior=first.current_snapshot,
+                        sync_token=first.sync_token, supplied_token=first.sync_token,
+                        supplied_response=full())
+                if fails:
+                    with self.assertRaises((DomainError, ProtocolError)):
+                        consume()
+                else:
+                    self.assertEqual(consume().snapshot.items['task'].title, 'Fresh')
+                self.assertEqual(len(http.requests), 1)
+
     def test_full_and_one_delta_requests_minimal_wire_contract(self):
         result = self.initial()
         self.assertEqual(result.sync_token, 'delta-token')

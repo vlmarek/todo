@@ -47,7 +47,7 @@ class MoveRequest:
         assert self.command['type'] == 'item_move'
         assert self.command['args'] == self.args
         assert str(UUID(self.command['uuid'])) == self.command['uuid']
-        ExpectedRequest('POST', '/sync', 'secret', form={'commands': form['commands'][0]}).check(request, timeout)
+        ExpectedRequest('POST', '/sync', 'secret', form={k: v[0] for k, v in form.items()}).check(request, timeout)
 
 
 class MoveTests(unittest.TestCase):

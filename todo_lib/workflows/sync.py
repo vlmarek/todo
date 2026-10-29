@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from todo_lib import domain as d
 from todo_lib.adapter.current import retrieve
-from todo_lib.adapter.history import HistoryAdapter, Retrieval
+from todo_lib.adapter.history import CompletedRecord, HistoryAdapter, Retrieval
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import (StateStore, LocalState, LocalError, History, load_config,
                             exclusive_lock, merge_history, prepare_candidates)
@@ -90,10 +90,12 @@ def _known(state):
 
 
 class OperationEvidence:
-    """Only exhausted, explicitly scoped reads from this operation may be shared."""
+    """Share command-local lifecycle facts and exhausted, explicitly scoped reads."""
     def __init__(self, adapter, result):
         self.adapter = adapter
         self.reads = tuple(e for e in result.evidence if isinstance(e, Retrieval))
+        # Command-local current lifecycle facts are not interval coverage.
+        self.lifecycle_records = tuple(e for e in result.evidence if isinstance(e, CompletedRecord))
         self.lifecycle_ids = ({result.target_id} if result.operation.type in
             ('item_close', 'item_complete', 'item_update_date_complete', 'item_uncomplete') else set())
 
@@ -183,6 +185,7 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
     if isinstance(adapter, OperationEvidence):
         records = [r for e in adapter.reads if e.endpoint == '/tasks/completed/by_completion_date'
                    for r in e.records if r.item.id in affected]
+        records.extend(r for r in adapter.lifecycle_records if r.item.id in affected)
     if missing or recurring:
         # A bounded supported endpoint, never active absence, proves completion.
         categories = s.categories if affected is None else {

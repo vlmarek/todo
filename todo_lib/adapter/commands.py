@@ -23,12 +23,12 @@ from uuid import UUID, uuid4
 
 from todo_lib.domain import (
     rebase_attention, preserves_reminder, attention_prediction,
-    Attention, DomainError, Item, account_timezone, resolve_reminder_due, instant_key, instant_text,
+    Attention, DomainError, Item, Occurrence, account_timezone, resolve_reminder_due, instant_key, instant_text,
     reconciles_attention, retain_recurrence, validate_body,
     validate_title,
 )
 from . import current
-from .history import HistoryAdapter
+from .history import HistoryAdapter, CompletedRecord
 from .transport import HTTPFailure, Replay
 
 
@@ -301,7 +301,7 @@ class Gateway:
         self._used = set()
 
     def execute(self, operation, *, before=None, known_owners=None, known_reminders=None, owner_id=None, start=None, end=None):
-        """Submit once, then read current and required bounded history.
+        """Submit once, consume current resources and retrieve necessary context.
 
         before is the saved preflight Current. known_owners supplies already
         resolved archived Items for own comments. start/end bound lifecycle evidence;
@@ -362,24 +362,54 @@ class Gateway:
         observed = _Observed(self.transport)
         issues, evidence = [], []
         http_rejected = False
+        combined = (before is not None and before.current_snapshot is not None
+                    and before.sync_token not in (None, '*')
+                    and op.type not in ('project_add', 'label_add'))
+        form = {'commands': json.dumps([op.command()], ensure_ascii=False, separators=(',', ':'))}
+        if combined:
+            form.update(sync_token=before.sync_token,
+                        resource_types=json.dumps(list(current.RESOURCE_TYPES), separators=(',', ':')))
+        response = None
         try:
-            observed.request('POST', '/sync', operation=op.type, replay=Replay.IDEMPOTENT,
-                form={'commands': json.dumps([op.command()], ensure_ascii=False, separators=(',', ':'))},
+            response = observed.request('POST', '/sync', operation=op.type, replay=Replay.IDEMPOTENT,
+                form=form,
                 command_uuids=(op.uuid,))
         except HTTPFailure as error:
             http_rejected = error.outcome == 'rejected'
             evidence.append(('transport', error.outcome))
         after, actual, records, restored = None, None, (), ()
+        supplied = False
         try:
             if before is not None:
                 proven, created = _proof(op, observed.responses)
                 creation = ({created} if op.type == 'item_add' and proven == Outcome.ACCEPTED
                             and created and created not in owners else set())
+                # Write-only receipts have no resource provenance. Their token
+                # must never be used with our unincorporated saved baseline.
+                if combined and isinstance(response, dict) and 'sync_token' in response:
+                    if _id(response['sync_token']) == '*':
+                        raise current.CurrentError('response sync_token must not be *')
+                supplied = (combined and isinstance(response, dict) and
+                            any(k in response for k in (*current.RESOURCE_TYPES, 'full_sync')))
+                supplied_args = ({'supplied_response': response, 'supplied_token': before.sync_token}
+                                 if supplied else {})
                 after = self.retrieve(observed, before.binding, prior=before.current_snapshot or before.snapshot,
                                       sync_token=before.sync_token,
                                       replace=before.sync_token == '*' or before.current_snapshot is None,
                                       known=before.snapshot, reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids,
-                                      created_ids=frozenset(creation))
+                                      created_ids=frozenset(creation), **supplied_args)
+                if supplied:
+                    name = ('notes' if op.type.startswith('note_') else
+                            'reminders' if op.type.startswith('reminder_') else 'items')
+                    covered = any(isinstance(raw, dict) and raw.get('id') == created
+                                  for raw in response.get(name, ()))
+                    # A complete delta may omit unchanged objects. That proves
+                    # current membership, but not this command's normalized effect.
+                    if not covered and not response.get('full_sync'):
+                        after = self.retrieve(observed, before.binding, prior=before.current_snapshot,
+                            sync_token=before.sync_token, known=before.snapshot,
+                            reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids,
+                            created_ids=frozenset(creation))
             else:
                 # Provisioning before a root binding exists: only project/label
                 # resources, full plus one bounded freshness delta.
@@ -395,6 +425,9 @@ class Gateway:
                 if not isinstance(fresh, dict) or fresh.get('full_sync') is not False or not isinstance(fresh.get('sync_token'), str) or not fresh['sync_token'] or fresh['sync_token'] == '*':
                     raise DomainError('invalid provision freshness response')
         except (DomainError, HTTPFailure) as error:
+            # A failed necessary read cannot leave the insufficient first
+            # candidate/token available for accepted-operation publication.
+            after = None
             issues.append('current reconciliation unavailable: ' + str(error))
         outcome, target = _proof(op, observed.responses)
         if http_rejected and outcome == Outcome.UNKNOWN:
@@ -411,7 +444,13 @@ class Gateway:
         account_zone = after.account.timezone if after is not None else before.account.timezone if before else 'UTC'
         history = self.history or HistoryAdapter(observed, timezone=account_zone)
         try:
-            if op.type.startswith('note_'):
+            resource_responses = ([response] if supplied else []) + observed.reads
+            own_notes = any(r.get('full_sync') is True or any(
+                isinstance(raw, dict) and raw.get('id') == target for raw in r.get('notes', ()))
+                for r in resource_responses) if after is not None else False
+            if (op.type.startswith('note_') and not
+                    (own_notes and after is not None and after.current_snapshot is not None and
+                     owner in after.snapshot.items and not after.snapshot.items[owner].completed)):
                 # Scoped REST comments work for supported known archived owners,
                 # without requiring them to remain in active Sync.
                 comments = history.comments(owner)
@@ -425,9 +464,19 @@ class Gateway:
                 category = owners.get(op.args['id'])
                 if category is None:
                     raise DomainError('known lifecycle owner required')
-                completed = history.completed(lower, upper, {'project_id': category.category_id})
-                records = tuple(r for r in completed.records if r.item.id == op.args['id'] and not r.deleted)
-                evidence.append(completed)
+                if (combined and supplied and isinstance(actual, Item) and actual.completed
+                        and actual.completed_at is not None and not actual.recurring and not category.recurring
+                        and op.type != 'item_update_date_complete'):
+                    # Actual lifecycle state is sufficient for this result; it
+                    # makes no claim about a completed-history interval.
+                    records = (CompletedRecord(actual, Occurrence(
+                        actual.id + '@' + str(instant_key(actual.completed_at)),
+                        actual.id, actual.completed_at, False)),)
+                    evidence.extend(records)
+                else:
+                    completed = history.completed(lower, upper, {'project_id': category.category_id})
+                    records = tuple(r for r in completed.records if r.item.id == op.args['id'] and not r.deleted)
+                    evidence.append(completed)
                 if actual is None and records and op.type != 'item_update_date_complete':
                     actual = max(records, key=lambda r: instant_key(r.occurrence.completed_at)).item
                 # Occurrences are compared by exact instant, never datetime's

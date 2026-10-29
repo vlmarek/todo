@@ -357,10 +357,11 @@ class LifecycleTests(unittest.TestCase):
 
 class CommandRequest:
     """Dynamic UUID only; semantic request and response state are independent."""
-    def __init__(self, case, kind, args, status='ok', target=None):
+    def __init__(self, case, kind, args, status='ok', target=None, *, token='delta-token', resources=None):
         from tests.support.http import Response
         self.case, self.kind, self.args = case, kind, args
         self.status, self.target = status, target
+        self.token, self.resources = token, resources
         self.response = Response()
         self.commands = []
 
@@ -369,7 +370,12 @@ class CommandRequest:
         from uuid import UUID
         from tests.support.http import ExpectedRequest
         wire = parse_qs(request.data.decode())
-        self.case.assertEqual(set(wire), {'commands'})
+        if self.token is None:
+            self.case.assertEqual(set(wire), {'commands'})
+        else:
+            self.case.assertEqual(set(wire), {'commands', 'sync_token', 'resource_types'})
+            self.case.assertEqual(wire['sync_token'], [self.token])
+            self.case.assertEqual(wire['resource_types'], [fixtures.RESOURCES])
         commands = json.loads(wire['commands'][0])
         self.case.assertEqual(len(commands), 1)
         op = commands[0]
@@ -377,12 +383,14 @@ class CommandRequest:
         self.case.assertEqual(op['args'], self.args)
         self.case.assertEqual(str(UUID(op['uuid'])), op['uuid'])
         self.case.assertEqual(set(op), {'type', 'uuid', 'args'} | ({'temp_id'} if self.kind.endswith('_add') else set()))
-        ExpectedRequest('POST', '/sync', 'secret', form={'commands': wire['commands'][0]}).check(request, timeout)
+        ExpectedRequest('POST', '/sync', 'secret', form={k: v[0] for k, v in wire.items()}).check(request, timeout)
         self.commands.append(op)
         response = {} if self.status is None else {'sync_status': {op['uuid']: self.status}}
         if self.target:
             self.case.assertEqual(str(UUID(op['temp_id'])), op['temp_id'])
             response['temp_id_mapping'] = {op['temp_id']: self.target}
+        if self.resources is not None:
+            response.update(self.resources)
         self.response.write(json.dumps(response).encode())
         self.response.seek(0)
 

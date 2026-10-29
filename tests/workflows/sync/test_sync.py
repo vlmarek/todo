@@ -679,7 +679,7 @@ else:
                               uuid='11111111-1111-4111-8111-111111111111')
         command = '[{"type":"item_update","uuid":"11111111-1111-4111-8111-111111111111","args":{"id":"A","content":"Changed A"}}]'
         transport, http = self.boundary([
-            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': command}),
+            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': command, 'sync_token': 'delta-token', 'resource_types': RESOURCES}),
              {'sync_status': {operation.uuid: 'ok'}}),
             self.sync('delta-token', delta(items=[item('A', content='Changed A', added_at=CREATED)])),
             self.sync('delta-token', delta(items=[item('A', content='Changed A', added_at=CREATED)]))])
@@ -847,7 +847,7 @@ else:
 
 
 class MutationReuseTests(unittest.TestCase):
-    """Revision 17 strict HTTP composition, using actual adapter/store/workflows.
+    """Revisions 17/18 strict HTTP composition, using actual adapter/store/workflows.
 
     Shapes/queries follow the pinned Sync, completed, activities and comments
     contracts cited above. No response is computed from a production mapper.
@@ -901,7 +901,7 @@ class MutationReuseTests(unittest.TestCase):
         Synchronizer(transport, self.store, clock=lambda: baseline).refresh()
         return self.store.load_consistent_state()
 
-    def compose(self, *, invalid=False):
+    def compose(self, *, invalid=False, archived_completion=False):
         from todo_lib.adapter.commands import Gateway
         from todo_lib.workflows.capture import CaptureWorkflow
         from tests.workflows.lifecycle.test_lifecycle import CommandRequest
@@ -918,7 +918,7 @@ class MutationReuseTests(unittest.TestCase):
         add = CommandRequest(self, 'item_add', dict(project_id='cat',
             content='Created title', priority=3, description='', labels=[],
             auto_reminder=False, due=None), target='actual-created')
-        done = CommandRequest(self, 'item_close', {'id': 'actual-created'})
+        done = CommandRequest(self, 'item_close', {'id': 'actual-created'}, token='created-token')
         original_check = done.check
         def check_published(request, timeout):
             # The next submission observes the actual saved identity, active
@@ -934,14 +934,26 @@ class MutationReuseTests(unittest.TestCase):
             original_check(request, timeout)
         done.check = check_published
         final = dict(created, checked=True, completed_at='2026-10-22T12:00:00Z')
-        steps = [add.step(), self.sync('delta-token', delta(sync_token='created-token', items=[created, changed]))]
+        add.resources = delta(sync_token='created-token', items=[created, changed])
+        steps = [add.step()]
         if invalid:
             # Required outcome reconciliation cannot publish the invalid active
             # result, even though the UUID and temporary identity were accepted.
             steps += [self.sync('delta-token', delta(items=[created, changed]))]
         else:
-            steps += [done.step(), self.sync('created-token', delta(sync_token='completed-token', items=[final])),
-                self.completed([final])]
+            if archived_completion:
+                # A full active replacement omits the completed owner. Freshness
+                # and scoped lifecycle/comments remain necessary, not inferred.
+                done.resources = open_tree(user_plan_limits={'current': {'activity_log': True,
+                    'activity_log_limit': -1, 'reminders': True}})
+                done.resources['items'] = [item('A', added_at=CREATED), changed, self.recurring()]
+                steps += [done.step(), self.sync('full-token', delta(sync_token='completed-token')),
+                    self.completed([final]),
+                    (Expected('/comments', [('task_id', 'actual-created'), ('limit', '200')]),
+                     {'results': [], 'next_cursor': None})]
+            else:
+                done.resources = delta(sync_token='completed-token', items=[final])
+                steps += [done.step()]
         transport, http = self.boundary(steps)
         sync = Synchronizer(transport, self.store, clock=lambda: NOW)
         result = CaptureWorkflow(sync, gateway=Gateway(transport,
@@ -965,11 +977,14 @@ class MutationReuseTests(unittest.TestCase):
             self.assertEqual(after.snapshot.comments['x-note'].body, 'Last established text')
             self.assertEqual(after.cursor, saved.cursor)
             self.assertEqual(after.history.coverage, saved.history.coverage)
-            self.assertEqual(len(http.requests), 5)  # no full, activities or archived comments
+            self.assertEqual(len(http.requests), 5 if archived_completion else 2)
         return result
 
     def test_composed_incremental_create_published_before_complete_reuses_required_proof(self):
         self.compose()
+
+    def test_combined_server_full_completion_retains_freshness_and_scoped_evidence(self):
+        self.compose(archived_completion=True)
 
     def test_unrelated_invalid_active_change_fails_before_second_write(self):
         self.compose(invalid=True)
@@ -1023,6 +1038,42 @@ class MutationReuseTests(unittest.TestCase):
         self.assertIn('Deferred recurring work', out.getvalue())
 
 
+    def test_combined_active_note_update_delete_reuses_complete_current_notes(self):
+        from io import StringIO
+        from todo_lib.adapter.commands import Gateway
+        from todo_lib.presentation import OriginalStreams
+        from todo_lib.workflows.comments import CommentWorkflow, Change
+        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        updated = note('own', 'B', content='Actual updated text', posted_at=COMMENT)
+        blank = note('blank', 'B', posted_at=None)
+        blank.pop('content')  # documented NoteSyncView default; retain identity
+        edit = CommandRequest(self, 'note_update', {'id': 'own', 'content': 'Actual updated text'},
+            resources=delta(sync_token='note-updated', notes=[updated, blank]))
+        delete = CommandRequest(self, 'note_delete', {'id': 'own'}, token='note-updated',
+            resources=delta(sync_token='note-deleted', notes=[{'id': 'own', 'is_deleted': True}]))
+        check = delete.check
+        def published(request, timeout):
+            saved = StateStore(self.root).load_consistent_state()
+            self.assertEqual(saved.snapshot.comments['own'].body, 'Actual updated text')
+            self.assertEqual(saved.snapshot.comments['blank'].body, '')
+            self.assertEqual(saved.sync_token, 'note-updated')
+            check(request, timeout)
+        delete.check = published
+        transport, http = self.boundary([edit.step(), delete.step()])
+        sync = Synchronizer(transport, self.store, clock=lambda: NOW)
+        workflow = CommentWorkflow(sync, gateway=Gateway(transport),
+            streams=OriginalStreams(StringIO(), StringIO(), StringIO()))
+        with exclusive_lock('combined notes', self.root):
+            current = sync.read_local()
+            result = workflow._apply(current, current.snapshot.items['B'],
+                (Change('edit', 'own', 'Actual updated text'), Change('delete', 'own')))
+        self.assertEqual(result.status, 0, result.document.stderr)
+        saved = StateStore(self.root).load_consistent_state()
+        self.assertNotIn('own', saved.snapshot.comments)
+        self.assertEqual(saved.snapshot.comments['blank'].body, '')
+        self.assertEqual(saved.sync_token, 'note-deleted')
+        self.assertEqual(len(http.requests), 2)
+
     def test_archived_comment_evidence_shared_without_losing_other_pending_owner(self):
         from io import StringIO
         from todo_lib.adapter.commands import Gateway
@@ -1031,10 +1082,11 @@ class MutationReuseTests(unittest.TestCase):
         from tests.workflows.lifecycle.test_lifecycle import CommandRequest
         saved = self.establish_pending(second=True)
         before = self.bytes()
-        op = CommandRequest(self, 'note_add', {'item_id': 'X', 'content': 'New own text'}, target='R')
+        op = CommandRequest(self, 'note_add', {'item_id': 'X', 'content': 'New own text'}, target='R',
+            resources=delta(notes=[note('R', 'X', content='New own text', posted_at=COMMENT)]))
         # Complete, paginated owner scope includes unaffected own comments too.
         query = [('task_id', 'X'), ('limit', '200')]
-        steps = [op.step(), self.sync('delta-token', delta()),
+        steps = [op.step(),
             (Expected('/comments', query), {'results': [dict(id='x-note', content='Last established text',
                 posted_at=COMMENT, is_deleted=False)], 'next_cursor': 'own.page'}),
             (Expected('/comments', query + [('cursor', 'own.page')]),
@@ -1060,7 +1112,7 @@ class MutationReuseTests(unittest.TestCase):
         # Resource namespaces do not make the new note ID an affected item ID.
         self.assertEqual(after.history.observations['R'], saved.history.observations['R'])
         self.assertEqual((self.root / 'report-cursor').read_bytes(), before['report-cursor'])
-        self.assertEqual(len(http.requests), 5)
+        self.assertEqual(len(http.requests), 4)
 
     def test_explicit_archived_note_removal_survives_deferred_history(self):
         from io import StringIO

@@ -407,6 +407,10 @@ def _read(transport, token):
                 else 'explicit todo --clear-cache --refresh now deletes current cache and preserves history')
             error.args = (str(error) + '; automatic sync-token recognition unavailable; ' + guidance,)
         raise
+    return _response(response)
+
+
+def _response(response):
     response = _object(response, 'Sync response')
     new_token = _id(_required(response, 'sync_token'), 'sync_token')
     if new_token == '*':
@@ -417,7 +421,8 @@ def _read(transport, token):
 
 def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
              sync_token: str | None = None, replace=False, hidden_names=(),
-             known=None, reminder_ids=None, waiting_label_ids=None, created_ids=frozenset()) -> Current:
+             known=None, reminder_ids=None, waiting_label_ids=None, created_ids=frozenset(),
+             supplied_response=None, supplied_token=None) -> Current:
     """Read a complete candidate. No mutation, files, retries beyond transport,
     or account history access. A full response receives exactly one freshness read.
 
@@ -428,6 +433,8 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     created_ids is a command-local exception for exact UUID/temp-ID-proven new
     objects, never title matches or arbitrary entrants. With a compatible prior
     and token, incremental resources establish these objects' complete own state.
+    supplied_response replaces only the initial read and must originate from a
+    request using supplied_token, equal to this proven baseline token.
     Other entrants still require unchanged-resource hydration. This is data
     hydration, never error/token recovery, and is bounded once.
     """
@@ -443,7 +450,12 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
         raise CurrentError('incremental token requires a prior Snapshot')
     initial = prior is None or replace
     token = '*' if initial else _id(sync_token, 'prior sync_token')
-    response, token, full = _read(transport, token)
+    if supplied_response is not None:
+        if supplied_token != token:
+            raise CurrentError('supplied response baseline token differs from prior sync_token')
+        response, token, full = _response(supplied_response)
+    else:
+        response, token, full = _read(transport, token)
     if initial and not full:
         raise CurrentError('requested full Sync returned a delta')
     state = {name: {} for name in _COLLECTIONS} if full else _seed(prior)
