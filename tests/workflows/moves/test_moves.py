@@ -115,7 +115,7 @@ class MoveTests(unittest.TestCase):
                 row['project_id'] = args.get('project_id', 'cat')
                 query = [('since', '2026-10-20T00:00:00Z'),
                          ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]
-                for category in ('cat', 'hidden', 'other'):
+                for category in (row['project_id'],):
                     steps.append((Expected('/tasks/completed/by_completion_date', [('project_id', category)] + query),
                                   {'items': [row] if category == row['project_id'] and not omitted else []}))
                 steps.append((Expected('/comments', [('task_id', 'E'), ('limit', '200')]),

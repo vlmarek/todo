@@ -53,7 +53,7 @@ class CachedSelectionTests(unittest.TestCase):
         return kind(sync, streams=self.f.workflow.streams), http
 
     def after(self, state):
-        return [self.read(state), self.read(delta(), 'full-token')] * 2
+        return [self.read(state), self.read(delta(), 'full-token')]
 
     def test_parent_update_uses_cached_id_first_accepts_changed_title_and_context(self):
         # Remote parent changed title/priority context after it was selected from
@@ -66,7 +66,7 @@ class CachedSelectionTests(unittest.TestCase):
         self.assertEqual(result.status, 0, result.document.stderr)
         self.assertEqual(op.commands[0]['args']['id'], 'parent')
         self.assertIn('commands', parse_qs(http.requests[0][0].data.decode()))
-        self.assertEqual(len(http.requests), 5)
+        self.assertEqual(len(http.requests), 3)
         saved = self.f.store.load_consistent_state()
         self.assertEqual(saved.snapshot.items['parent'].title, 'Remote parent name')
         self.assertEqual(saved.snapshot.items['leaf'].parent_id, 'child')
@@ -79,7 +79,7 @@ class CachedSelectionTests(unittest.TestCase):
         wf, http = self.workflow([op.step(), *self.after(self.f.state(items=self.f.wire_items+[row]))])
         result = wf.execute(['add', 'step', 'Saved child', '--step', 'New child'])
         self.assertEqual(result.status, 0, result.document.stderr)
-        self.assertEqual(len(http.requests), 5)
+        self.assertEqual(len(http.requests), 3)
         self.assertEqual(self.f.store.load_consistent_state().snapshot.items['created'].parent_id, 'child')
 
     def test_schedule_then_relative_reminder_uses_reconciled_timed_owner(self):
@@ -102,7 +102,7 @@ class CachedSelectionTests(unittest.TestCase):
                                      '--reminder', '1h'])
                 self.assertEqual(result.status, 0, result.document.stderr)
                 self.assertEqual([o.outcome for o in result.outcomes], ['accepted', 'accepted'])
-                self.assertEqual(len(http.requests), 10)
+                self.assertEqual(len(http.requests), 6)
                 saved = self.f.store.load_consistent_state().snapshot
                 self.assertTrue(saved.items['parent'].attention.exact)
                 self.assertEqual(saved.reminders['new-reminder'].minutes, 60)
@@ -123,7 +123,7 @@ class CachedSelectionTests(unittest.TestCase):
         self.assertIn('relative reminder requires timed task due', result.document.stderr)
         self.assertIn('Not attempted: create reminder Parent', result.document.stderr)
         self.assertNotIn('unknown', result.document.stderr.lower())
-        self.assertEqual(len(http.requests), 5)
+        self.assertEqual(len(http.requests), 3)
         commands = [json.loads(form['commands'][0])[0]
                     for request, _ in http.requests
                     if 'commands' in (form := parse_qs(request.data.decode()))]
@@ -136,7 +136,7 @@ class CachedSelectionTests(unittest.TestCase):
         # rejecting the same relative reminder proposal without another request.
         with self.assertRaisesRegex(d.DomainError, 'timed'):
             wf.execute(['schedule', 'Parent', '--reminder', '1h'])
-        self.assertEqual(len(http.requests), 5)
+        self.assertEqual(len(http.requests), 3)
 
     def test_mixed_destination_preserves_source_and_complete_known_subtree(self):
         f = moves.MoveTests('runTest'); f.setUp(); self.addCleanup(f.doCleanups)
@@ -217,11 +217,10 @@ class CachedSelectionTests(unittest.TestCase):
         rows=[dict(r,labels=['waiting']) if r['id']=='parent' else r for r in f.wire_items]
         state=f.state(items=rows)
         op=CommandRequest(self,'item_update',{'id':'parent','labels':['waiting']})
-        wf,http=self.workflow([op.step(),self.read(state,'*'),self.read(delta(),'full-token'),
-                               self.read(state,'*'),self.read(delta(),'full-token')])
+        wf,http=self.workflow([op.step(),self.read(state,'*'),self.read(delta(),'full-token')])
         result=wf.execute(['hide','Parent'])
         self.assertEqual(result.status,0,result.document.stderr)
-        self.assertEqual(len(http.requests),5)
+        self.assertEqual(len(http.requests),3)
         self.assertTrue(f.store.load_consistent_state().snapshot.items['parent'].waiting)
 
     def test_waiting_context_full_delta_rename_tombstone_and_legacy_unknown(self):
@@ -296,14 +295,13 @@ class CachedSelectionTests(unittest.TestCase):
         # Remote cascade also deleted a never-observed child. No preview read is
         # scripted; its tombstone is learned only after item_delete acceptance.
         tombstones = [dict(id=k, is_deleted=True) for k in ('parent','child','leaf','unseen')]
-        wf, http = self.workflow([op.step(), self.read(delta(items=tombstones)),
-                                 self.read(delta(items=tombstones))], LifecycleWorkflow)
+        wf, http = self.workflow([op.step(), self.read(delta(items=tombstones))], LifecycleWorkflow)
         result = wf.execute(['delete','--yes','Parent'])
         self.assertEqual(result.status, 0, result.document.stderr)
         preview = self.f.workflow.streams.stdout.getvalue()
         self.assertIn('  Saved child\n    Saved leaf', preview)
         self.assertNotIn('unseen', preview)
-        self.assertEqual(len(http.requests), 3)
+        self.assertEqual(len(http.requests), 2)
         self.assertNotIn('parent', self.f.store.load_consistent_state().snapshot.items)
 
     def test_cached_deletion_confirmation_and_cancellation_keep_bounded_warning(self):
@@ -316,8 +314,7 @@ class CachedSelectionTests(unittest.TestCase):
                 op = CommandRequest(self, 'item_delete', {'id': 'parent'})
                 tombstones = [dict(id=k, is_deleted=True)
                               for k in ('parent', 'child', 'leaf', 'old', 'unseen')]
-                steps = ([op.step(), self.read(delta(items=tombstones)),
-                          self.read(delta(items=tombstones))] if answer == 'yes\n' else [])
+                steps = ([op.step(), self.read(delta(items=tombstones))] if answer == 'yes\n' else [])
                 wf, http = self.workflow(steps, LifecycleWorkflow)
                 out, err = comments.Terminal(), StringIO()
                 wf.streams = p.OriginalStreams(comments.Terminal(answer), out, err)
@@ -325,7 +322,7 @@ class CachedSelectionTests(unittest.TestCase):
                     result = wf.execute(['delete', 'Parent'])
                     self.assertEqual(result.status, 0, result.document.stderr)
                     self.assertEqual(len(op.commands), 1)
-                    self.assertEqual(len(http.requests), 3)
+                    self.assertEqual(len(http.requests), 2)
                     self.assertNotIn('parent', self.f.store.load_consistent_state().snapshot.items)
                 else:
                     with self.assertRaises(Cancelled): wf.execute(['delete', 'Parent'])
@@ -341,8 +338,7 @@ class CachedSelectionTests(unittest.TestCase):
     def test_accepted_mutation_then_reconciliation_failure_is_partial(self):
         op = CommandRequest(self, 'item_update', {'id':'parent', 'priority':4})
         rows = [dict(r, priority=4) if r['id']=='parent' else r for r in self.f.wire_items]
-        wf, http = self.workflow([op.step(), self.read(self.f.state(items=rows)), self.read(delta(),'full-token'),
-                                 self.read(Response(b'{invalid'))])
+        wf, http = self.workflow([op.step(), self.read(Response(b'{invalid')), self.read(Response(b'{invalid'))])
         result = wf.execute(['priority','Parent','P1'])
         self.assertEqual(result.status, 1)
         self.assertEqual([o.outcome for o in result.outcomes], ['accepted'])
@@ -406,8 +402,7 @@ class CachedEditorTests(unittest.TestCase):
         scoped = [{k:v for k,v in n.items() if k!='item_id'} for n in returned if n['item_id']=='C']
         steps = [op.step(), read(comments.tree(returned)), read(delta(),'full-token'),
                  (ExpectedRequest('GET','/comments','secret',query={'task_id':'C','limit':'200'}),
-                  {'results':scoped,'next_cursor':None}),
-                 read(comments.tree(returned)), read(delta(),'full-token')]
+                  {'results':scoped,'next_cursor':None})]
         http = ControlledHTTP([(r,v if isinstance(v,Response) else Response(json.dumps(v).encode()))
                                for r,v in steps])
         self.addCleanup(http.assert_done)
@@ -416,7 +411,7 @@ class CachedEditorTests(unittest.TestCase):
         result=wf.execute(['comment','--edit','Leaf'])
         self.assertEqual(result.status,0,result.document.stderr)
         self.assertEqual(op.commands[0]['args']['id'],'z-older')
-        self.assertEqual(len(http.requests),6)
+        self.assertEqual(len(http.requests),4)
         self.assertEqual(f.store.load_consistent_state().snapshot.comments['z-older'].body,'changed')
 
     def test_comment_receipts_use_reconciled_owner_title_and_hierarchy(self):

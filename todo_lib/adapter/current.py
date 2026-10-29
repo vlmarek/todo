@@ -68,6 +68,7 @@ class Current:
     reminder_ids: frozenset[str] | None = None
     current_snapshot: Snapshot | None = None
     waiting_label_ids: frozenset[str] | None = None
+    removed_comment_ids: frozenset[str] = frozenset()
 
     @property
     def account(self):
@@ -416,7 +417,7 @@ def _read(transport, token):
 
 def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
              sync_token: str | None = None, replace=False, hidden_names=(),
-             known=None, reminder_ids=None, waiting_label_ids=None) -> Current:
+             known=None, reminder_ids=None, waiting_label_ids=None, created_ids=frozenset()) -> Current:
     """Read a complete candidate. No mutation, files, retries beyond transport,
     or account history access. A full response receives exactly one freshness read.
 
@@ -424,7 +425,11 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     identities for tombstone/departure reconciliation without seeding resources.
     On scope expansion from a minimal prior Snapshot, request a replacement to
     recover unchanged resources owned by entrants (Sync does not re-emit them).
-    This is data hydration, never error/token recovery, and is bounded once.
+    created_ids is a command-local exception for exact UUID/temp-ID-proven new
+    objects, never title matches or arbitrary entrants. With a compatible prior
+    and token, incremental resources establish these objects' complete own state.
+    Other entrants still require unchanged-resource hydration. This is data
+    hydration, never error/token recovery, and is bounded once.
     """
     if prior is not None:
         validate(prior, hidden_names)
@@ -483,7 +488,7 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
         scoped = binding.category_ids | {identity for identity, raw in state['projects'].items()
                                         if raw.get('parent_id') == binding.root_id}
         expanded |= any(raw.get('is_deleted') is not True and raw.get('project_id') in scoped
-                        and identity not in prior.items for identity, raw in state['items'].items())
+                        and identity not in prior.items and identity not in created_ids for identity, raw in state['items'].items())
         if expanded:
             # Hydration must not become recovery for invalid incoming resources.
             # Parse own fields here; hierarchy waits for the complete replacement.
@@ -504,6 +509,9 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
                 raise CurrentError('scope hydration requires a full Sync')
             earlier_tombstones = {identity: raw for identity, raw in state['items'].items()
                                   if identity in (known or prior).items and raw.get('is_deleted') is True}
+            earlier_notes = {identity: raw for identity, raw in state['notes'].items()
+                if known is not None and identity in known.comments
+                and (raw.get('is_deleted') is True or raw.get('item_id') != known.comments[identity].item_id)}
             state = {name: {} for name in _COLLECTIONS}
             labels_known = True
             _merge(state, response, True)
@@ -511,6 +519,8 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
             # objects. A later live representation supersedes that evidence.
             for identity, raw in earlier_tombstones.items():
                 state['items'].setdefault(identity, raw)
+            for identity, raw in earlier_notes.items():
+                state['notes'].setdefault(identity, raw)
             account = metadata(response, True, account)
     if full:
         response, token, again_full = _read(transport, token)
@@ -529,7 +539,13 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     unresolved_ids = {r['id'] for r in unresolved}
     duplicates = tuple((left, right) for name, left, right in state.get('_duplicates', ())
         if name == 'reminders' and right['id'] in unresolved_ids)
+    # Preserve explicit note deletion/ownership loss even for deferred archived
+    # owners. Their absence from mapped active comments alone proves nothing.
+    removed_comments = frozenset(k for k, comment in (known or prior).comments.items()
+        if k in state['notes'] and (state['notes'][k].get('is_deleted') is True
+            or state['notes'][k].get('item_id') != comment.item_id)) if (known or prior) else frozenset()
     return Current(snapshot, token, missing, deleted, departed, unresolved, duplicates,
                    frozenset(k for k, raw in state['reminders'].items() if raw.get('is_deleted') is not True), snapshot,
                    frozenset(k for k, raw in state['labels'].items()
-                       if raw.get('is_deleted') is not True and raw.get('name') == 'waiting') if labels_known else None)
+                       if raw.get('is_deleted') is not True and raw.get('name') == 'waiting') if labels_known else None,
+                   removed_comments)

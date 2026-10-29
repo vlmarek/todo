@@ -6,7 +6,7 @@ fields and preserve nullable/precise creation values through real publication.
 """
 from copy import deepcopy
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import StringIO
 import json
 import os
@@ -157,9 +157,9 @@ class CaptureTests(unittest.TestCase):
 
     def operation(self, kind, args, state, identity='new', status='ok'):
         self.http.command(kind, args, identity, status)
-        self.queue_refresh(state, synchronize=False)  # gateway's independent authoritative reads
-        if status == 'ok':
-            self.queue_refresh(state)  # synchronized-state reconciliation/publication
+        self.queue_refresh(state, synchronize=False)  # gateway's authoritative reads
+        if kind == 'project_add' and status == 'ok':
+            self.queue_refresh(state)  # provisioning keeps full refresh policy
 
     def run_request(self, argv):
         result = self.workflow.execute(parse(argv))
@@ -216,10 +216,10 @@ class CaptureTests(unittest.TestCase):
         self.http.completed([done])
         reconcile = self.sync.reconcile_accepted_locked
         calls = []
-        def fail_completion_publication():
+        def fail_completion_publication(result):
             calls.append(True)
             if len(calls) == 1:
-                return reconcile()
+                return reconcile(result)
             raise SyncError('local publication', OSError('history replacement'),
                 publication_started=True, remote_outcome='accepted')
         with patch.object(self.sync, 'reconcile_accepted_locked', side_effect=fail_completion_publication):
@@ -272,8 +272,6 @@ class CaptureTests(unittest.TestCase):
             description='', labels=[], auto_reminder=False, due=None), state)
         done = dict(parent, checked=True, completed_at='2026-10-22T12:00:01.123456789012350Z')
         self.http.command('item_close', {'id': 'new'}, 'new')
-        self.queue_refresh(self.state(), synchronize=False)
-        self.http.completed([done])
         self.queue_refresh(self.state(), synchronize=False)
         self.http.completed([done])
         self.http.comments('new')
@@ -445,7 +443,7 @@ class CaptureTests(unittest.TestCase):
                                  else i for i in self.wire_items])
         command = CommandRequest(self, 'item_update', {'id': 'parent', 'labels': ['waiting']})
         after = [command.step()]
-        for _ in range(2):  # gateway authoritative read, then publication refresh
+        for _ in range(1):  # gateway evidence is also used for publication
             for token, response in [('delta-token', state), ('full-token', delta())]:
                 after.append((ExpectedRequest('POST', '/sync', 'secret', form={
                     'sync_token': token, 'resource_types': RESOURCES}), response))
@@ -582,7 +580,7 @@ class CaptureTests(unittest.TestCase):
         self.assertFalse(result.snapshot.items['child'].waiting)
 
     def test_creation_completion_inline_before_parent_ordinary_gateway(self):
-        self.workflow.gateway = Gateway(self.http, clock=lambda: d.instant_datetime(NOW))
+        self.workflow.gateway = Gateway(self.http, clock=lambda: d.instant_datetime(NOW) + timedelta(seconds=1))
         self.refresh()
         parent = item('new', content='New parent', priority=3, added_at=None)
         child = item('child', content='Inline child', parent_id='new', priority=3, added_at=PRECISE)
@@ -596,12 +594,10 @@ class CaptureTests(unittest.TestCase):
         self.http.command('item_close', {'id': 'child'}, 'child')
         self.queue_refresh(self.state(items=self.wire_items + [parent, child_done]), synchronize=False)
         self.http.completed([child_done])
-        self.queue_refresh(self.state(items=self.wire_items + [parent, child_done]))
         parent_done = dict(parent, checked=True, completed_at=d.instant_text(NOW))
         self.http.command('item_close', {'id': 'new'}, 'new')
         self.queue_refresh(self.state(items=self.wire_items + [parent_done, child_done]), synchronize=False)
         self.http.completed([parent_done])
-        self.queue_refresh(self.state(items=self.wire_items + [parent_done, child_done]))
         result = self.run_request(['add', 'cat', 'New parent', '--step', 'Inline child', '--done'])
         self.assertEqual(result.status, 0, result.document.stderr)
         self.assertEqual([o.target_id for o in result.outcomes], ['new', 'child', 'child', 'new'])

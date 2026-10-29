@@ -228,6 +228,8 @@ class ReminderWorkflowTests(unittest.TestCase):
         invalid = [absolute('invalid', {'date': '2026-10-23', 'lang': 'en'}, item_id='parent')]
         self.operation('reminder_add', {'item_id': 'parent', 'type': 'absolute',
             'due': {'string': 'some provider expression', 'lang': 'en'}}, self.state(reminders=invalid), 'invalid')
+        # No complete Current exists to share after the rejected resource mapping.
+        self.queue_refresh(self.state(reminders=invalid), synchronize=False)
         # Reconciliation also refuses the invalid current state; no rollback follows.
         result = self.run_request(['schedule', 'Parent', '--reminder-at', 'some provider expression',
                                   '--reminder-at', 'another expression'])

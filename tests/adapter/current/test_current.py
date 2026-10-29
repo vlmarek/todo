@@ -676,3 +676,33 @@ class CurrentTests(unittest.TestCase):
         transport, _ = self.boundary([('*', response), ('full-token', delta())])
         with self.assertRaisesRegex(DomainError, 'parent_id'):
             retrieve(transport, BINDING)
+
+    def test_proven_new_creation_keeps_incremental_resources(self):
+        first = self.initial(full(notes=[note()]))
+        transport, http = self.boundary([('delta-token', delta(
+            items=[item('created', due=due())], notes=[note('new-note', 'created')],
+            reminders=[reminder('new-reminder', 'created')]))])
+        result = retrieve(transport, first.binding, prior=first.current_snapshot,
+            sync_token=first.sync_token, waiting_label_ids=first.waiting_label_ids,
+            reminder_ids=first.reminder_ids, created_ids=frozenset({'created'}))
+        self.assertEqual(set(result.snapshot.items), {'task', 'created'})
+        self.assertEqual(set(result.snapshot.comments), {'note', 'new-note'})
+        self.assertEqual(result.snapshot.reminders['new-reminder'].item_id, 'created')
+        self.assertEqual(result.snapshot, result.current_snapshot)
+        self.assertEqual(len(http.requests), 1)
+
+    def test_archived_comment_tombstone_survives_necessary_entrant_hydration(self):
+        from dataclasses import replace
+        from todo_lib.domain import Item, Comment, instant_from_wire
+        first = self.initial()
+        known = replace(first.snapshot, items={**first.snapshot.items,
+            'archived': Item('archived', 'cat', 'Archived', completed=True,
+                             completed_at=instant_from_wire(STAMP))},
+            comments={'archived-note': Comment('archived-note', 'archived', 'Old text')})
+        transport, _ = self.boundary([('delta-token', delta(items=[item('entrant')],
+            notes=[{'id': 'archived-note', 'is_deleted': True}])),
+            ('*', full(items=[item(), item('entrant')])), ('full-token', delta())])
+        result = retrieve(transport, first.binding, prior=first.current_snapshot,
+            known=known, sync_token=first.sync_token)
+        self.assertEqual(result.removed_comment_ids, {'archived-note'})
+        self.assertNotIn('archived', result.current_snapshot.items)

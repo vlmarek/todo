@@ -233,8 +233,8 @@ def phase(install, name):
                 return reply
             return ('POST', '/sync', None, response)
         def reconciled(**changes):
-            # Gateway reads actual outcome; Synchronizer independently publishes.
-            return [sync('delta-token', delta(**changes)), sync('delta-token', delta(**changes))]
+            # Gateway current evidence is reused for publication.
+            return [sync('delta-token', delta(**changes))]
         if name == 'tolerance':
             state = full([a(), item('D', 'A'), row], notes(True)[2:] + comments)
             state['user_plan_limits']['current']['reminders'] = True
@@ -312,8 +312,43 @@ def phase(install, name):
             return {'sync_status': {op['uuid']: 'ok'}}
         changed = item('A'); changed['content'] = 'Alpha'
         steps = [('POST', '/sync', None, accepted),
-                 sync('delta-token', delta(items=[changed])), sync('delta-token', delta(items=[changed]))]
+                 sync('delta-token', delta(items=[changed]))]
         assert 'Alpha' in call(['rename', 'A', '--to', 'Alpha'], steps, INITIAL)
+    elif name == 'affected-create':
+        # The copied launcher writes against its saved current resources. An
+        # unrelated archived owner and recurring owner must trigger no REST read.
+        before = store.load_consistent_state()
+        cursor = (store.root / 'report-cursor').read_bytes()
+        def accepted(form):
+            assert set(form) == {'commands'}
+            commands = json.loads(form['commands'][0]); assert len(commands) == 1
+            op = commands[0]
+            assert set(op) == {'type', 'uuid', 'temp_id', 'args'}
+            UUID(op['uuid']); UUID(op['temp_id'])
+            assert op['uuid'] != op['temp_id']
+            assert op['type'] == 'item_add'
+            assert op['args'] == dict(project_id='cat', content='Copied affected',
+                priority=3, description='', labels=[], auto_reminder=False, due=None)
+            return {'sync_status': {op['uuid']: 'ok'},
+                    'temp_id_mapping': {op['temp_id']: 'copied-created'}}
+        row = item('copied-created'); row.update(content='Copied affected', priority=3)
+        steps = [('POST', '/sync', None, accepted),
+                 sync(before.sync_token, dict(delta(items=[row]), sync_token='copied-created-token'))]
+        assert 'Copied affected' in call(['add', 'cat', 'Copied affected'], steps, FINAL)
+        after = StateStore().load_consistent_state()
+        assert after.sync_token == 'copied-created-token'
+        assert after.snapshot.items['copied-created'].title == 'Copied affected'
+        assert 'copied-created' in after.current_snapshot.items
+        assert (store.root / 'report-cursor').read_bytes() == cursor
+        for identity, observed in before.history.observations.items():
+            assert after.history.observations[identity] == observed
+        for identity, comment in before.history.snapshot.comments.items():
+            assert after.history.snapshot.comments[identity] == comment
+    elif name == 'affected-reload':
+        saved = StateStore().load_consistent_state()
+        assert saved.sync_token == 'copied-created-token'
+        assert saved.snapshot.items['copied-created'].title == 'Copied affected'
+        assert 'Copied affected' in call(['task', 'Copied affected'], now=FINAL)
     elif name == 'cached-parent':
         # init/mutation published this saved parent and child in earlier processes.
         # The remote title changes after selection; no read may populate operands.
@@ -330,7 +365,6 @@ def phase(install, name):
             return {'sync_status': {op['uuid']: 'ok'}}
         changed = a(); changed.update(content='Remote parent', priority=2)
         steps = [('POST', '/sync', None, accepted),
-                 sync('delta-token', delta(items=[changed])),
                  sync('delta-token', delta(items=[changed]))]
         out = call(['priority', 'Alpha', 'P3'], steps, INITIAL)
         assert 'P1 -> P3' in out and 'Remote parent' in out
@@ -425,6 +459,6 @@ if __name__ == '__main__':
         phase(install, sys.argv[2])
     else:
         for name in ('init', 'mutation', 'cached-parent', 'repeat', 'external', 'read', 'rebuild', 'read',
-                     'preview', 'failure', 'final', 'cleanup', 'tolerance', 'tolerance-read'):
+                     'preview', 'failure', 'final', 'cleanup', 'tolerance', 'tolerance-read', 'affected-create', 'affected-reload'):
             subprocess.run([sys.executable, '-I', '-B', __file__, str(install), name],
                            check=True, timeout=10)

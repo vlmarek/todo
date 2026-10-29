@@ -73,7 +73,7 @@ class FakeSync:
         self.calls.append(('refresh', kwargs))
         return self.value()
 
-    def reconcile_accepted_locked(self):
+    def reconcile_accepted_locked(self, result=None):
         self.calls.append(('accepted', {}))
         value = next(self.after, self.snapshot)
         if isinstance(value, Exception):
@@ -451,13 +451,11 @@ class AdapterLifecycleTests(unittest.TestCase):
             f.sync('delta-token', full(items=[item('A', added_at=fixtures.CREATED)])),
             f.sync('full-token', delta()),
             f.completed([fixtures.completed_b()]),
-            *f.external(),
+            f.comments(),
             comment1.step(),
             f.sync('delta-token', delta()),
             self.comments('B', rest),
-            f.sync('delta-token', delta(notes=[current_note])),
             f.completed([]),
-            self.comments('B', rest),
             comment2.step(),
             f.sync('delta-token', delta()),
             self.comments('B', rest),
@@ -503,7 +501,6 @@ class AdapterLifecycleTests(unittest.TestCase):
         reopen = CommandRequest(self, 'item_uncomplete', {'id': 'B'})
         restored = [item('A', added_at=fixtures.CREATED), item('B', parent_id='A', added_at=fixtures.CREATED)]
         wf, _ = self.workflow([reopen.step(),
-            f.sync('delta-token', delta(items=restored)),
             f.sync('delta-token', delta(items=restored))], setup=[f.sync('delta-token', delta()),
             f.completed([a, b, child])], recent=True)
         result = wf.execute(['step', '--undone', 'A', 'B'])
@@ -529,10 +526,7 @@ class AdapterLifecycleTests(unittest.TestCase):
                  ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]
         deletion = CommandRequest(self, 'item_delete', {'id': 'eligible'})
         wf, _ = self.workflow([deletion.step(),
-            f.sync('delta-token', delta(items=[item('eligible', is_deleted=True)])),
-            f.sync('delta-token', delta(items=[item('eligible', is_deleted=True)])),
-            (Expected('/tasks/completed/by_completion_date', query), {'items': []}),
-            self.comments('end', [own])], setup=[f.sync('delta-token', delta()),
+            f.sync('delta-token', delta(items=[item('eligible', is_deleted=True)]))], setup=[f.sync('delta-token', delta()),
             (Expected('/tasks/completed/by_completion_date', query), {'items': rows, 'unknown': 1}),
             self.comments('eligible', []),
             self.comments('end', [own])], recent=True, now=END)
@@ -613,8 +607,11 @@ class AdapterLifecycleTests(unittest.TestCase):
         steps = [command.step(), f.sync('delta-token', delta(items=[item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)])),
             f.completed(rows)]
         if include_after:
-            steps += [f.sync('delta-token', delta(items=[item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)])),
-                      f.completed(rows), self.activity()]
+            if command.status is None:
+                # Unknown outcomes retain the required full read-only recovery.
+                steps += [f.sync('delta-token', delta(items=[item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)])),
+                          f.completed(rows)]
+            steps += [self.activity()]
         return steps
 
     def test_recurring_accepted_late_publication_failure_requires_manual_restore_no_replay(self):
@@ -713,9 +710,6 @@ class AdapterLifecycleTests(unittest.TestCase):
         wf, http = self.workflow([command.step(),
             f.sync('delta-token', delta(items=[restored])),
             f.completed([counterpart]),
-            self.activity(records=events),
-            f.sync('delta-token', delta(items=[restored])),
-            f.completed([counterpart]),
             self.activity(records=events)], setup=[f.sync('delta-token', delta()),
             f.completed([]),
             self.activity(records=[completion]),
@@ -797,9 +791,6 @@ class AdapterLifecycleTests(unittest.TestCase):
         normalized = {**recurrence, 'date': '2026-10-24'}
         restored = item('B', parent_id='A', due=normalized, added_at=fixtures.CREATED)
         wf, _ = self.workflow([command.step(),
-            f.sync('delta-token', delta(items=[restored])),
-            f.completed([newer, older]),
-            self.activity(records=[event]),
             f.sync('delta-token', delta(items=[restored])),
             f.completed([newer, older]),
             self.activity(records=[event])], setup=[f.sync('delta-token', delta()),

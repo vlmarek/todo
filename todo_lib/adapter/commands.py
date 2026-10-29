@@ -180,6 +180,12 @@ class Label:
 
 @dataclass(frozen=True)
 class Result:
+    """Exact operation attribution plus command-local authoritative evidence.
+
+    before_token pairs after with its submitted preflight baseline. Retrieval
+    entries in evidence retain exhausted endpoint/scope/owner/interval evidence;
+    issues never erase an accepted UUID/temp-ID receipt.
+    """
     outcome: Outcome
     operation: Operation
     target_id: str | None = None
@@ -189,6 +195,7 @@ class Result:
     issues: tuple[str, ...] = ()
     restored_ancestors: tuple[Item, ...] = ()
     occurrences: tuple = ()
+    before_token: str | None = None
 
     @property
     def accepted(self):
@@ -365,10 +372,14 @@ class Gateway:
         after, actual, records, restored = None, None, (), ()
         try:
             if before is not None:
+                proven, created = _proof(op, observed.responses)
+                creation = ({created} if op.type == 'item_add' and proven == Outcome.ACCEPTED
+                            and created and created not in owners else set())
                 after = self.retrieve(observed, before.binding, prior=before.current_snapshot or before.snapshot,
                                       sync_token=before.sync_token,
                                       replace=before.sync_token == '*' or before.current_snapshot is None,
-                                      known=before.snapshot, reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids)
+                                      known=before.snapshot, reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids,
+                                      created_ids=frozenset(creation))
             else:
                 # Provisioning before a root binding exists: only project/label
                 # resources, full plus one bounded freshness delta.
@@ -544,7 +555,8 @@ class Gateway:
             if op.type.endswith('_delete') and actual is not None:
                 issues.append('accepted deletion still present')
         return Result(outcome, op, target, after, actual, tuple(evidence), tuple(issues),
-                      restored, tuple(r.occurrence for r in records))
+                      restored, tuple(r.occurrence for r in records),
+                      before.sync_token if before is not None else None)
 
     def provision_root(self, name, **context):
         return self.execute(Operation('project_add', {'name': name, 'parent_id': None}), **context)

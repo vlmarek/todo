@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from todo_lib import domain as d
 from todo_lib.adapter.current import retrieve
-from todo_lib.adapter.history import HistoryAdapter
+from todo_lib.adapter.history import HistoryAdapter, Retrieval
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import (StateStore, LocalState, LocalError, History, load_config,
                             exclusive_lock, merge_history, prepare_candidates)
@@ -89,7 +89,69 @@ def _known(state):
     return d.validate(replace(s, items=items, **collections))
 
 
-def _reconcile(current, known, history, adapter, start, end, cursor, hidden_names):
+class OperationEvidence:
+    """Only exhausted, explicitly scoped reads from this operation may be shared."""
+    def __init__(self, adapter, result):
+        self.adapter = adapter
+        self.reads = tuple(e for e in result.evidence if isinstance(e, Retrieval))
+        self.lifecycle_ids = ({result.target_id} if result.operation.type in
+            ('item_close', 'item_complete', 'item_update_date_complete', 'item_uncomplete') else set())
+
+    def _read(self, endpoint, start, end, scope):
+        for evidence in self.reads:
+            if (evidence.endpoint == endpoint and dict(evidence.scope) == dict(scope or {})
+                    and evidence.start is not None and evidence.end is not None
+                    and d.instant_key(evidence.start) <= d.instant_key(start)
+                    and d.instant_key(evidence.end) >= d.instant_key(end)):
+                activity = endpoint == '/activities'
+                records = tuple(r for r in evidence.records if
+                    d.instant_key(start) < d.instant_key(r.event_date if activity else r.occurrence.completed_at)
+                    <= d.instant_key(end))
+                return replace(evidence, records=records, start=start, end=end)
+        return None
+
+    def completed(self, start, end, scope=None):
+        return self._read('/tasks/completed/by_completion_date', start, end, scope) or self.adapter.completed(start, end, scope)
+
+    def activities(self, start, end, scope=None):
+        return self._read('/activities', start, end, scope) or self.adapter.activities(start, end, scope)
+
+    def comments(self, owner):
+        for evidence in self.reads:
+            if (evidence.endpoint == '/comments' and evidence.owner_id == owner
+                    and evidence.required_ids is None):
+                return evidence
+        return self.adapter.comments(owner)
+
+
+def affected_ids(result, known, current):
+    """Known subtree and ancestry remain required operation context."""
+    items = {**known.items, **current.snapshot.items}
+    op = result.operation
+    ids = {result.target_id} if op.type.startswith('item_') else {op.args.get('item_id')}
+    resource = 'comments' if op.type.startswith('note_') else 'reminders' if op.type.startswith('reminder_') else None
+    if resource is not None:
+        for snapshot in (known, current.snapshot):
+            value = getattr(snapshot, resource).get(result.target_id)
+            if value is not None:
+                ids.add(value.item_id)
+    ids.discard(None)
+    roots = set(ids)
+    while True:
+        expanded = ids | {i.id for i in (*known.items.values(), *current.snapshot.items.values()) if i.parent_id in ids}
+        if expanded == ids:
+            break
+        ids = expanded
+    for identity in roots:
+        seen = set()
+        while identity in items and identity not in seen:
+            seen.add(identity)
+            identity = items[identity].parent_id
+            ids.add(identity)
+    return ids - {None}
+
+
+def _reconcile(current, known, history, adapter, start, end, cursor, hidden_names, *, affected=None):
     s = current.snapshot
     removed = set(current.deleted_ids | current.departed_ids)
     # Explicit parent deletion/scope departure removes its known subtree too.
@@ -99,13 +161,46 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
             break
         removed = expanded
     missing = set(known.items) - s.items.keys() - removed
+    deferred = set() if affected is None else {k for k in missing
+        if known.items[k].completed and k not in affected}
+    missing -= deferred
     items, occurrences = dict(s.items), dict(s.occurrences)
+    def retained(item):
+        if (known.account.timezone != s.account.timezone and item.attention is not None
+                and item.attention.kind == 'floating'):
+            if item.attention.raw_due is None:
+                raise d.DomainError('retained floating attention requires original due metadata')
+            return replace(item, attention=d.resolve_remote_due(item.attention.raw_due, s.account.timezone))
+        return item
+
+    items.update({k: retained(known.items[k]) for k in deferred})
     recurring = {i.id for i in s.items.values() if i.recurring}
+    if affected is not None:
+        recurring &= affected
+        if isinstance(adapter, OperationEvidence):
+            recurring &= adapter.lifecycle_ids
     records = []
+    if isinstance(adapter, OperationEvidence):
+        records = [r for e in adapter.reads if e.endpoint == '/tasks/completed/by_completion_date'
+                   for r in e.records if r.item.id in affected]
     if missing or recurring:
         # A bounded supported endpoint, never active absence, proves completion.
-        for category in sorted(s.categories):
+        categories = s.categories if affected is None else {
+            (s.items.get(k) or known.items[k]).category_id for k in missing | recurring}
+        for category in sorted(categories):
             records.extend(adapter.completed(start, end, {'project_id': category}).records)
+        if affected is not None:
+            # Returned ancestry may differ from saved ancestry. Retain only the
+            # required owner closure from a complete category-scoped response.
+            needed = affected | missing
+            while True:
+                expanded = needed | {r.item.parent_id for r in records if r.item.id in needed
+                                     and r.item.parent_id is not None}
+                if expanded == needed:
+                    break
+                needed = expanded
+            records = [r for r in records if r.item.id in needed]
+            affected = needed
         latest = {}
         for record in records:
             item = record.item
@@ -115,6 +210,8 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
             if item.id in s.items:
                 continue  # current truth always supersedes historical fields
             if item.id not in missing:
+                if affected is not None and item.id not in affected:
+                    continue
                 if record.deleted or d.instant_key(record.occurrence.completed_at) <= d.instant_key(cursor):
                     continue
                 if not item.completed:
@@ -140,15 +237,7 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
                 items[identity] = record.item
             elif identity in known.items and known.items[identity].completed:
                 # Omission does not retract an already established completion.
-                item = known.items[identity]
-                if (known.account.timezone != s.account.timezone
-                        and item.attention is not None and item.attention.kind == 'floating'):
-                    # Retain the wall time, not its resolution in the old account zone.
-                    if item.attention.raw_due is None:
-                        raise d.DomainError('retained floating attention requires original due metadata')
-                    item = replace(item, attention=d.resolve_remote_due(
-                        item.attention.raw_due, s.account.timezone))
-                items[identity] = item
+                items[identity] = retained(known.items[identity])
             else:
                 raise d.DomainError('unresolved disappeared managed item ' + identity + '; supported lifecycle evidence required')
     while True:
@@ -160,6 +249,11 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
     # Current live comments are authoritative, including absence/changed ownership.
     comments = {k: c for k, c in s.comments.items() if c.item_id in items}
     for identity in sorted(items.keys() - s.items.keys()):
+        if identity in deferred:
+            comments.update({k: c for k, c in known.comments.items()
+                             if c.item_id == identity and k not in s.comments
+                             and k not in current.removed_comment_ids})
+            continue
         for comment in adapter.comments(identity).records:
             if comment.item_id != identity:
                 raise d.DomainError('incompatible historical comment ownership')
@@ -201,7 +295,14 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
             for k, r in reminders.items()}
     snapshot = d.validate(replace(s, items=items, comments=comments,
         reminders=reminders, occurrences=occurrences), hidden_names)
-    incoming = History(snapshot, {k: end for k in items})
+    observed = set(items) if affected is None else set(affected)
+    if affected is not None:
+        observed |= {k for k, item in s.items.items() if item != known.items.get(k)}
+        for collection in ('comments', 'reminders'):
+            old, new = getattr(known, collection), getattr(s, collection)
+            observed |= {value.item_id for k, value in {**old, **new}.items()
+                         if value.item_id in s.items and old.get(k) != new.get(k)}
+    incoming = History(snapshot, {k: end for k in items if k in observed and k not in deferred})
     removed_comments = set(history.snapshot.comments) - comments.keys()
     # Resolve removals and rebase the entire retained context before merge's
     # validation. Unioning old reminders here would resurrect tombstones in the
@@ -236,15 +337,19 @@ class Synchronizer:
         with exclusive_lock('refresh', self.store.root):
             return self.refresh_locked(clear_cache=clear_cache)
 
-    def reconcile_accepted_locked(self):
+    def reconcile_accepted_locked(self, result=None):
         """Call after EACH accepted gateway operation, before any next mutation.
 
         Raises with remote_outcome='accepted' even if retrieval or publication fails.
         Unknown/rejected gateway outcomes must not call this acceptance boundary.
+        result is the exact Gateway Result from this operation. Matching complete
+        after/scoped Retrieval evidence is reused, while uncovered required state
+        is fetched. Omitting result retains full refresh policy for legacy callers
+        and provisioning. No report cursor/coverage advancement or pruning occurs.
         """
-        return self.refresh_locked(remote_outcome='accepted')
+        return self.refresh_locked(remote_outcome='accepted', operation_result=result)
 
-    def refresh_locked(self, *, clear_cache=False, remote_outcome='unattempted'):
+    def refresh_locked(self, *, clear_cache=False, remote_outcome='unattempted', operation_result=None):
         """Caller holds exclusive_lock; no retries, token classifier or remote repair."""
         phase, cleared, before = 'local validation', False, None
         try:
@@ -265,14 +370,44 @@ class Synchronizer:
             d.instant_key(now)
             known = _known(state)
             phase = 'current retrieval'
-            current = retrieve(self.transport, known.binding, prior=state.current_snapshot or known,
-                sync_token=state.sync_token, replace=clear_cache or state.current_snapshot is None or state.waiting_label_ids is None,
-                hidden_names=config.hidden_from_now, known=known, waiting_label_ids=state.waiting_label_ids, reminder_ids=state.current_reminder_ids)
+            if operation_result is not None and not operation_result.accepted:
+                raise d.DomainError('accepted operation result required')
+            current = operation_result.after if (operation_result is not None
+                and operation_result.before_token == state.sync_token) else None
+            if current is not None and (current.current_snapshot != current.snapshot
+                    or current.binding.account_id != known.binding.account_id
+                    or current.binding.root_id != known.binding.root_id):
+                raise d.DomainError('incompatible operation current evidence')
+            if current is None:
+                current = retrieve(self.transport, known.binding, prior=state.current_snapshot or known,
+                    sync_token=state.sync_token, replace=clear_cache or state.current_snapshot is None or state.waiting_label_ids is None,
+                    hidden_names=config.hidden_from_now, known=known, waiting_label_ids=state.waiting_label_ids, reminder_ids=state.current_reminder_ids)
             phase = 'lifecycle reconciliation'
             adapter = HistoryAdapter(self.transport, timezone=current.account.timezone)
+            # Cursor-bound coverage includes every deferred pending interval;
+            # synced_at may widen that bound but can never advance it.
             start = min((state.cursor, state.synced_at or state.cursor), key=d.instant_key)
+            affected = None
+            upper = now
+            if operation_result is not None:
+                affected = affected_ids(operation_result, known, current)
+                adapter = OperationEvidence(adapter, operation_result)
+                # The gateway's completed read proves this operation's transition.
+                # Wider coverage is still required for unrelated active disappearances.
+                missing_open = {k for k, i in known.items.items() if not i.completed
+                    and k not in current.snapshot.items and k not in current.deleted_ids | current.departed_ids}
+                for evidence in adapter.reads:
+                    if (evidence.endpoint == '/tasks/completed/by_completion_date'
+                            and missing_open <= affected and evidence.start is not None):
+                        start, upper = evidence.start, evidence.end
+                        break
             snapshot, history = _reconcile(current, known, state.history, adapter,
-                                           start, now, state.cursor, config.hidden_from_now)
+                                           start, upper, state.cursor, config.hidden_from_now, affected=affected)
+            if operation_result is not None and operation_result.operation.type == 'item_delete':
+                target = operation_result.target_id
+                ancestors = {i.id for i in d.ancestors(known, target)} if target in known.items else set()
+                if target in snapshot.items or not ({target} | ancestors) & current.deleted_ids:
+                    raise d.DomainError('accepted deletion lacks authoritative deletion evidence')
             phase = 'candidate preparation'
             candidates = prepare_candidates(snapshot, history,
                 account_display=state.binding.account_display,

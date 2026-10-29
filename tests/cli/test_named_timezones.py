@@ -119,7 +119,7 @@ class PublicNamedTimezones(unittest.TestCase):
         for command, state in [(due_command, self.state(items=rows)),
                                (reminder_command, self.state(items=rows, reminders=[reminder]))]:
             steps.append(command.step())
-            for _ in range(2):  # Gateway actual read, then Synchronizer publication.
+            for _ in range(1):  # Gateway current is reused for publication.
                 for token, response in [('delta-token', state), ('full-token', f.delta())]:
                     steps.append((ExpectedRequest('POST', '/sync', 'secret', form={
                         'sync_token': token, 'resource_types': f.RESOURCES}),

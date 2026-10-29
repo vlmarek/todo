@@ -108,15 +108,16 @@ class History:
         self.calls.append(('completed', instant_key(start), instant_key(end), scope))
         if self.failure:
             raise HistoryError('incomplete bounded history')
-        return Retrieval(tuple(self.records), (), start, end)
+        return Retrieval(tuple(self.records), (), start, end,
+                         '/tasks/completed/by_completion_date', tuple(scope.items()))
 
     def comments(self, owner):
         self.calls.append(('comments', owner))
-        return Retrieval(tuple(self.notes), ())
+        return Retrieval(tuple(self.notes), (), endpoint='/comments', owner_id=owner)
 
     def activities(self, start, end, scope):
         self.calls.append(('activities', scope))
-        return Retrieval(tuple(self.events), (), start, end)
+        return Retrieval(tuple(self.events), (), start, end, '/activities', tuple(scope.items()))
 
 
 class CommandsTests(unittest.TestCase):

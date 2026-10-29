@@ -85,19 +85,22 @@ class _Evidence:
             by_owner = {owner: [] for owner in current.items}
             for comment in current.comments.values():
                 by_owner[comment.item_id].append(comment)
-            self.own = {owner: Retrieval(tuple(comments), ())
+            self.own = {owner: Retrieval(tuple(comments), (), endpoint='/sync',
+                                         scope=(('resource', 'notes'),), owner_id=owner)
                         for owner, comments in by_owner.items()}
 
     def completed(self, start, end, scope=None):
         records = tuple(r for r in self.done.records
             if _within(r.occurrence.completed_at, start, end)
             and (scope is None or r.item.category_id == scope['project_id']))
-        return Retrieval(records, self.done.pages, start, end)
+        return Retrieval(records, self.done.pages, start, end,
+                         '/tasks/completed/by_completion_date', tuple((scope or {}).items()))
 
     def activities(self, start, end, scope=None):
         records = tuple(e for e in self.events.records if _within(e.event_date, start, end)
             and (scope is None or (e.object_type == scope['object_type'] and e.object_id == scope['object_id'])))
-        return Retrieval(records, self.events.pages, start, end)
+        return Retrieval(records, self.events.pages, start, end,
+                         '/activities', tuple((scope or {}).items()))
 
     def comments(self, owner, *, required_ids=None):
         if owner not in self.own and required_ids is not None:
@@ -251,7 +254,8 @@ class Reporter:
                 result = adapter.completed(lower, now, {'project_id': category})
                 records.extend(result.records)
                 pages.extend(result.pages)
-            self.completed = Retrieval(tuple(records), tuple(pages), lower, now)
+            self.completed = Retrieval(tuple(records), tuple(pages), lower, now,
+                'managed/completed', tuple(('project_id', k) for k in sorted(current.snapshot.categories)))
             self.activities = adapter.activities(lower, now)
             evidence = _Evidence(adapter, self.completed, self.activities, current.snapshot)
             snapshot, pending = _reconcile(current, known, state.history, evidence,

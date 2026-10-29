@@ -844,3 +844,243 @@ else:
             workflow.refresh(clear_cache=True)
         self.assertFalse(caught.exception.cache_cleared)
         self.assertNotIn('Explicit cache clearing occurred', str(caught.exception))
+
+
+class MutationReuseTests(unittest.TestCase):
+    """Revision 17 strict HTTP composition, using actual adapter/store/workflows.
+
+    Shapes/queries follow the pinned Sync, completed, activities and comments
+    contracts cited above. No response is computed from a production mapper.
+    """
+    setUp = SyncTests.setUp
+    put = SyncTests.put
+    sync = SyncTests.sync
+    boundary = SyncTests.boundary
+    bytes = SyncTests.bytes
+
+    def recurring(self):
+        from tests.adapter.current.test_current import due
+        return item('R', content='Deferred recurring work', due=due('2026-10-25', timezone=None,
+                    string='every day', is_recurring=True))
+
+    def archived(self):
+        return item('X', checked=True, completed_at=DONE, content='Archived pending')
+
+    def own(self, owner, text):
+        return (Expected('/comments', [('task_id', owner), ('limit', '200')]),
+                {'results': [dict(id=owner.lower() + '-note', content=text, posted_at=COMMENT,
+                                 is_deleted=False)], 'next_cursor': None})
+
+    def completed(self, rows, cursor=None, *, upper='2026-10-22T12:00:01Z'):
+        return (Expected('/tasks/completed/by_completion_date', [(key, upper if key == 'until' else value) for key, value in COMPLETED_QUERY] +
+                         ([] if cursor is None else [('cursor', cursor)])),
+                {'items': rows})
+
+    def activities(self, rows, *, owner=None, upper='2026-10-22T12:00:01Z'):
+        scope = [] if owner is None else [('object_type', 'item'), ('object_id', owner)]
+        return (Expected('/activities', scope + [
+            ('date_from', '2026-10-20T00:00:00Z'),
+            ('date_to', upper), ('limit', '200'),
+            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+                {'results': rows, 'next_cursor': None})
+
+    def establish_pending(self, *, second=False):
+        raw = open_tree(user_plan_limits={'current': {'activity_log': True,
+            'activity_log_limit': -1, 'reminders': True}})
+        raw['items'].append(self.recurring())
+        archived = [self.archived()]
+        if second:
+            archived.append(item('Y', checked=True, completed_at=DONE, content='Unaffected archived'))
+        baseline = d.instant_from_wire('2026-10-21T13:00:00Z')
+        upper = '2026-10-21T13:00:01Z'
+        transport, _ = self.boundary([self.sync('delta-token', raw),
+            self.sync('full-token', delta()), self.completed(archived, upper=upper),
+            self.own('X', 'Last established text'),
+            *([self.own('Y', 'Unaffected pending text')] if second else []),
+            self.activities([], owner='R', upper=upper)])
+        Synchronizer(transport, self.store, clock=lambda: baseline).refresh()
+        return self.store.load_consistent_state()
+
+    def compose(self, *, invalid=False):
+        from todo_lib.adapter.commands import Gateway
+        from todo_lib.workflows.capture import CaptureWorkflow
+        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        from todo_lib.presentation import OriginalStreams
+        from io import StringIO
+        saved = self.establish_pending()
+        pending_at = saved.history.observations['X']
+        before = self.bytes()
+        created = item('actual-created', content='Created title', priority=3,
+                       added_at='2026-10-22T11:59:59Z')
+        changed = item('B', parent_id='A', content='Concurrent unrelated update')
+        if invalid:
+            changed['priority'] = 9
+        add = CommandRequest(self, 'item_add', dict(project_id='cat',
+            content='Created title', priority=3, description='', labels=[],
+            auto_reminder=False, due=None), target='actual-created')
+        done = CommandRequest(self, 'item_close', {'id': 'actual-created'})
+        original_check = done.check
+        def check_published(request, timeout):
+            # The next submission observes the actual saved identity, active
+            # membership and new token through a new StateStore instance.
+            reloaded = StateStore(self.root).load_consistent_state()
+            self.assertEqual(reloaded.snapshot.items['actual-created'].title, 'Created title')
+            self.assertFalse(reloaded.snapshot.items['actual-created'].completed)
+            self.assertIn('actual-created', reloaded.current_snapshot.items)
+            self.assertEqual(reloaded.sync_token, 'created-token')
+            self.assertEqual(reloaded.snapshot.items['B'].title, 'Concurrent unrelated update')
+            self.assertEqual(reloaded.history.observations['X'], pending_at)
+            self.assertEqual((self.root / 'report-cursor').read_bytes(), before['report-cursor'])
+            original_check(request, timeout)
+        done.check = check_published
+        final = dict(created, checked=True, completed_at='2026-10-22T12:00:00Z')
+        steps = [add.step(), self.sync('delta-token', delta(sync_token='created-token', items=[created, changed]))]
+        if invalid:
+            # Required outcome reconciliation cannot publish the invalid active
+            # result, even though the UUID and temporary identity were accepted.
+            steps += [self.sync('delta-token', delta(items=[created, changed]))]
+        else:
+            steps += [done.step(), self.sync('created-token', delta(sync_token='completed-token', items=[final])),
+                self.completed([final])]
+        transport, http = self.boundary(steps)
+        sync = Synchronizer(transport, self.store, clock=lambda: NOW)
+        result = CaptureWorkflow(sync, gateway=Gateway(transport,
+            clock=lambda: d.instant_datetime(NOW)), streams=OriginalStreams(StringIO(), StringIO(), StringIO())).execute(
+                ['add', 'cat', 'Created title', '--done'])
+        if invalid:
+            self.assertEqual(result.status, 1)
+            self.assertEqual([o.outcome for o in result.outcomes], ['accepted', 'unattempted'])
+            self.assertEqual(self.bytes(), before)
+        else:
+            self.assertEqual(result.status, 0, result.document.stderr)
+            after = self.store.load_consistent_state()
+            self.assertTrue(after.snapshot.items['actual-created'].completed)
+            self.assertEqual(after.sync_token, 'completed-token')
+            self.assertNotIn('X', after.current_snapshot.items)
+            self.assertEqual([(o.item_id, d.instant_text(o.completed_at))
+                for o in after.history.snapshot.occurrences.values() if o.item_id == 'actual-created'],
+                [('actual-created', '2026-10-22T12:00:00Z')])
+            self.assertEqual(after.snapshot.items['B'].title, 'Concurrent unrelated update')
+            self.assertEqual(after.history.observations['X'], pending_at)
+            self.assertEqual(after.snapshot.comments['x-note'].body, 'Last established text')
+            self.assertEqual(after.cursor, saved.cursor)
+            self.assertEqual(after.history.coverage, saved.history.coverage)
+            self.assertEqual(len(http.requests), 5)  # no full, activities or archived comments
+        return result
+
+    def test_composed_incremental_create_published_before_complete_reuses_required_proof(self):
+        self.compose()
+
+    def test_unrelated_invalid_active_change_fails_before_second_write(self):
+        self.compose(invalid=True)
+
+    def test_deferred_history_older_than_writes_reported_and_failure_boundaries(self):
+        from io import StringIO
+        from todo_lib.presentation import OriginalStreams
+        from todo_lib.workflows.report import Reporter
+        self.compose()
+        before = self.bytes()
+        event = dict(id=801, object_type='note', object_id='x-note', event_type='updated',
+            event_date='2026-10-21T18:00:00Z', parent_item_id='X', parent_project_id='cat')
+        recurring = dict(id=802, object_type='item', object_id='R', event_type='completed',
+                         event_date='2026-10-21T18:00:01Z', parent_project_id='cat')
+        self.assertLess(d.instant_key(d.instant_from_wire('2026-10-21T13:00:00Z')),
+                        d.instant_key(d.instant_from_wire(event['event_date'])))
+        self.assertLess(d.instant_key(d.instant_from_wire(event['event_date'])),
+                        d.instant_key(self.store.load_consistent_state().synced_at))
+        def steps(failed=False):
+            return [self.sync(self.store.load_consistent_state().sync_token, delta()), self.completed([self.archived()]),
+                    self.activities([event, recurring]),
+                    self.own('X', 'Deferred changed text') if not failed else
+                    (self.own('X', '')[0], Response(b'{invalid'))]
+        transport, _ = self.boundary(steps(True))
+        with self.assertRaises(SyncError):
+            Reporter(transport, self.store, clock=lambda: NOW).run(['--final'])
+        self.assertEqual(self.bytes(), before)
+        for boundary in ('output', 'cursor'):
+            transport, _ = self.boundary(steps())
+            out = StringIO()
+            reporter = Reporter(transport, self.store, clock=lambda: NOW,
+                streams=OriginalStreams(StringIO(), out, StringIO()))
+            protected = {}
+            def fail(*args, **kwargs):
+                protected['history'] = (self.root / 'history.json').read_bytes()
+                raise OSError('controlled final ' + boundary + ' failure')
+            target = ('todo_lib.workflows.report.deliver' if boundary == 'output' else
+                      'todo_lib.local.store.StateStore.write_cursor')
+            with patch(target, side_effect=fail):
+                with self.assertRaises((SyncError, OSError)):
+                    reporter.run(['--final'])
+            self.assertEqual((self.root / 'report-cursor').read_bytes(), before['report-cursor'])
+            self.assertEqual((self.root / 'history.json').read_bytes(), protected['history'])
+            self.assertIn('X', self.store.load_history().snapshot.items)
+        transport, _ = self.boundary(steps())
+        out = StringIO()
+        Reporter(transport, self.store, clock=lambda: NOW,
+            streams=OriginalStreams(StringIO(), out, StringIO())).run()
+        self.assertIn('Deferred changed text', out.getvalue())
+        self.assertIn('Archived pending', out.getvalue())
+        self.assertIn('Deferred recurring work', out.getvalue())
+
+
+    def test_archived_comment_evidence_shared_without_losing_other_pending_owner(self):
+        from io import StringIO
+        from todo_lib.adapter.commands import Gateway
+        from todo_lib.presentation import OriginalStreams
+        from todo_lib.workflows.comments import CommentWorkflow, Change
+        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        saved = self.establish_pending(second=True)
+        before = self.bytes()
+        op = CommandRequest(self, 'note_add', {'item_id': 'X', 'content': 'New own text'}, target='R')
+        # Complete, paginated owner scope includes unaffected own comments too.
+        query = [('task_id', 'X'), ('limit', '200')]
+        steps = [op.step(), self.sync('delta-token', delta()),
+            (Expected('/comments', query), {'results': [dict(id='x-note', content='Last established text',
+                posted_at=COMMENT, is_deleted=False)], 'next_cursor': 'own.page'}),
+            (Expected('/comments', query + [('cursor', 'own.page')]),
+                {'results': [dict(id='R', content='New own text', posted_at=COMMENT,
+                                 is_deleted=False)], 'next_cursor': None}),
+            self.completed([self.archived()])]
+        transport, http = self.boundary(steps)
+        sync = Synchronizer(transport, self.store, clock=lambda: NOW)
+        workflow = CommentWorkflow(sync, gateway=Gateway(transport, clock=lambda: d.instant_datetime(NOW)),
+            streams=OriginalStreams(StringIO(), StringIO(), StringIO()))
+        # Exercise the archived-owner consumer directly; ordinary title selection
+        # intentionally selects open owners. Public Done composition is covered
+        # by AdapterLifecycleTests with the same real gateway/publication path.
+        with exclusive_lock('archived comment', self.root):
+            result = workflow._apply(sync.read_local(), saved.snapshot.items['X'],
+                                     (Change('add', body='New own text'),))
+        self.assertEqual(result.status, 0, result.document.stderr)
+        after = self.store.load_consistent_state()
+        self.assertEqual(after.snapshot.comments['R'].body, 'New own text')
+        self.assertEqual(after.snapshot.comments['x-note'], saved.snapshot.comments['x-note'])
+        self.assertEqual(after.snapshot.comments['y-note'], saved.snapshot.comments['y-note'])
+        self.assertEqual(after.history.observations['Y'], saved.history.observations['Y'])
+        # Resource namespaces do not make the new note ID an affected item ID.
+        self.assertEqual(after.history.observations['R'], saved.history.observations['R'])
+        self.assertEqual((self.root / 'report-cursor').read_bytes(), before['report-cursor'])
+        self.assertEqual(len(http.requests), 5)
+
+    def test_explicit_archived_note_removal_survives_deferred_history(self):
+        from io import StringIO
+        from todo_lib.adapter.commands import Gateway
+        from todo_lib.presentation import OriginalStreams
+        from todo_lib.workflows.capture import CaptureWorkflow
+        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        self.establish_pending()
+        saved = self.store.load_consistent_state()
+        op = CommandRequest(self, 'item_update', {'id': 'B', 'content': 'Renamed'})
+        transport, http = self.boundary([op.step(), self.sync('delta-token', delta(
+            items=[item('B', parent_id='A', content='Renamed')],
+            notes=[{'id': 'x-note', 'is_deleted': True}]))])
+        workflow = CaptureWorkflow(Synchronizer(transport, self.store, clock=lambda: NOW),
+            gateway=Gateway(transport, clock=lambda: d.instant_datetime(NOW)),
+            streams=OriginalStreams(StringIO(), StringIO(), StringIO()))
+        result = workflow.execute(['rename', 'B', '--to', 'Renamed'])
+        self.assertEqual(result.status, 0, result.document.stderr)
+        after = self.store.load_consistent_state()
+        self.assertNotIn('x-note', after.snapshot.comments)
+        self.assertNotIn('x-note', after.history.snapshot.comments)
+        self.assertEqual(after.history.observations['X'], saved.history.observations['X'])
+        self.assertEqual(len(http.requests), 2)
