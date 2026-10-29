@@ -74,6 +74,9 @@ class NamedTimezoneWorkflowTests(unittest.TestCase):
                 attention = self.store.load_consistent_state().snapshot.items['parent'].attention
                 self.assertEqual((attention.zone, attention.rule, attention.recurring), ('America/New_York', 'every Monday at 09:00', True))
                 self.assertEqual(attention.instant.astimezone(d.account_timezone(attention.zone)).hour, 9)
+                self.assertEqual(d.instant_text(attention.instant), date)
+                self.assertEqual(attention.language, 'en')
+                self.assertIn('America/New_York)', result.document.stdout)
 
     def test_occurrence_move_retains_rule_language_zone_and_reminders(self):
         raw = f.due('2026-10-26T13:00:00Z', timezone='America/New_York', string='cada lunes a las 9', lang='es', is_recurring=True)
@@ -88,6 +91,12 @@ class NamedTimezoneWorkflowTests(unittest.TestCase):
         self.assertEqual(result.status, 0, result.document.stderr)
         self.assertEqual(result.snapshot.reminders, before)
         self.assertEqual(result.snapshot.items['parent'].attention.raw_due, moved)
+        retained = result.snapshot.items['parent'].attention
+        self.assertEqual((retained.rule, retained.language, retained.zone, retained.recurring),
+                         ('cada lunes a las 9', 'es', 'America/New_York', True))
+        self.assertIn('2026-11-12 08:00:00 UTC (2026-11-12 03:00:00 America/New_York)',
+                      result.document.stdout)
+        self.assertNotIn('(2026-11-12 09:00:00 Europe/Prague)', result.document.stdout)
 
     def test_short_code_forwarding_has_no_predicted_zone(self):
         # Synthetic actual normalization makes no claim about live CET behavior.

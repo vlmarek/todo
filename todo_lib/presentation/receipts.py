@@ -37,7 +37,7 @@ def render_mutation(snapshot, item, action='Updated', *, changes=(), attention=N
         return document()
     text = [f'{action} {item.role}: ' + owner_title(snapshot, item, deep_only=True), *changed]
     if action == 'Created' and attention is not None:
-        text.append('  Due: ' + actual_due(attention, snapshot.account.timezone))
+        text.append('  Due: ' + actual_due(attention, snapshot.account.timezone, schedule_zone=True))
     if also_reopened:
         text.append('Also reopened:')
         for ancestor in also_reopened:

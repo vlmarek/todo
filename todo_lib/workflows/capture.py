@@ -50,11 +50,12 @@ class _Action:
 
 
 def reminder_values(snapshot, owner_id):
+    """Accepted receipt scalar, preserving each reminder's schedule context."""
     from todo_lib.presentation.formatting import reminders_text
     reminders = [r for r in snapshot.reminders.values() if r.item_id == owner_id]
     relative = sorted(r.minutes for r in reminders if r.type == 'relative')
     absolute = [r for r in reminders if r.type == 'absolute']
-    return ', '.join(v for v in (offset_text(relative), reminders_text(absolute, snapshot.account.timezone)) if v) or None
+    return ', '.join(v for v in (offset_text(relative), reminders_text(absolute, snapshot.account.timezone, schedule_zone=True)) if v) or None
 
 
 def _same_item(left, right, zone):
@@ -382,8 +383,8 @@ class CaptureWorkflow:
                    ('Reason', d.item_description(old)[1], d.item_description(actual)[1])]
         zone = snapshot.account.timezone
         if not d.same_attention(old.attention, actual.attention, zone):
-            previous_due = p.actual_due(old.attention, zone) if old.attention else None
-            actual_due = p.actual_due(actual.attention, zone) if actual.attention else None
+            previous_due = p.actual_due(old.attention, zone, schedule_zone=True) if old.attention else None
+            actual_due = p.actual_due(actual.attention, zone, schedule_zone=True) if actual.attention else None
             if previous_due == actual_due:
                 # Whole-second display must not erase a real explicit fractional change.
                 previous_due = due_arguments(old.attention)['date']
@@ -392,7 +393,7 @@ class CaptureWorkflow:
         document = p.render_mutation(snapshot, actual, changes=changes)
         if not document.stdout and 'attention' in action.kwargs:
             document = p.document(f'Accepted scheduling for {actual.role}: {d.scalar_title(actual.title)}\n'
-                                  '  Due: ' + p.actual_due(actual.attention, zone))
+                                  '  Due: ' + p.actual_due(actual.attention, zone, schedule_zone=True))
         extra = []
         if action.retained is not None and reminder_values(snapshot, actual.id):
             extra.append('  Reminders retained: ' + reminder_values(snapshot, actual.id))
