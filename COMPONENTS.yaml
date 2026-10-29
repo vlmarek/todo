@@ -554,3 +554,24 @@ interfaces:
     dates and removal previews. No clock capture, I/O, model validation or fabricated input-zone persistence;
     document scoped helper/caller APIs in presentation/API.md.
   status: provisional
+- id: shared-operation-evidence
+  owner: adapter
+  supersedes_ref: named-zone-gateway
+  description: 'Compatible successor Gateway.execute(Operation, before=Current) -> Result: retain exact
+    UUID/temp-ID attribution, actual/after/issues and complete command-local scoped Retrieval evidence
+    with its baseline/token, scope and coverage. Current retrieval keeps normal incremental creation when
+    resources are complete, with bounded necessary hydration and full-response freshness. Evidence can
+    be consumed by accepted-operation publication without equivalent repeated reads; partial or unrelated
+    evidence cannot establish completeness or acceptance. Keep provisioning, unknown outcomes, named-zone/reminder
+    reconciliation and replay protections compatible.'
+- id: scoped-write-reconciliation
+  owner: workflows
+  supersedes_ref: cached-task-step-workflows
+  description: Compatible successor ordinary task/step workflows pass exact operation results/evidence
+    into Synchronizer accepted-operation reconciliation. Reuse complete current and scoped historical
+    evidence, validate all returned active changes, retrieve only necessary affected lifecycle/context
+    history, and publish before any next write. Preserve deferred pending context without claiming historical
+    freshness; explicit refresh/report still cover deferred intervals independently of current Sync progress.
+    Keep public request/result/error shapes, cached stable-ID preflight, actual receipts, locking, per-file
+    publication, outcome classification and finalization. Document concrete compatible evidence arguments
+    in existing adapter/workflows API.md.

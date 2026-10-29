@@ -1,13 +1,12 @@
 # Prepared ownership and evidence
 
-Confirmed Design revision 15 adds per-value named-zone attention/absolute reminders,
-preserved recurring zones and dual-zone selected-item detail/scheduling receipts.
-T34 owns the usable scheduling/data path and affected fixture migration. T35 owns
-scoped presentation, composed/copied acceptance, demonstrated integration repairs
-and appended observed evidence. All 147 earlier requirements remain satisfied with
-their accepted historical owners preserved. Four successors are active and nothing
-is deferred in the final stage. This ledger records planned coverage; observations
-append only to `docs/implementation/acceptance-evidence.md`.
+Design revision 17 adds ordinary-write evidence reuse and affected-state historical
+retrieval. T36 owns the complete coupled implementation, consumer migration and
+distinguishing acceptance. All 151 previously planned requirements are satisfied;
+35 historical assignments remain unchanged. The four revision-16 notice-removal
+requirements remain deferred pending their separate direct-delivery completion and
+retained evidence; no manual coverage or final completion is claimed. Observations
+append to `docs/implementation/acceptance-evidence.md`.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -804,23 +803,54 @@ requirements:
     - t31-focused
     - final-delivery
   REQ-SCHED-017:
-    stage_status: active
-    primary_owner: T34
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t34-focused
   REQ-SCHED-018:
-    stage_status: active
-    primary_owner: T34
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t34-focused
   REQ-OUT-025:
-    stage_status: active
-    primary_owner: T35
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t35-focused
   REQ-VERIFY-033:
-    stage_status: active
-    primary_owner: T35
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t35-focused
+  REQ-SYNC-036:
+    stage_status: active
+    primary_owner: T36
+    planned_evidence:
+    - t36-focused
+  REQ-SYNC-037:
+    stage_status: active
+    primary_owner: T36
+    planned_evidence:
+    - t36-focused
+  REQ-VERIFY-035:
+    stage_status: active
+    primary_owner: T36
+    planned_evidence:
+    - t36-focused
+  REQ-OUT-026:
+    stage_status: deferred
+    primary_owner: null
+    planned_evidence: []
+  REQ-OUT-027:
+    stage_status: deferred
+    primary_owner: null
+    planned_evidence: []
+  REQ-OUT-028:
+    stage_status: deferred
+    primary_owner: null
+    planned_evidence: []
+  REQ-VERIFY-034:
+    stage_status: deferred
+    primary_owner: null
+    planned_evidence: []
 ```

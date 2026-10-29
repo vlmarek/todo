@@ -1,3 +1,33 @@
+# Current continuation: TODO3-PLAN-016
+
+Design revision 17 in `docs/design/mutation-retrieval-reuse.md` governs ordinary-write
+evidence reuse and affected-state historical retrieval. T36 owns the coupled Gateway,
+current retrieval, synchronization/publication, consumer/fixture migration and composed
+acceptance. Reuse the accepted application at
+`5b99bbbccc2f317036faab2ca924ef88b2fb5684`; preserve all 35 accepted assignments,
+their selected definitions/interfaces/checks and evidence. No prior work is reopened.
+
+The successor stage activates REQ-SYNC-036/037 and REQ-VERIFY-035; all 151 earlier
+planned requirements are satisfied. Revision-16 notice removal has separate authorized
+direct-delivery edits but no retained delivery record. Its four requirements remain
+explicitly deferred, with no invented implementation/audit task or coverage claim.
+The stage therefore does not declare final project completion. Preserve those edits;
+they must be resolved through their separate delivery workflow before clean committed
+validation/adoption, rather than imported into a preparation revision.
+
+Keep cached stable-ID selection, exact UUID/temp-ID attribution, complete validation
+of returned current changes, necessary affected history, and publication between
+accepted operations. Ordinary writes may defer unrelated history; explicit refresh
+and reports must still retrieve it across intervening current Sync progress. Preserve
+pending history, cursor/finalization ordering, failures, interruption and recovery.
+No command/output change, numerical latency/request gate or new storage engine is added.
+
+T36 is one coherent producer/consumer change, with focused feedback and the existing
+one-suite final-delivery gate plus distinct copied/PATH/real-less probes. Its integrated
+acceptance appends observed evidence without modifying this frozen planning ledger.
+This preparation grants no application edits, adoption, recovery, resume or paid work.
+Earlier continuation sections below retain their historical scope and provenance.
+
 # Current continuation: TODO3-PLAN-015
 
 Reuse the completed revision-14 application at

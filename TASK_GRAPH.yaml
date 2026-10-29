@@ -1,8 +1,10 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-015
-predecessor_revision_id: TODO3-PLAN-014
+revision_id: TODO3-PLAN-016
+predecessor_revision_id: TODO3-PLAN-015
 contract_sources:
+- docs/design/mutation-retrieval-reuse.md
+- docs/design/routine-notices.md
 - docs/design/named-timezone-scheduling.md
 - docs/design/external/todoist/named-timezone-notes.md
 - docs/design/item-date-display.md
@@ -564,6 +566,29 @@ interfaces:
     dates and removal previews. No clock capture, I/O, model validation or fabricated input-zone persistence;
     document scoped helper/caller APIs in presentation/API.md.
   source_path: COMPONENTS.yaml
+- id: shared-operation-evidence
+  owner: adapter
+  supersedes_ref: named-zone-gateway
+  description: 'Compatible successor Gateway.execute(Operation, before=Current) -> Result: retain exact
+    UUID/temp-ID attribution, actual/after/issues and complete command-local scoped Retrieval evidence
+    with its baseline/token, scope and coverage. Current retrieval keeps normal incremental creation when
+    resources are complete, with bounded necessary hydration and full-response freshness. Evidence can
+    be consumed by accepted-operation publication without equivalent repeated reads; partial or unrelated
+    evidence cannot establish completeness or acceptance. Keep provisioning, unknown outcomes, named-zone/reminder
+    reconciliation and replay protections compatible.'
+  source_path: COMPONENTS.yaml
+- id: scoped-write-reconciliation
+  owner: workflows
+  supersedes_ref: cached-task-step-workflows
+  description: Compatible successor ordinary task/step workflows pass exact operation results/evidence
+    into Synchronizer accepted-operation reconciliation. Reuse complete current and scoped historical
+    evidence, validate all returned active changes, retrieve only necessary affected lifecycle/context
+    history, and publish before any next write. Preserve deferred pending context without claiming historical
+    freshness; explicit refresh/report still cover deferred intervals independently of current Sync progress.
+    Keep public request/result/error shapes, cached stable-ID preflight, actual receipts, locking, per-file
+    publication, outcome classification and finalization. Document concrete compatible evidence arguments
+    in existing adapter/workflows API.md.
+  source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
   command: git diff --check
@@ -794,6 +819,15 @@ checks:
     tests.cli.test_named_timezones -v
   prerequisite_task_refs:
   - T35
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t36-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.adapter.commands.test_commands
+    tests.workflows.sync.test_sync tests.workflows.report.test_report tests.workflows.test_cached_selection
+    -v
+  prerequisite_task_refs:
+  - T36
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -6939,6 +6973,288 @@ tasks:
   - 'Final-delivery on the settled subject: one complete offline suite plus representative new named-zone
     unchanged-copy observation and preserved PATH/real-less/cached/report probes. Append observed subjects/commands/results
     and explicit live-provider limits to docs/implementation/acceptance-evidence.md.'
+- id: T36
+  title: Reuse mutation evidence and scope ordinary-write historical reconciliation
+  origin_stage_ref: mutation-retrieval-reuse
+  observable_outcome: Ordinary task/step writes reuse complete authoritative evidence and incremental
+    current state, retrieve only necessary affected history, and publish each accepted operation before
+    the next; later explicit refresh/report retrieves deferred history without loss.
+  dependencies:
+  - task_ref: T34
+    kind: interface
+    interface_ref: named-zone-gateway
+    reason: Extend the accepted Gateway/current scheduling and reminder reconciliation path compatibly.
+  - task_ref: T31
+    kind: interface
+    interface_ref: cached-task-step-workflows
+    reason: Retain saved stable-ID preflight and migrate ordinary workflow reconciliation consumers.
+  - task_ref: T29
+    kind: interface
+    interface_ref: reconciled-completion-reports
+    reason: Preserve occurrence reconciliation and report retrieval/finalization while history is deferred.
+  - task_ref: T02
+    kind: interface
+    interface_ref: state-store
+    reason: Preserve token/current-resource pairing and compatible protected state publication.
+  - task_ref: T17
+    kind: repository_state
+    interface_ref: null
+    reason: Reuse the copied-entry-point harness and append truthful observed acceptance evidence.
+  goal: 'Implement REQ-SYNC-036/037 and REQ-VERIFY-035 on the accepted application at 5b99bbbccc2f317036faab2ca924ef88b2fb5684.
+    Read docs/design/mutation-retrieval-reuse.md and its narrow precedence first. Preserve accepted assignments
+    and original evidence. This task owns the complete evidence producer/consumer adaptation, necessary
+    current-versus-history provenance and focused/composed/copied verification; no speculative caching
+    service or performance target.
+
+
+    Start at adapter/commands.py Operation, Result and Gateway.execute. Result currently contains outcome,
+    operation, target_id, after: Current|None, actual, evidence, issues, restored_ancestors and occurrences.
+    Gateway already retrieves current state after submission and retains complete HistoryAdapter Retrieval
+    values for completion/activity/comment reads. adapter/current.py Current retains snapshot/token, missing/deleted/departed
+    IDs, unresolved reminder evidence, proven current_snapshot, reminder membership and waiting-label
+    IDs. HistoryAdapter Retrieval(records,pages,start,end) denotes complete exhausted retrieval; preserve
+    request scope/owner and coverage explicitly when sharing it. These are observed baseline APIs, not
+    an invented future constructor. Extend them minimally and compatibly, documenting concrete symbols
+    in existing API.md. Evidence is operation-local and attributable to this exact UUID/temp-ID, not proof
+    based on valid state, matching title or an earlier operation.
+
+
+    Trace workflows/capture.py CaptureWorkflow._run, lifecycle.py LifecycleWorkflow._run and comments.py
+    CommentWorkflow._apply/_execute_operation. They call reconcile_accepted_locked() without the available
+    Result, causing another current retrieval and broad historical work. Synchronizer.reconcile_accepted_locked
+    currently delegates to refresh_locked; _reconcile scans each category for missing/recurring owners,
+    all archived-owner comments and every recurring owner''s activity. Separate ordinary-write affected
+    reconciliation from full explicit refresh/report policy in this existing path. Reuse complete matching
+    Current and required scoped Retrieval evidence; fetch only uncovered required owner/ancestor/subtree/reminder/occurrence
+    state. Do not repeat equivalent evidence reads solely at a layer boundary. Complete active Sync merging
+    still includes and validates unrelated active changes; a missing/invalid required transition cannot
+    be silently carried as verified success. Keep raw delta versus proven current baseline distinction,
+    tombstones, scope/privacy and contradictory-state validation.
+
+
+    Moves has a distinct publication path: workflows/moves.py MoveWorkflow._publish already uses operation.after,
+    but calls shared _reconcile and supplies inherited completed-descendant context. Migrate it too, preserving
+    category-change hydration, actual returned source/destination checks, complete known subtree identities/ancestry
+    and inherited category updates without mutating the remote tree to repair state. Do not treat cached
+    archived fields as fresh proof. Comment operations on completed owners must share complete owner-comment
+    evidence without losing unaffected pending owner context; optional Done comments remain after verified/published
+    completion. Preserve stable IDs and ordered stopping for scalar/scheduling/reminder replacement, hierarchy,
+    completion/reopen/deletion and editor operations. Inspect rejected/unknown and interruption paths
+    explicitly: required outcome reconciliation remains, and a local failure cannot erase acceptance or
+    permit replay.
+
+
+    In adapter/current.py retrieve, expanded currently becomes true for every ID absent from prior.items.
+    Remove the unconditional new-item-to-full rule when a new managed task has sufficient complete incremental
+    evidence and a valid saved current resource baseline/token. Preserve necessary hydration for scope
+    expansion or missing compatible provenance/resources, validation before hydration, preserved tombstone/departure
+    evidence, and exactly the existing freshness delta after full candidates. Distinguish entrants carrying
+    unchanged comments/reminders from newly created objects whose resources are established; do not guess
+    completeness from identity novelty alone or fall back on generic token errors.
+
+
+    Inspect local/store.py LocalState, _cache and prepare_candidates plus local/history.py and workflows/sync.py
+    _known/_reconcile. synced_at and the current token cannot certify historical intervals deferred by
+    ordinary writes. Choose the smallest representation/derivation that keeps history coverage independent;
+    an existing cursor-bound retrieval may suffice if demonstrated, so do not add a field by default.
+    Retain pending observations, comments and required context at their last established state without
+    stamping unrelated history freshly observed, advancing the report cursor or pruning it. Preserve newly
+    established affected observations and explicit current deletion/departure/privacy evidence. Legacy
+    saved states remain readable or take existing explicit disposable-cache recovery without resetting
+    protected history. Adapt all actual representation producers/consumers, including init, moves, report
+    publication and test fakes. Reporter._prepare currently uses min(start,cursor,synced_at) for historical
+    lower bounds and shares _reconcile with an _Evidence facade. Explicit refresh and reports must still
+    obtain their full existing required current/historical evidence and complete comments, including information
+    deferred across several writes; preserve cross-endpoint occurrence reconciliation and output/flush
+    -> cursor -> cleanup.
+
+
+    Implement a small distinguishing offline composed creation/completion using real Gateway, Synchronizer,
+    StateStore and controlled HTTP boundaries. With a valid baseline and sufficient new-item incremental
+    resources, create then save/reload its actual identity before completion is submitted. Reuse its current
+    result, obtain authoritative affected completion proof once for the needed scope, save completed state,
+    and leave unrelated recurring activities/archived comments unread. Assert unrelated returned active
+    updates are incorporated and invalid active state fails. Starting from an unrelated pending archived
+    owner and a recurring owner, defer their historical changes across intervening writes, then explicit
+    refresh or report must retrieve those changes and preserve/report eligible work. Assert cursor/pending
+    bytes remain protected on required-read or final-output/cursor failure. Use a case with deferred changes
+    predating the last write''s synced_at so an incorrect lower-bound shortcut fails visibly. Reuse existing
+    adequate boundary cases rather than repeating every command at every layer.
+
+
+    Use existing tests/adapter/current/test_current.py entrant/hydration/freshness/tombstone tests; tests/adapter/commands
+    for UUID/temp-ID/unknown and lifecycle/comments evidence; tests/workflows/test_cached_selection.py
+    for command-first saved IDs, composed reminder ordering and legacy hydration; tests/workflows/{capture,moves,lifecycle,comments,sync,report}
+    for consumers and failures. Preserve test_sync.py unresolved absence, invalid actual state, required
+    comments, publication-before/after replacement and SIGINT tests; report/test_report.py deferred-window/current-owner,
+    activity-only recurrence/undo and finalization tests. Migrate strict source-cited endpoint fakes and
+    tests/delivery/final/copy_probe.py before automatic integration gates: fixtures expecting duplicate
+    reads or all-history reads after each write must express the new evidence semantics without relaxing
+    operation ordering, required scope/coverage or failure assertions. No xfail/expected-failure marker
+    may hide a newly required behavior.
+
+
+    Extend the existing copied-runtime probe with one representative affected write/reload observation,
+    retaining its actual copied launcher/modules, strict offline opener and existing clock hooks; no production
+    test switch or new framework. Preserve public receipt/stream/date/timezone behavior, cached selection,
+    normal refresh/report and installation isolation. Revision-16 notice removal is separately pending
+    direct delivery; do not implement, revert or claim that scope in this task. If that delivery is installed
+    before this task starts, retain its output behavior and adapt only genuinely affected fixtures.
+
+
+    Run t36-focused while implementing the coherent Gateway -> accepted publication -> later report slice,
+    then relevant affected workflow/local/adapter regressions. Workers may expand focused feedback for
+    concrete gaps. The runner''s unchanged final-delivery gate performs one complete offline suite and
+    distinct unchanged-copy/PATH/real-less probes on the settled integrated subject; no duplicate worker
+    full-suite run is mandated. This task also owns integrated acceptance and appending observed subject/commands/outcomes/reused
+    evidence/limitations to docs/implementation/acceptance-evidence.md, preserving earlier bytes. Do not
+    edit contract-map or frozen inputs. Synthetic request traces establish algorithm/conformance, not
+    measured production latency or live provider guarantees.'
+  failure_domain: Authoritative per-operation evidence reuse, historical scope and preservation through
+    later synchronization/reporting.
+  verification_rationale: One coupled outcome spans Gateway/current retrieval, accepted-operation publication
+    and its ordinary consumers. Splitting introduces a temporary evidence contract and tests against an
+    incomplete producer/consumer state. The focused command exercises the real current/gateway/saved-state/report
+    slice and relevant cached selection; affected existing workflow cases and strict copied fixtures are
+    migrated in the same task before shared gates. New traces distinguish reuse, sufficient incremental
+    creation, necessary hydration, intermediate publication and deferred changes older than the last write.
+    Existing failure/recurrence/tree tests supply unchanged coverage. Final-delivery remains the one complete-suite
+    plus distinct copied acceptance gate; no separate audit task is needed.
+  correction_instructions: Preserve all newly retrieved active-resource validation, exact operation proof,
+    necessary affected history and verification/publication between writes. Do not restore unrelated ordinary-write
+    history scans to make old fixtures pass, promote saved history to fresh truth, batch writes, or infer
+    completion/deletion from active absence. Missing required evidence is a classified nonzero failure
+    with existing recovery. Surface a provider-contract contradiction rather than silently weakening Design.
+    Preserve unrelated revision-16 edits.
+  requirement_refs:
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-035
+  constraint_refs:
+  - REQ-DOM-009
+  - REQ-DOM-013
+  - REQ-DOM-016
+  - REQ-DOM-018
+  - REQ-OUT-009
+  - REQ-OUT-019
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-SYNC-021
+  - REQ-COMMENT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-SYNC-013
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CLI-032
+  - REQ-CLI-038
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-MUT-004
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-CREATE-008
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-REPORT-003
+  - REQ-REPORT-014
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-OUT-025
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-013
+  - REQ-VERIFY-023
+  exclusion_refs:
+  - OUT-FEATURE-002
+  - OUT-ARCHIVE-001
+  - OUT-HISTORY-001
+  - OUT-LOCAL-001
+  - OUT-OPS-003
+  - OUT-REPORT-001
+  - OUT-REPORT-002
+  - OUT-TEST-001
+  - OUT-PRIVACY-001
+  - OUT-NFR-001
+  - OUT-CONC-001
+  - OUT-LOGGING-001
+  component_refs:
+  - adapter
+  - local
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - shared-operation-evidence
+  - scoped-write-reconciliation
+  consumes_interface_refs:
+  - named-zone-gateway
+  - cached-task-step-workflows
+  - reconciled-completion-reports
+  - state-store
+  expected_paths:
+  - todo_lib/adapter/**
+  - todo_lib/local/**
+  - todo_lib/workflows/**
+  - todo_lib/cli.py
+  - tests/adapter/**
+  - tests/local/**
+  - tests/support/**
+  - tests/workflows/**
+  - tests/cli/**
+  - tests/delivery/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - README.md
+  - docs/user/**
+  - todo_lib/domain/**
+  - todo_lib/presentation/**
+  - todo_lib/syntax/**
+  check_refs:
+  - t36-focused
+  required_evidence:
+  - t36-focused
+  - 'Operation-local strict HTTP trace: sufficient incremental create, verified published/reloaded creation
+    before completion, complete reused Current/scoped completion evidence, no unrelated recurring/archive
+    reads, and actual saved results.'
+  - Necessary hydration and partial/invalid/unknown/required-evidence failure regressions; migrate affected
+    capture, moves, lifecycle, comments, local-state and copied fixtures before shared gates.
+  - Deferred historical change older than intervening write synced_at appears after explicit refresh/report;
+    protected pending observations and cursor survive required retrieval/output/cursor failure.
+  - Final-delivery full offline suite and unchanged copied-runtime/PATH/real-less probes; append actual
+    subject-bound observations and limits to docs/implementation/acceptance-evidence.md.
 stages:
 - id: release-1
   final_project: false
@@ -7096,6 +7412,13 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -7254,6 +7577,13 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 - id: todoist-coexistence
@@ -7412,6 +7742,13 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 - id: request-conformance
@@ -7570,6 +7907,13 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 - id: report-retrieval-reuse
@@ -7728,6 +8072,13 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 - id: completion-reconciliation
@@ -7886,6 +8237,13 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 - id: cached-selection
@@ -8044,6 +8402,13 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 
@@ -8203,10 +8568,17 @@ stages:
   - REQ-SCHED-018
   - REQ-OUT-025
   - REQ-VERIFY-033
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
   check_refs:
   - final-delivery
 - id: named-timezone-scheduling
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-SCHED-017
   - REQ-SCHED-018
@@ -8360,7 +8732,179 @@ stages:
   - REQ-VERIFY-030
   - REQ-VERIFY-031
   - REQ-VERIFY-032
-  deferred_requirement_refs: []
+  deferred_requirement_refs:
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-034
+  - REQ-VERIFY-035
+  check_refs:
+  - final-delivery
+- id: mutation-retrieval-reuse
+  final_project: false
+  active_requirement_refs:
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-VERIFY-035
+  satisfied_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-036
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-INIT-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-OUT-025
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-TIME-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-024
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-VERIFY-027
+  - REQ-VERIFY-028
+  - REQ-VERIFY-029
+  - REQ-VERIFY-030
+  - REQ-VERIFY-031
+  - REQ-VERIFY-032
+  - REQ-VERIFY-033
+  deferred_requirement_refs:
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-VERIFY-034
   check_refs:
   - final-delivery
 verification:

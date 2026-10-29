@@ -1,9 +1,57 @@
 # todo-3 product specification
 
-Design revision: **15 — named timezones in attention and absolute reminders, 2026-10-29**.
+Design revision: **17 — reuse mutation retrieval and scope historical reconciliation, 2026-10-29**.
 State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 15
+## Current revision 17
+
+Read [mutation-retrieval-reuse.md](mutation-retrieval-reuse.md) first. Ordinary
+task/step writes retain incremental current-state synchronization and authoritative
+verification of the operation and required related state. Reuse complete retrieved
+evidence and defer unrelated completion history, recurring activity and archived
+comments to existing explicit-refresh and report workflows. A newly created task
+alone does not justify full replacement when incremental evidence is sufficient.
+
+REQ-SYNC-036/037 narrowly succeed the ordinary-write retrieval scope and redundant
+retrieval interpretations identified in the amendment. REQ-VERIFY-035 defines
+representative correctness and retrieval evidence without a latency target,
+numerical request budget or benchmark gate. Preserve verification and publication
+between accepted operations, including creation before completion, outcome and
+recovery rules, protected pending history and later retrieval of deferred history.
+Explicit refresh/report completeness, grammar and output remain unchanged.
+
+The operator accepted the historical-retrieval boundary, explicitly retained
+`--refresh` and `report`, retained verification between creation and completion,
+and declined a performance target: improve the algorithm and observe the result.
+They approved the concrete two-document revision-17 update. This authorizes Design
+documentation and recording only, with no new commit, Planning, implementation or
+execution authorization. Existing revision-16 code/test and documentation changes
+are preserved. There are no unresolved product choices; minimal evidence reuse,
+dependency closure, deferred-history bookkeeping and proportional verification
+are delegated to Planning against the retained provider contract. No unmeasured
+elapsed-time estimate is an acceptance promise.
+
+## Preserved revision 16
+
+Read [routine-notices.md](routine-notices.md) first. Remove the older-completed-
+descendants deletion warning, completed-step inspection coverage notice,
+completed-search coverage line (including earliest retained completion), and
+successful cache-clearing notices, with no replacement messages. Cached preview
+bounds, retained history, confirmations, results and actual failure diagnostics
+remain unchanged. Keep limited-report-history and stale-snapshot warnings,
+retrieval progress and the task/step distinction.
+
+REQ-OUT-026/027/028 narrowly supersede the output duties identified in the
+amendment; REQ-VERIFY-034 defines distinguishing outcomes. Earlier definitions and
+accepted assignments remain historical inputs. The operator selected messages
+"1, 2, and 4" alongside their original deletion-warning request, then explicitly
+instructed updating Design and implementing directly. This authorizes the scoped
+documentation and implementation; no new Plan or runner workers are requested.
+The completed installed final plan permits the direct-delivery route. The Design
+handoff initially names uncommitted documents; final delivery records the actual
+subject and evidence. There are no new product uncertainties or investigations.
+
+## Preserved revision 15
 
 Read [named-timezone-scheduling.md](named-timezone-scheduling.md) first. Attention
 and absolute reminders accept a timezone name within each date argument, including
@@ -413,7 +461,8 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped clarification
-and successor precedence in named-timezone-scheduling.md, item-date-display.md, cached-selection.md,
+and successor precedence in mutation-retrieval-reuse.md, routine-notices.md,
+named-timezone-scheduling.md, item-date-display.md, cached-selection.md,
 completion-reconciliation.md, report-retrieval-reuse.md, request-conformance.md,
 historical-reminder-contradiction.md, todoist-tolerance.md,
 project-sharing-field.md, partial-initialization-failure.md,
