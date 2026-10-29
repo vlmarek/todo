@@ -1,8 +1,10 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-014
-predecessor_revision_id: TODO3-PLAN-013
+revision_id: TODO3-PLAN-015
+predecessor_revision_id: TODO3-PLAN-014
 contract_sources:
+- docs/design/named-timezone-scheduling.md
+- docs/design/external/todoist/named-timezone-notes.md
 - docs/design/item-date-display.md
 - docs/design/report-retrieval-reuse.md
 - docs/design/external/todoist/report-retrieval-notes.md
@@ -514,6 +516,54 @@ interfaces:
     state mutation belongs in the renderer. Concrete existing exports are in todo_lib/presentation/render.py,
     formatting.py and todo_lib/workflows/reads.py.
   source_path: COMPONENTS.yaml
+- id: named-zone-time-policy
+  owner: domain
+  supersedes_ref: time-policy-precise
+  description: Compatible successor of todo_lib.domain.time parse_attention(expression, now, account_zone)
+    -> Attention or DomainError. Locally validate final location-name/UTC suffixes, interpret supported
+    calendar/wall expressions in that per-value zone, retain the original expression for previews and
+    stripped wording plus explicit zone for delegated requests. Preserve Attention exact/date/floating/unresolved
+    shapes, full supplied instant precision, strict semantic comparisons and existing constructors/callers;
+    document any compatible metadata extension in domain/API.md. Resolve an occurrence instant before
+    retaining its existing recurring rule/language/zone. parse_boundary and account-based day/urgency
+    APIs retain their existing contract.
+  source_path: COMPONENTS.yaml
+- id: named-zone-gateway
+  owner: adapter
+  supersedes_ref: reminder-gateway
+  description: Compatible successor of commands.due_arguments, Operation and Gateway create/update task/reminder
+    APIs. Send locally resolved exact UTC due.date with its applicable explicit schedule timezone, or
+    unchanged stripped English due.string/lang en plus explicit timezone for delegated expressions; short
+    codes stay in due.string without invented zone mapping. Preserve retained recurrence metadata independently
+    of the zone used to resolve an occurrence move. Current mapping and local round-trips retain authoritative
+    named zones. UUID/temp-ID proof and Result accepted/rejected/unknown semantics remain; exact predictions
+    retain <=2s remote tolerance with strict applicable day/kind/recurrence/zone, and unknown parser outputs
+    remain authoritative rather than guessed.
+  source_path: COMPONENTS.yaml
+- id: named-zone-scheduling
+  owner: workflows
+  supersedes_ref: complete-reminder-scheduling
+  description: Compatible successor SchedulingWorkflow/CaptureWorkflow execute(CommandRequest) -> existing
+    CaptureResult, OperationOutcome and Document shapes. Each attention/absolute-reminder scalar has its
+    own named zone or binding-account default and one command time. Integrate parser, due request, occurrence/recurrence
+    preservation, complete desired reminder matching/keep/removal consent and authoritative reconciliation
+    without preflight reads, retargeting or rollback. Publish actual accepted schedule metadata in existing
+    snapshots/results for presentation; preserve relative reminders, account-day hierarchy/hiding, pending
+    history and failure classification. Domain/API.md and actual completed dependency modules define concrete
+    compatible extensions; no persisted last-input-zone field.
+  source_path: COMPONENTS.yaml
+- id: dual-zone-schedule-rendering
+  owner: presentation
+  supersedes_ref: item-date-rendering
+  description: Narrow compatible successor of existing pure detail/receipt rendering over Snapshot, Attention
+    and Reminder. Selected-item scheduling values and scheduling/creation receipts retain account time
+    first and append exactly (YYYY-MM-DD HH:MM:SS IANA_TIMEZONE), with one preceding space, only for a
+    different retained named schedule zone. Reminder zones are independent; prior/result/retained values
+    use their own metadata. Detail suffix precedes countdown and reminder suffix precedes recurrence.
+    Keep original helpers/default compact behavior for now/waiting/Steps/search/someday/choosers, reports/cursors/comment
+    dates and removal previews. No clock capture, I/O, model validation or fabricated input-zone persistence;
+    document scoped helper/caller APIs in presentation/API.md.
+  source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
   command: git diff --check
@@ -728,6 +778,22 @@ checks:
     -v
   prerequisite_task_refs:
   - T31
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t34-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.domain.test_named_timezones tests.workflows.capture.test_named_timezones
+    -v
+  prerequisite_task_refs:
+  - T34
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t35-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.presentation.test_named_timezones
+    tests.cli.test_named_timezones -v
+  prerequisite_task_refs:
+  - T35
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -6451,6 +6517,428 @@ tasks:
     and limitations to docs/implementation/acceptance-evidence.md.
   - Existing final-delivery must pass with one complete offline suite and a representative affected-row
     observation in the unchanged copied runtime; preserve all prior copy/PATH/real-less probes.
+- id: T34
+  title: Implement per-value named zones through scheduling and recurrence
+  origin_stage_ref: named-timezone-scheduling
+  observable_outcome: Existing attention and absolute-reminder surfaces resolve each named-zone value
+    correctly, send contract-conforming requests, preserve recurring schedules and independent reminders,
+    and publish truthful reconciled outcomes with the existing cached selection and account-day policies.
+  dependencies:
+  - task_ref: T23
+    kind: interface
+    reason: Extend compatible attention/reminder model, codec/current mapping and actual due request/attributed
+      reconciliation APIs from the same accepted provider.
+    interface_ref: reminder-model
+  - task_ref: T24
+    kind: interface
+    reason: Extend complete desired-set planning, keep matching and pre-write removal consent.
+    interface_ref: complete-reminder-scheduling
+  - task_ref: T03
+    kind: interface
+    reason: Retain normalized CommandRequest, scalar/equals spellings and canonical alias parsing.
+    interface_ref: command-grammar
+  - task_ref: T31
+    kind: interface
+    reason: Preserve saved stable-ID operands, command time, binding default and direct command-first
+      mutation.
+    interface_ref: cached-task-step-workflows
+  - task_ref: T16
+    kind: interface
+    reason: Keep public composition/help/status behavior and inspect actual consumers.
+    interface_ref: public-cli
+  - task_ref: T33
+    kind: repository_state
+    reason: Start from the completed revision-14 deliverable and keep its item-date behavior usable.
+    interface_ref: null
+  goal: 'Implement REQ-SCHED-017/018 on the accepted application. Read docs/design/named-timezone-scheduling.md
+    and docs/design/external/todoist/named-timezone-notes.md first; their narrow successor scope governs
+    this work. T35 owns the new detail/receipt suffix and final composed audit. This task owns the complete
+    usable scheduling/data path, compatible caller/fake migration and focused evidence before its gates.
+    Preserve historical accepted assignments and evidence.
+
+
+    Start at domain/time.py parse_attention, Attention, resolve_wall, retain_recurrence, same_attention/reconciles_attention
+    and resolve_remote_due/resolve_reminder_due. Attention already carries kind, date_value, instant,
+    expression, recurring/rule/language/zone, raw_due and exact epoch_seconds. Extend this shared path
+    compatibly, exposing concrete symbols in domain/API.md. A final slash-containing location-zone token
+    or UTC is extracted and validated locally; unknown location names fail before writes. Short codes
+    such as CET/CEST/CST/EST remain in the full delegated expression even if ZoneInfo accepts them. Preserve
+    original input for unresolved previews while sending only the remaining wording and explicit named
+    zone to Todoist; do not translate recurrence text or fabricate offset mappings.
+
+
+    Use the supplied one command time for every scalar. The chosen zone governs today/tomorrow/weekdays,
+    date-only dates, supported ISO local wall datetimes and calendar arithmetic, including month clamping/business
+    days and local DST refusal. Minutes/hours remain elapsed. With no suffix keep existing account behavior,
+    including the existing offset requirement for ISO attention datetime. Numeric-offset/Z inputs retain
+    their exact instant and supplied fractional precision; if combined with a validated name, the numeric
+    instant remains authoritative and the name supplies schedule metadata, never a reinterpretation of
+    the clock. No blanket clock-token restriction; locally known date-only attention remains date-only,
+    and date-only absolute reminder input fails before any write. Do not extend parse_boundary/report
+    grammar or change account_timezone/day/urgency/visibility authority.
+
+
+    Trace scheduling.propose/equivalent/validate_proposals and capture._plan/_run into adapter/commands.py
+    due_arguments, Operation, Gateway.create_task/update_task/create_reminder/update_reminder and execute
+    reconciliation. Each absolute reminder independently chooses its supplied zone or the binding default,
+    never another scalar''s zone. Locally exact requests send documented UTC due.date plus the applicable
+    explicit timezone; delegated expressions send due.string/lang en plus explicit timezone when supplied.
+    Preserve omitted-zone request semantics. Current._seed/_signature/_merge/_map, domain reminder preservation,
+    local/codec snapshot_data/snapshot_from and history round-trips must retain the authoritative kind/zone/rule/language
+    and precise epoch. Do not store a last-input-zone or second account authority. Existing valid local
+    state/pending history stays readable; change representation only when necessary and compatibly.
+
+
+    Resolve a supported nonrecurring occurrence move in its input zone first, then preserve the previous
+    recurring rule, original language and recurrence timezone. Inspect both retain_recurrence calls (proposal
+    and Gateway) and raw_due merging so neither reinterprets the new instant nor restores an obsolete
+    date. Keep floating/fixed and date-only semantics; a date-only result cannot acquire a clock/zone.
+    New delegated recurring expressions may replace the pattern and zone through Todoist, without stale
+    old rule/language/zone overriding them. Do not invent a local recurrence engine, parse-only HTTP round
+    trip or recurrence advancement. At the request/reconciliation boundary prove the named rule/zone survives
+    across representative DST offsets rather than storing only a first-firing offset.
+
+
+    Preserve complete desired-set equivalence/no-op, duplicate detection, ID retention and independent
+    reminder metadata. Same first instant with a different zone/recurrence is not equivalence. Attention-only
+    changes issue no reminder reschedule; keep retains stable IDs and non-English metadata. Removal confirmation/cancellation/noninteractive
+    refusal occurs before every task/reminder write, with the original unresolved expression in the preview.
+    Existing clear forms, capability/relative exact-time checks and locally required hiding/ancestor comparisons
+    remain. Named input interpretation does not move account-local visibility days or buckets. Keep tolerant
+    hidden-category scheduling and imported conventions under the later accepted coexistence definitions.
+
+
+    Inspect both Gateway and CaptureWorkflow reconciliation checks, including unresolved branches and
+    the omitted fixed-zone fallback: explicit zones must reach the request and predictions without being
+    replaced by the account default; recurring/known exact results keep strict applicable semantics and
+    inclusive two-second remote tolerance, while local equality stays exact. For delegated named input
+    with no predicted instant, still verify the applicable explicit named-zone semantics on timed authoritative
+    results instead of bypassing metadata checks; date-only attention normalization has no persistent
+    clock zone. Delegated attention may validly normalize to date-only; delegated absolute reminders need
+    exact time. Preserve provider rejection versus unknown acceptance, accepted-but-invalid normalization,
+    ordered stopping/unattempted remainder, actual state/receipts, protected history and per-file publication
+    without rollback. Do not claim a provider-owned abbreviation result has a predetermined zone or instant.
+
+
+    Update syntax/help.py and applicable scalar/noun-action normalization only as needed. Teach whole-argument
+    suffix syntax across schedule/hide, creation and task/step forms, date aliases and equals forms; keep
+    selector boundaries, inline-step exclusions, existing relative reminder grammar and type-specific
+    keep/clear. Add focused evidence in tests/domain/test_named_timezones.py and tests/workflows/capture/test_named_timezones.py,
+    reusing strict source-grounded adapter/CLI fixtures. Include at 2026-10-29T00:30Z tomorrow in New
+    York = Oct 29 versus Prague = Oct 30; 2026-11-12 09:00 New York = 14:00Z; distinct attention/reminder/omitted
+    zones in one request; unknown location and New York 2026-11-01 01:30 / 2027-03-14 02:30 refusal with
+    no writes; delegated named recurrence and unmapped short-code forwarding; an occurrence moved in Prague
+    retaining the New York recurring rule/zone; and exact equivalence versus same-first-instant differing
+    semantics. Use representative cases and adequate existing tests rather than a cross-product. Existing
+    elapsed/calendar/month, precision, keep/consent, date-only partial failure, UUID/unknown, account-zone-change
+    and publication tests remain applicable; adapt assertions only where the successor changes them.
+
+
+    Own directly affected old test/fake/caller migrations, including tests/support/reminders.py, tests/adapter/commands,
+    tests/local and tests/delivery/final/copy_probe.py if changed requests/metadata affect them, before
+    any shared final-delivery gate. Runtime presentation APIs and existing output stay compatible until
+    T35 adds its suffix. Directed feedback is t34-focused plus t23-focused/t24-focused and t31-focused
+    where affected. The runner retains final-delivery for the integrated subject; do not require a duplicate
+    worker full suite. Preserve offline isolation and original upstream bytes, and report contradictions
+    or protected-input defects instead of weakening checks.'
+  failure_domain: Per-value schedule interpretation, recurrence metadata and operation-attributed authoritative
+    reconciliation.
+  verification_rationale: Parser, due serializer, equality, current/codec and workflow callers share one
+    Attention value and cannot be accepted independently with temporary adapters. T34 provides a usable
+    scheduling API before T35 decorates its actual results. Focused distinguishing calendar/request/recurrence/failure
+    cases complement existing strict reminder, cached-selection and precision tests; directly affected
+    fakes and copied expectations migrate here so unchanged shared gates remain executable. One settled-subject
+    final-delivery full suite is runner evidence; no worker broad rerun is prescribed.
+  correction_instructions: Preserve compatible public constructors/results/errors and all clauses outside
+    the explicit revision-15 precedence. Later coexistence and cached-preflight rules take precedence
+    over older inherited category/freshness restrictions. Distinguish original input, requested interpretation
+    zone and authoritative retained recurrence zone without a persistent last-input field. Any necessary
+    consumer/codec/test adaptation is owned here; no-change is acceptable only for inspected compatible
+    consumers with adequate evidence. T35 supplies the presentation suffix. Report an actual product/provider
+    contradiction; do not invent new grammar, HTTP reads, no-op tolerance or weaker acceptance.
+  requirement_refs:
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  constraint_refs:
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-LOCAL-005
+  - REQ-LOCAL-007
+  - REQ-CACHE-010
+  - REQ-TIME-001
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-MUT-001
+  - REQ-MUT-006
+  - REQ-CLI-031
+  - REQ-CLI-033
+  - REQ-CLI-037
+  - REQ-CLI-024
+  - REQ-CLI-032
+  - REQ-SYNC-026
+  - REQ-SYNC-035
+  - REQ-VERIFY-003
+  - REQ-VERIFY-013
+  - REQ-CLI-030
+  - REQ-LOCAL-006
+  - REQ-SYNC-013
+  - REQ-CACHE-009
+  exclusion_refs:
+  - OUT-TIME-001
+  - OUT-TIME-002
+  - OUT-USABILITY-001
+  - OUT-FEATURE-002
+  - OUT-OPS-003
+  - OUT-TEST-001
+  - OUT-PRIVACY-001
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - named-zone-time-policy
+  - named-zone-gateway
+  - named-zone-scheduling
+  consumes_interface_refs:
+  - reminder-model
+  - reminder-gateway
+  - complete-reminder-scheduling
+  - command-grammar
+  - cached-task-step-workflows
+  - public-cli
+  expected_paths:
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/syntax/**
+  - todo_lib/adapter/**
+  - todo_lib/workflows/**
+  - todo_lib/cli.py
+  - tests/domain/**
+  - tests/local/**
+  - tests/syntax/**
+  - tests/adapter/**
+  - tests/support/**
+  - tests/workflows/**
+  - tests/cli/**
+  - tests/delivery/final/copy_probe.py
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - README.md
+  - docs/user/**
+  - todo_lib/presentation/**
+  - tests/presentation/**
+  check_refs:
+  - t34-focused
+  required_evidence:
+  - t34-focused
+  - Source-grounded actual due request and authoritative reconciliation cases distinguish named-zone interpretation,
+    recurrence-zone retention and per-reminder independence; locally detected invalid-zone/DST/date-only/required-comparison
+    failures and cancelled replacement make zero writes.
+  - Reuse and run affected existing t23-focused/t24-focused/t31-focused modules for precision, codec/current/reminder
+    semantics, aliases, cached command-first ordering, keep/consent and actual partial/unknown outcomes.
+    Preserve executable old fixtures before runner shared gates.
+- id: T35
+  title: Render dual-zone schedules and verify the composed timezone capability
+  origin_stage_ref: named-timezone-scheduling
+  observable_outcome: Selected-item details and scheduling/creation receipts display account and retained
+    schedule times correctly, compact views stay unchanged, and public/copied offline evidence establishes
+    the complete revision-15 behavior with preserved failure semantics.
+  dependencies:
+  - task_ref: T34
+    kind: interface
+    reason: Consume the completed compatible time policy, due gateway and scheduling workflow from T34;
+      inspect actual domain/API.md and modules for concrete APIs and retained metadata.
+    interface_ref: named-zone-scheduling
+  - task_ref: T33
+    kind: interface
+    reason: Extend the current pure rendering stack while preserving revision-14 compact item dates.
+    interface_ref: item-date-rendering
+  - task_ref: T16
+    kind: interface
+    reason: Exercise real public main/launcher/help with existing offline composition hooks.
+    interface_ref: public-cli
+  - task_ref: T17
+    kind: repository_state
+    reason: Extend the existing unchanged-copy probe and append subject-bound acceptance evidence.
+    interface_ref: null
+  goal: 'Implement REQ-OUT-025 and own the composed acceptance/audit under REQ-VERIFY-033 after T34''s
+    scheduling APIs are usable. Read the revision-15 amendment and docs/design/external/todoist/named-timezone-notes.md,
+    then actual completed dependency APIs. Preserve all accepted assignments and earlier evidence; do
+    not treat the old broad output templates as overriding the narrow revision-14/15 fragments.
+
+
+    Use existing presentation/formatting.py actual_due/reminders_text/timing/time_block, render.py render_detail
+    and receipts.py render_mutation with workflows/capture.py reminder_values/_document. Add the smallest
+    opt-in scheduling-detail/receipt formatting needed so default helpers still serve compact and preview
+    consumers unchanged. Selected-item Due appends the schedule-zone instant immediately after actual
+    account time, before the middle dot/countdown; each absolute reminder appends its own fragment before
+    its recurrence suffix. Scheduling/creation receipts must apply the same rule to every previous/resulting/retained
+    scheduling value they already print, including reminder-only creation and retained sets. Caller-side
+    scalar strings currently lose the schedule object; adapt these callers without changing public result
+    shapes or receipt framing. Preserve the existing exact fractional-change fallback so equal whole-second
+    text cannot hide a real accepted change.
+
+
+    Append exactly one space then (YYYY-MM-DD HH:MM:SS IANA_TIMEZONE) when an exact value has a different
+    retained named schedule zone. For Prague account time, New York 2026-11-12 09:00 is 2026-11-12 15:00:00
+    Europe/Prague (2026-11-12 09:00:00 America/New_York). Use full dates across midnight. Same named zone,
+    floating/unzoned/date-only attention produces no duplicate or invented suffix; reminders use their
+    own zones rather than the task''s. Use authoritative normalized state, including provider-parsed short
+    codes. A one-occurrence move shows the retained recurrence zone, never a fabricated persisted last-input
+    zone. Preserve recurrence wording, relative reminders, sorting, color-stripped exact text, safe titles,
+    streams, prior/result framing and accepted/partial/unknown classifications. Do not add schedule fields
+    to unrelated receipts.
+
+
+    Audit consumers of shared helpers: now/waiting, recursive Steps, search/someday, ambiguity choices,
+    reports/cursors/comment/completion timestamps and removal previews retain account-only current formats.
+    In particular render_detail''s top-level Due can opt in while its descendant row helper cannot; reminders_text
+    is shared with removal previews and now/chooser. Unresolved removal additions continue displaying
+    the full original expression as expression (Todoist): ..., not an accepted timestamp. No rendering
+    clock capture, remote read, parsing, model-validation relaxation or new account authority.
+
+
+    Add focused pure output cases in tests/presentation/test_named_timezones.py for independent due/reminder
+    zones, exact placement before countdown/recurrence, day crossing, same-zone omission and date-only/floating
+    absence; exercise unchanged compact rows/previews and color stripping. Add representative public composition
+    in tests/cli/test_named_timezones.py using the actual parser/CaptureWorkflow/Gateway/Current/local
+    publication/presentation boundary and strict source-cited HTTP fakes. Reuse T34''s detailed local
+    calendar, invalid-zone/DST, wire and matching cases rather than repeating them at every layer. Establish
+    a mixed-zone schedule with actual receipts and reload/detail, one creation/alias scalar path, and
+    a representative delegated recurrence or abbreviation response. Verify omitted-zone/default behavior
+    and that an accepted provider-normalized date-only attention is valid while an unsuitable absolute
+    reminder remains a nonzero partial failure, retaining accepted earlier work and unattempted remainder.
+    Reuse adequate existing keep/removal-cancel, UUID/unknown, fractional precision, cached selection
+    and report-finalization evidence; supplement only uncovered distinguishing outcomes. Audit the representative
+    DST recurrence request/result and cross-zone one-occurrence move from T34 against the full accepted
+    rule/zone rather than a shared first instant.
+
+
+    Extend tests/delivery/final/copy_probe.py with one representative affected scheduling/detail observation
+    through the unchanged copied launcher/modules and existing controlled opener/clock. Require a named-zone
+    request and actual dual-zone output from reconciled/reloaded metadata; do not pre-seed a correct result
+    in place of the operation under test. Preserve cached stable-ID command-first ordering, authoritative
+    post-operation reads, ordinary reports, PATH/editor and real-less probes. Migrate directly affected
+    presentation/read/CLI/copied goldens before final-delivery. Reuse the existing harness; no production
+    test mode, new network gate or test dependency.
+
+
+    T35 may correct demonstrated integration defects across the declared runtime/test components, including
+    producer/caller/codec issues exposed by this audit, within the same accepted scope. Do not weaken
+    conformance fakes/gates or edit frozen planning/provider inputs. Directed worker feedback uses t35-focused
+    plus relevant t09-focused/t24-focused/t31-focused and T34''s new tests for repaired producers. The
+    runner''s unchanged final-delivery runs scripts/verify-clean on the settled integrated subject: one
+    complete scripts/check suite, then distinct unchanged-copy/PATH/real-less probes. No duplicate worker
+    full-suite execution is required. Append observed subject, commands/results, coverage reuse and limitations
+    to docs/implementation/acceptance-evidence.md, leaving its earlier bytes intact and never editing
+    contract-map.md. Label synthetic recurrence/short-code fixtures as request/response conformance, not
+    live notification delivery, abbreviation acceptance or future advancement proof.'
+  failure_domain: Correct schedule-context presentation and composed acceptance of the named-timezone
+    scheduling capability.
+  verification_rationale: Pure formatting plus concrete CaptureWorkflow scalar caller changes deliver
+    one observable display outcome. T35 also supplies the explicit integrated acceptance/evidence task
+    for this small successor capability, using actual T34 producers instead of fabricated APIs. The dependency
+    serializes overlapping workflow/CLI/delivery edits. Focused new output/public tests and one distinguishing
+    copied scenario complement reused scheduler/keep/error tests. The retained final-delivery gate shares
+    its single complete offline suite across integrated/stage/project roles; checker/harness self-tests
+    use mini-suites, not nested application suites.
+  correction_instructions: Preserve revision-14 compact row behavior and all unamended output semantics.
+    Opt in only selected-item scheduling detail and existing schedule-bearing receipts; protect removal
+    previews and all other shared-helper callers. Producer repairs must preserve T34 contracts and earlier
+    still-required behavior, with relevant focused regressions and adequate edit scope. Never equate passing
+    synthetic fixtures with live Todoist behavior or claim future independent review.
+  requirement_refs:
+  - REQ-OUT-025
+  - REQ-VERIFY-033
+  constraint_refs:
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-DOM-018
+  - REQ-CLI-030
+  - REQ-CLI-032
+  - REQ-LOCAL-005
+  - REQ-TIME-001
+  - REQ-SYNC-026
+  - REQ-SYNC-035
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-013
+  exclusion_refs:
+  - OUT-OUTPUT-005
+  - OUT-FEATURE-002
+  - OUT-TIME-002
+  - OUT-TEST-001
+  - OUT-PRIVACY-001
+  component_refs:
+  - domain
+  - local
+  - syntax
+  - adapter
+  - presentation
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs:
+  - dual-zone-schedule-rendering
+  consumes_interface_refs:
+  - named-zone-time-policy
+  - named-zone-gateway
+  - named-zone-scheduling
+  - item-date-rendering
+  - public-cli
+  expected_paths:
+  - todo_lib/**
+  - todo
+  - tests/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - README.md
+  - docs/user/**
+  check_refs:
+  - t35-focused
+  required_evidence:
+  - t35-focused
+  - Exact dual-zone detail/receipt and unchanged compact/preview output, representative public request
+    -> authoritative response -> saved/reloaded detail, cross-date and independent reminders; focused
+    producer/error regressions for any integration repairs.
+  - 'Final-delivery on the settled subject: one complete offline suite plus representative new named-zone
+    unchanged-copy observation and preserved PATH/real-less/cached/report probes. Append observed subjects/commands/results
+    and explicit live-provider limits to docs/implementation/acceptance-evidence.md.'
 stages:
 - id: release-1
   final_project: false
@@ -6604,6 +7092,10 @@ stages:
   - REQ-MUT-006
   - REQ-MUT-007
   - REQ-VERIFY-031
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -6758,6 +7250,10 @@ stages:
   - REQ-MUT-006
   - REQ-MUT-007
   - REQ-VERIFY-031
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
   check_refs:
   - final-delivery
 - id: todoist-coexistence
@@ -6912,6 +7408,10 @@ stages:
   - REQ-MUT-006
   - REQ-MUT-007
   - REQ-VERIFY-031
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
   check_refs:
   - final-delivery
 - id: request-conformance
@@ -7066,6 +7566,10 @@ stages:
   - REQ-MUT-006
   - REQ-MUT-007
   - REQ-VERIFY-031
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
   check_refs:
   - final-delivery
 - id: report-retrieval-reuse
@@ -7220,6 +7724,10 @@ stages:
   - REQ-MUT-006
   - REQ-MUT-007
   - REQ-VERIFY-031
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
   check_refs:
   - final-delivery
 - id: completion-reconciliation
@@ -7374,6 +7882,10 @@ stages:
   - REQ-MUT-006
   - REQ-MUT-007
   - REQ-VERIFY-031
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
   check_refs:
   - final-delivery
 - id: cached-selection
@@ -7528,11 +8040,15 @@ stages:
   - REQ-OUT-023
   - REQ-OUT-024
   - REQ-VERIFY-032
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
   check_refs:
   - final-delivery
 
 - id: item-date-display
-  final_project: true
+  final_project: false
   active_requirement_refs:
   - REQ-OUT-023
   - REQ-OUT-024
@@ -7682,6 +8198,168 @@ stages:
   - REQ-VERIFY-029
   - REQ-VERIFY-030
   - REQ-VERIFY-031
+  deferred_requirement_refs:
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
+  check_refs:
+  - final-delivery
+- id: named-timezone-scheduling
+  final_project: true
+  active_requirement_refs:
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-OUT-025
+  - REQ-VERIFY-033
+  satisfied_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-036
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-INIT-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-TIME-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-024
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-VERIFY-027
+  - REQ-VERIFY-028
+  - REQ-VERIFY-029
+  - REQ-VERIFY-030
+  - REQ-VERIFY-031
+  - REQ-VERIFY-032
   deferred_requirement_refs: []
   check_refs:
   - final-delivery

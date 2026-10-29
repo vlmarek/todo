@@ -1,9 +1,48 @@
 # todo-3 product specification
 
-Design revision: **14 — attention and completion dates in item rows, 2026-10-28**.
+Design revision: **15 — named timezones in attention and absolute reminders, 2026-10-29**.
 State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 14
+## Current revision 15
+
+Read [named-timezone-scheduling.md](named-timezone-scheduling.md) first. Attention
+and absolute reminders accept a timezone name within each date argument, including
+recurring expressions. Each value has its own zone; omitted zones preserve current
+account-timezone behavior. Keep local parsing for supported expressions and use
+Todoist for the remainder, including short codes such as CET/CEST without an
+application-defined abbreviation mapping. Do not add a blanket explicit-clock-time
+requirement; absolute reminders still require a timed result. Existing pre-write
+comparison and partial-failure rules remain.
+
+New recurring expressions retain their named timezone across DST. Moving one
+occurrence in another input zone preserves the old recurring rule and timezone.
+Details and scheduling receipts show account time first and the retained schedule
+zone when different; compact lists and other stated views keep their current
+presentation. The account binding remains the single default-timezone authority.
+
+REQ-SCHED-017/018 and REQ-OUT-025 are narrow successor definitions for the input,
+recurrence and detail/receipt scopes identified in the amendment's precedence
+table. REQ-VERIFY-033 states distinguishing outcomes. Earlier definitions, all
+accepted assignments and provider evidence remain intact. Planning owns affected
+work assessment, request/metadata/renderer adaptation and verification.
+
+The operator answered yes to per-value suffixes, recurring schedules, single-
+occurrence preservation and dual-timezone detail/receipt display. They asked to
+leave delegated date parsing to Todoist and approved provider-owned short-code
+interpretation. They confirmed the complete resulting scope with yes, then
+explicitly requested updating the design documentation. Actual words and decision
+contexts are retained separately in the external Design handoff and native decision
+history. This authorizes the scoped documentation update, not a Todoist workspace
+commit, Planning or implementation. The separate instruction to commit and push
+the cml-design skill concerned the runner repository only and was completed there.
+
+The retained API contract establishes named-zone feasibility; Todoist's exact
+CET/CEST acceptance and interpretation remain unverified and provider-dependent.
+No live account probe is required or claimed. There is no unresolved product
+choice in this scope. The exact initial workspace baseline is retained in the
+external Design report; the revision-15 document bytes themselves are uncommitted.
+
+## Preserved revision 14
 
 Read [item-date-display.md](item-date-display.md) first. In nested Steps lists,
 search, someday and task/step selection menus, open dated items show their own
@@ -374,7 +413,7 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped clarification
-and successor precedence in item-date-display.md, cached-selection.md,
+and successor precedence in named-timezone-scheduling.md, item-date-display.md, cached-selection.md,
 completion-reconciliation.md, report-retrieval-reuse.md, request-conformance.md,
 historical-reminder-contradiction.md, todoist-tolerance.md,
 project-sharing-field.md, partial-initialization-failure.md,

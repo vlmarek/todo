@@ -506,3 +506,51 @@ interfaces:
     state mutation belongs in the renderer. Concrete existing exports are in todo_lib/presentation/render.py,
     formatting.py and todo_lib/workflows/reads.py.
   status: provisional
+- id: named-zone-time-policy
+  owner: domain
+  supersedes_ref: time-policy-precise
+  description: Compatible successor of todo_lib.domain.time parse_attention(expression, now, account_zone)
+    -> Attention or DomainError. Locally validate final location-name/UTC suffixes, interpret supported
+    calendar/wall expressions in that per-value zone, retain the original expression for previews and
+    stripped wording plus explicit zone for delegated requests. Preserve Attention exact/date/floating/unresolved
+    shapes, full supplied instant precision, strict semantic comparisons and existing constructors/callers;
+    document any compatible metadata extension in domain/API.md. Resolve an occurrence instant before
+    retaining its existing recurring rule/language/zone. parse_boundary and account-based day/urgency
+    APIs retain their existing contract.
+  status: provisional
+- id: named-zone-gateway
+  owner: adapter
+  supersedes_ref: reminder-gateway
+  description: Compatible successor of commands.due_arguments, Operation and Gateway create/update task/reminder
+    APIs. Send locally resolved exact UTC due.date with its applicable explicit schedule timezone, or
+    unchanged stripped English due.string/lang en plus explicit timezone for delegated expressions; short
+    codes stay in due.string without invented zone mapping. Preserve retained recurrence metadata independently
+    of the zone used to resolve an occurrence move. Current mapping and local round-trips retain authoritative
+    named zones. UUID/temp-ID proof and Result accepted/rejected/unknown semantics remain; exact predictions
+    retain <=2s remote tolerance with strict applicable day/kind/recurrence/zone, and unknown parser outputs
+    remain authoritative rather than guessed.
+  status: provisional
+- id: named-zone-scheduling
+  owner: workflows
+  supersedes_ref: complete-reminder-scheduling
+  description: Compatible successor SchedulingWorkflow/CaptureWorkflow execute(CommandRequest) -> existing
+    CaptureResult, OperationOutcome and Document shapes. Each attention/absolute-reminder scalar has its
+    own named zone or binding-account default and one command time. Integrate parser, due request, occurrence/recurrence
+    preservation, complete desired reminder matching/keep/removal consent and authoritative reconciliation
+    without preflight reads, retargeting or rollback. Publish actual accepted schedule metadata in existing
+    snapshots/results for presentation; preserve relative reminders, account-day hierarchy/hiding, pending
+    history and failure classification. Domain/API.md and actual completed dependency modules define concrete
+    compatible extensions; no persisted last-input-zone field.
+  status: provisional
+- id: dual-zone-schedule-rendering
+  owner: presentation
+  supersedes_ref: item-date-rendering
+  description: Narrow compatible successor of existing pure detail/receipt rendering over Snapshot, Attention
+    and Reminder. Selected-item scheduling values and scheduling/creation receipts retain account time
+    first and append exactly (YYYY-MM-DD HH:MM:SS IANA_TIMEZONE), with one preceding space, only for a
+    different retained named schedule zone. Reminder zones are independent; prior/result/retained values
+    use their own metadata. Detail suffix precedes countdown and reminder suffix precedes recurrence.
+    Keep original helpers/default compact behavior for now/waiting/Steps/search/someday/choosers, reports/cursors/comment
+    dates and removal previews. No clock capture, I/O, model validation or fabricated input-zone persistence;
+    document scoped helper/caller APIs in presentation/API.md.
+  status: provisional

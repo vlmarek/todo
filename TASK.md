@@ -1,3 +1,35 @@
+# Current continuation: TODO3-PLAN-015
+
+Reuse the completed revision-14 application at
+`26e4851ab89b3fa9b3125e66b3cb753198bb25e1`. Confirmed Design revision 15 in
+`docs/design/named-timezone-scheduling.md` governs per-value named-zone attention
+and absolute reminders, recurrence-zone preservation and scoped dual-zone output.
+T34 owns the coupled parsing/request/reconciliation/data/caller migration. T35
+depends on that usable result, implements detail/receipt output, verifies composed
+and copied behavior, repairs demonstrated integration gaps and appends observations.
+The technical note in `docs/design/external/todoist/named-timezone-notes.md` supplies
+source/API navigation and bounded decisions, without changing upstream evidence.
+
+Preserve all 33 accepted effective assignments and their original definitions,
+interfaces, checks and evidence. The appended final stage satisfies all 147 earlier
+requirements and activates four successors; nothing is deferred in that final stage.
+Each value has its own zone or binding-account default; all values share one command
+time. Account-based buckets, hiding, parent/step comparisons and reports stay intact.
+Keep independent reminder IDs/metadata, exact local no-ops, authoritative outcomes,
+cached stable-ID selection and command-first writes, pending history and publication.
+Provider-owned abbreviations have no app-defined mapping or live acceptance guarantee.
+
+Keep the current compact now/waiting/Steps/search/someday/chooser and preview formats.
+Only selected-item scheduling detail and schedule-bearing creation/mutation receipts
+gain a second-zone fragment using reconciled metadata. The two new tasks are ordered
+by actual APIs and shared-file migrations, so configured parallelism cannot produce
+conflicting edits. Focused feedback belongs to workers; unchanged final-delivery
+provides one complete offline suite followed by distinct copy/PATH/real-less probes
+on each settled integrated subject. Neither task needs an extra worker full suite.
+
+This preparation authorizes no adoption, resume, recovery or paid execution. Earlier
+continuation sections below describe historical scopes and retain their provenance.
+
 # Current continuation: TODO3-PLAN-014
 
 Reuse the completed cached-selection application at

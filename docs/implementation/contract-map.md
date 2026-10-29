@@ -1,13 +1,13 @@
 # Prepared ownership and evidence
 
-Confirmed Design revision 14 changes item-row dates in Steps, search/someday and
-task/step candidates. T33 owns the complete presentation increment, shared
-view-time/caller adaptations, affected existing fixture migration before shared
-gates, representative copied evidence and appended observations. All 144 earlier
-requirements remain satisfied with their accepted historical owners preserved.
-Three successors are active; nothing is deferred in the final stage. This protected
-ledger records planned coverage; observations append only to
-`docs/implementation/acceptance-evidence.md`.
+Confirmed Design revision 15 adds per-value named-zone attention/absolute reminders,
+preserved recurring zones and dual-zone selected-item detail/scheduling receipts.
+T34 owns the usable scheduling/data path and affected fixture migration. T35 owns
+scoped presentation, composed/copied acceptance, demonstrated integration repairs
+and appended observed evidence. All 147 earlier requirements remain satisfied with
+their accepted historical owners preserved. Four successors are active and nothing
+is deferred in the final stage. This ledger records planned coverage; observations
+append only to `docs/implementation/acceptance-evidence.md`.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -780,27 +780,47 @@ requirements:
     - t31-focused
     - final-delivery
   REQ-OUT-023:
-    stage_status: active
-    primary_owner: T33
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t09-focused
     - t10-focused
     - t31-focused
     - final-delivery
   REQ-OUT-024:
-    stage_status: active
-    primary_owner: T33
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t09-focused
     - t10-focused
     - t31-focused
     - final-delivery
   REQ-VERIFY-032:
-    stage_status: active
-    primary_owner: T33
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t09-focused
     - t10-focused
     - t31-focused
     - final-delivery
+  REQ-SCHED-017:
+    stage_status: active
+    primary_owner: T34
+    planned_evidence:
+    - t34-focused
+  REQ-SCHED-018:
+    stage_status: active
+    primary_owner: T34
+    planned_evidence:
+    - t34-focused
+  REQ-OUT-025:
+    stage_status: active
+    primary_owner: T35
+    planned_evidence:
+    - t35-focused
+  REQ-VERIFY-033:
+    stage_status: active
+    primary_owner: T35
+    planned_evidence:
+    - t35-focused
 ```
