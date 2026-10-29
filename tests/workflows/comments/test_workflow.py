@@ -73,7 +73,9 @@ class Boundary:
         def check(kwargs):
             self.case.assertEqual(kwargs['replay'], Replay.IDEMPOTENT)
             self.case.assertEqual(kwargs['operation'], kind)
-            self.case.assertEqual(set(kwargs['form']), {'commands'})
+            self.case.assertEqual(set(kwargs['form']), {'commands', 'sync_token', 'resource_types'})
+            self.case.assertEqual(kwargs['form']['resource_types'], RESOURCES)
+            self.case.assertEqual(kwargs['form']['sync_token'], 'delta-token')
             commands = json.loads(kwargs['form']['commands'])
             self.case.assertEqual(len(commands), 1)
             command = commands[0]
@@ -191,13 +193,13 @@ class WorkflowTests(unittest.TestCase):
     def edit(self):
         return self.workflow.execute(['comment', '--edit', 'Leaf'])
 
-    def operation(self, kind, args, notes, *, status='ok', identity='new-comment',
-                  actual=None, pages=False, malformed=False):
+    def operation(self, kind, args, notes, *, status='ok', identity='new-comment'):
         self.wire.command(kind, args, status, identity)
         if status == 'interrupt':
             return
         self.queue_refresh(notes)
-        self.wire.comments(notes if actual is None else actual, pages=pages, malformed=malformed)
+        # Complete current notes already prove this active owner's actual state.
+        # Required owner pagination is retained by the archived-owner probes.
 
     def test_unchanged_and_removed_starter_exact_timestamps_and_own_identity(self):
         for removed in (False, True):
@@ -223,7 +225,7 @@ class WorkflowTests(unittest.TestCase):
         self.editor('path.write_text(text + "  first  \\n[new]\\nsecond\\n[new]\\n")')
         self.refresh()
         notes = [*self.notes, note('one', 'C', content='  first  ', posted_at=NEW)]
-        self.operation('note_add', {'item_id': 'C', 'content': '  first  '}, notes, identity='one', pages=True)
+        self.operation('note_add', {'item_id': 'C', 'content': '  first  '}, notes, identity='one')
         notes = [*notes, note('two', 'C', content='second', posted_at=None)]
         self.operation('note_add', {'item_id': 'C', 'content': 'second'}, notes, identity='two')
         result = self.edit()
@@ -537,7 +539,8 @@ class WorkflowTests(unittest.TestCase):
         status = {'error_code': 22, 'error': 'Comment content too long'} if rejected else 'ok'
         self.wire.command('note_add', {'item_id': 'C', 'content': 'requested body'}, status)
         if scoped:
-            self.queue_refresh([*self.notes, note('new-comment', 'C', content='requested body', posted_at=NEW)])
+            # No own note returned: required scoped evidence can still interrupt.
+            self.wire.sync('delta-token', delta())
             self.wire.steps.append(('GET', '/comments',
                 {'query': [('task_id', 'C'), ('limit', '200')]}, KeyboardInterrupt()))
         else:
@@ -608,7 +611,9 @@ class WorkflowTests(unittest.TestCase):
         class MutationRequest:
             def check(self, request, timeout):
                 form = parse_qs(request.data.decode('ascii'))
-                case.assertEqual(set(form), {'commands'})
+                case.assertEqual(set(form), {'commands', 'sync_token', 'resource_types'})
+                case.assertEqual(form['resource_types'], [RESOURCES])
+                case.assertEqual(form['sync_token'], ['delta-token'])
                 commands = json.loads(form['commands'][0])
                 case.assertEqual(len(commands), 1)
                 command = commands[0]
@@ -629,7 +634,7 @@ class WorkflowTests(unittest.TestCase):
                            if attributable else {})}}).encode())
                     response.seek(0)
                 ExpectedRequest('POST', '/sync', 'secret',
-                                form={'commands': form['commands'][0]}).check(request, timeout)
+                                form={k: v[0] for k, v in form.items()}).check(request, timeout)
 
         class InterruptedRead(ExpectedRequest):
             def check(self, request, timeout):

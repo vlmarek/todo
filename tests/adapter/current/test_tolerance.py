@@ -87,7 +87,7 @@ class ToleranceTests(unittest.TestCase):
         from tests.adapter.commands.test_commands import Wire
         next_due = {**due, 'date': '2026-11-13T15:00:00Z'}
         wire = Wire(self, 'item_update', {'id': 'task', 'due': next_due},
-                    [base.delta(items=[base.item(due=next_due)])])
+                    [base.delta(items=[base.item(due=next_due)])], token='delta-token')
         self.addCleanup(wire.done)
         result = Gateway(wire).update_task('task', attention=proposal, before=prior)
         self.assertTrue(result.accepted)

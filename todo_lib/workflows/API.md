@@ -30,3 +30,15 @@ The no-argument accepted boundary preserves legacy/full policy, including catego
 provisioning. Unknown/rejected paths retain their existing required read-only
 reconciliation and classifications. Public request/result/receipt shapes remain
 unchanged.
+
+Combined mutation responses reach this same boundary through `Result.after`;
+there is no new workflow operation API. Gateway uses
+`current.retrieve(..., supplied_response=response, supplied_token=before.sync_token)`
+with the matching proven current baseline. Sufficient resources avoid the initial
+equivalent current read, while legacy hydration/full freshness and required scoped
+reads retain their existing policy. Current active notes need no equivalent REST
+comment query. `OperationEvidence.lifecycle_records` retains command-local
+`CompletedRecord` values separately from exhausted `Retrieval` interval evidence;
+`_reconcile` incorporates those occurrences without claiming historical coverage.
+Missing related owners still trigger supported retrieval. Each complete candidate
+is validated and published before the next command receives its saved token.

@@ -216,7 +216,7 @@ class CachedSelectionTests(unittest.TestCase):
         self.assertEqual(f.store.load_consistent_state().waiting_label_ids,{'waiting'})
         rows=[dict(r,labels=['waiting']) if r['id']=='parent' else r for r in f.wire_items]
         state=f.state(items=rows)
-        op=CommandRequest(self,'item_update',{'id':'parent','labels':['waiting']})
+        op=CommandRequest(self,'item_update',{'id':'parent','labels':['waiting']}, token=None)
         wf,http=self.workflow([op.step(),self.read(state,'*'),self.read(delta(),'full-token')])
         result=wf.execute(['hide','Parent'])
         self.assertEqual(result.status,0,result.document.stderr)
@@ -399,10 +399,7 @@ class CachedEditorTests(unittest.TestCase):
         def read(response, token='delta-token'):
             return (ExpectedRequest('POST','/sync','secret',form={
                 'sync_token':token,'resource_types':RESOURCES}), response)
-        scoped = [{k:v for k,v in n.items() if k!='item_id'} for n in returned if n['item_id']=='C']
-        steps = [op.step(), read(comments.tree(returned)), read(delta(),'full-token'),
-                 (ExpectedRequest('GET','/comments','secret',query={'task_id':'C','limit':'200'}),
-                  {'results':scoped,'next_cursor':None})]
+        steps = [op.step(), read(comments.tree(returned)), read(delta(),'full-token')]
         http = ControlledHTTP([(r,v if isinstance(v,Response) else Response(json.dumps(v).encode()))
                                for r,v in steps])
         self.addCleanup(http.assert_done)
@@ -411,7 +408,7 @@ class CachedEditorTests(unittest.TestCase):
         result=wf.execute(['comment','--edit','Leaf'])
         self.assertEqual(result.status,0,result.document.stderr)
         self.assertEqual(op.commands[0]['args']['id'],'z-older')
-        self.assertEqual(len(http.requests),4)
+        self.assertEqual(len(http.requests),3)
         self.assertEqual(f.store.load_consistent_state().snapshot.comments['z-older'].body,'changed')
 
     def test_comment_receipts_use_reconciled_owner_title_and_hierarchy(self):

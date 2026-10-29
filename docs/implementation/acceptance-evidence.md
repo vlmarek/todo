@@ -1418,3 +1418,97 @@ caching service was introduced. No complete worker suite was run. The unchanged
 runner `final-delivery` gate must still run `scripts/verify-clean` on the settled
 integrated subject: one complete offline suite plus its distinct unchanged-copy,
 PATH and real-less probes. Earlier passes do not certify that later gate.
+
+## T37 — combined ordinary mutations and current resources (2026-10-29)
+
+Subject: supplied worktree HEAD `f45193c66f64de2212acc1bb9ee995d268ace393`
+plus these uncommitted T37 changes. The requested accepted integration
+`b42d078b63056118f83d4ed19e566129b5575c95` is an ancestor (checked with
+`git merge-base --is-ancestor`). No commit or Git metadata change was made.
+Earlier assignment/evidence records and the separately deferred revision-16
+notice-removal work/four deferrals remain unchanged.
+
+Implementation extends Gateway/Current/Result/OperationEvidence/Synchronizer.
+Ordinary writes with proven current resources submit exactly one command, their
+saved token, and all seven JSON resource types in the same encoded form. The
+supplied-response arguments documented in adapter/API.md reuse the existing
+merge/metadata/validation/hydration/full-freshness mapper. Provisioning and
+project/label creation retain their prior policy. Receipt-only or insufficient
+own-resource responses require retrieval from the original proven baseline,
+never the receipt token. Failed necessary reads discard the insufficient first
+candidate so its token cannot escape through Result.after. Malformed resources
+and controls remain classified failures, without replacement recovery. Exact
+UUID/temp-ID attribution, actual normalization discrepancies, public Result
+positions/defaults and legacy no-argument reconciliation remain intact.
+
+Actual offline observations:
+
+- `MutationReuseTests` uses real Transport -> Gateway -> Synchronizer -> StateStore.
+  A strict combined create response supplies a real mapped ID/priority/added_at
+  plus an unrelated active update. Completion dispatch reopens StateStore and
+  checks saved identity, current membership, unrelated update, protected pending
+  observation/cursor and the new token. Sufficient completed-item resources yield
+  a saved ordinary occurrence without another Sync/history request (two total
+  command requests). A second composition supplies a server-full active response
+  omitting the completed owner: its freshness delta, scoped completed history and
+  complete owner comments remain required (five requests). Absence is not used as
+  lifecycle proof.
+- Active comment update/delete also traverse that complete boundary with one
+  combined request per operation. The second request verifies publication via a
+  reopened store. Complete current notes prove actual text/explicit deletion;
+  omitted-content blank notes retain their identity. Necessary fallback current
+  reads can likewise provide complete own notes without equivalent REST reads.
+  Archived-owner comments still exhaust pagination and retain unrelated pending
+  context/observation times. A combined recurring response still requests scoped
+  occurrence evidence.
+- Real-transport command cases distinguish sufficient resources, accepted actual
+  normalization mismatches, unknown/rejected attribution, receipt-only tokens,
+  missing own-resource deltas and failed necessary reads. Malformed arrays,
+  unrelated invalid active data, identity/account/control/token errors fail.
+  Supplied-response tests reject mismatched submitted tokens and retain omitted
+  metadata/collections. Server full responses receive one freshness delta;
+  malformed or repeated-full freshness fails. Existing entrant/legacy/scope and
+  explicit tombstone/ownership-loss hydration cases remain in the focused suite.
+- Reused existing coverage retains lost responses and exact attribution without
+  mutation replay, partial normalization/publication failures, SIGINT stopping,
+  reminder replacement, ordered hierarchy/lifecycle/editor writes, stable cached
+  preflight, pending-history bytes and report cursor safeguards. The deferred
+  history/report case still retrieves events older than intervening writes'
+  synced_at, preserves failed output/cursor boundaries and final cleanup order.
+  Command-local completed records are distinct from exhausted historical interval
+  Retrieval evidence; current Sync progress never advances history coverage.
+
+Verification commands (all run from the assigned repository root, offline):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.adapter.commands.test_commands tests.workflows.sync.test_sync tests.workflows.report.test_report tests.workflows.test_cached_selection tests.workflows.comments.test_workflow -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_reminders tests.adapter.current.test_tolerance tests.adapter.commands.test_reminders tests.adapter.history.test_history tests.adapter.history.test_tolerance tests.adapter.transport.test_transport tests.workflows.capture.test_capture tests.workflows.capture.test_coexistence tests.workflows.capture.test_named_timezones tests.workflows.capture.test_reminders tests.workflows.moves.test_moves tests.workflows.lifecycle.test_lifecycle tests.workflows.comments.test_tolerance tests.workflows.comments.test_codec tests.workflows.report.test_tolerance tests.cli.test_cli tests.cli.test_composition tests.cli.test_coexistence tests.cli.test_named_timezones tests.cli.test_reminders tests.local.test_local tests.local.test_reminders -v
+```
+
+The final focused run passed 228 tests (`/tmp/t37-final-focused.log`). The affected
+dependency run passed 285 tests (`/tmp/t37-final-affected.log`). The latter scope
+was selected because the shared Gateway form and Current evidence affect direct
+adapter/reminder, capture/move/lifecycle/comment, CLI and local consumers beyond
+the focused selection. Early runs exposed strict fixtures with commands-only or
+old baseline assumptions and equivalent active-comment reads; these were migrated
+without skips/xfails or weakened outcome/order/failure checks. The last necessary
+fallback-failure guard was subsequently verified by the final focused run.
+
+The existing copied probe was run separately, without a complete suite: a Python
+invocation created isolated HOME/bin/outside directories, copied launcher/modules
+and `tests/delivery/final/copy_probe.py`, then executed
+`python3.11 -I -B <outside>/copy_probe.py <install>` with its existing synthetic
+credential/environment allowlist. All 16 phases exited 0, including
+`affected-create` and separate-process `affected-reload`
+(`/tmp/t37-final-copy.log`). The affected creation now returns actual combined
+resources in its sole mutation response; assertions check exact saved token,
+current membership, mapped priority, precise added_at and pending context/cursor.
+Runtime file bytes were compared with the source after execution. No production
+test switch or new harness was added. `git diff --check` passed.
+
+Limits: these synthetic source-cited traces establish algorithm and conformance,
+not universal provider own-effect inclusion, live behavior or measured latency.
+No live calls or complete worker suite were run. The unchanged CML final-delivery
+runner still owns `./scripts/verify-clean`: one complete offline suite plus its
+distinct unchanged-copy/PATH/real-less probes on the integrated subject. The
+standalone copied observation is not a claim that this final gate ran here.

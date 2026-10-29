@@ -49,18 +49,25 @@ def before(*items, comments=(), occurrences=()):
 
 class Wire:
     """Checks one command, then consumes independently supplied read responses."""
-    def __init__(self, case, kind, args, read, status='ok', mapping='new', lost=False):
+    def __init__(self, case, kind, args, read, status='ok', mapping='new', lost=False, token='prior-token'):
         self.case, self.kind, self.args = case, kind, args
         self.read = list(read)
         self.status, self.mapping, self.lost = status, mapping, lost
         self.commands, self.reads = [], []
         self.command = None
+        self.token = token
 
     def request(self, method, path, **kw):
         self.case.assertEqual((method, path), ('POST', '/sync'))
         form = kw['form']
         if 'commands' in form:
             self.case.assertEqual(kw['replay'], Replay.IDEMPOTENT)
+            if self.kind in ('project_add', 'label_add'):
+                self.case.assertEqual(set(form), {'commands'})
+            else:
+                self.case.assertEqual(set(form), {'commands', 'sync_token', 'resource_types'})
+                self.case.assertEqual(form['sync_token'], self.token)
+                self.case.assertEqual(form['resource_types'], RESOURCES)
             commands = json.loads(form['commands'])
             self.case.assertEqual(len(commands), 1)
             command = commands[0]
@@ -270,7 +277,7 @@ class CommandsTests(unittest.TestCase):
                 for body in ('Done: first', 'Done: second'):
                     comment = Comment('new', 'task', body, stamp(NEXT))
                     g2, _ = self.gateway('note_add', {'item_id': 'task', 'content': body},
-                        history=History(comments=[comment]))
+                        history=History(comments=[comment]), token='delta-token')
                     note_result = g2.create_comment('task', body, before=r.after, known_owners={'task': r.actual})
                     self.assertTrue(note_result.accepted)
                     self.assertFalse(note_result.issues)
@@ -308,11 +315,11 @@ class CommandsTests(unittest.TestCase):
         self.assertTrue(first.accepted)
         self.assertEqual(first.actual.minutes, 0)
         g2, _ = self.gateway('reminder_update', {'id': 'new', 'type': 'relative', 'minute_offset': 5},
-            status={'error_code': 20, 'error': 'Rejected'})
+            status={'error_code': 20, 'error': 'Rejected'}, token='delta-token')
         second = g2.update_reminder('new', 5, before=first.after)
         self.assertEqual(second.outcome, Outcome.REJECTED)
         self.assertEqual(second.actual.minutes, 0)
-        g3, _ = self.gateway('reminder_delete', {'id': 'new'}, read=[delta(reminders=[{'id': 'new', 'is_deleted': True}])])
+        g3, _ = self.gateway('reminder_delete', {'id': 'new'}, token='delta-token', read=[delta(reminders=[{'id': 'new', 'is_deleted': True}])])
         third = g3.delete_reminder('new', before=first.after)
         self.assertTrue(third.accepted)
         self.assertIsNone(third.actual)
@@ -482,7 +489,7 @@ class CommandsTests(unittest.TestCase):
         sync = lambda token: ExpectedRequest('POST', '/sync', 'secret', form={
             'sync_token': token, 'resource_types': RESOURCES})
         http = ControlledHTTP([
-            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': json.dumps([op.command()], separators=(',', ':'))}),
+            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': json.dumps([op.command()], separators=(',', ':')), 'sync_token': 'prior-token', 'resource_types': RESOURCES}),
              response({'sync_status': {op.uuid: 'ok'}})),
             (sync('prior-token'), response(replacement)),
             (sync('full-token'), response(delta())),
@@ -505,7 +512,7 @@ class CommandsTests(unittest.TestCase):
         # Current scoped REST comments have no required item_id field; posted_at
         # is authoritative null, terminal cursor is explicitly null.
         http2 = ControlledHTTP([
-            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': json.dumps([note_op.command()], separators=(',', ':'))}),
+            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': json.dumps([note_op.command()], separators=(',', ':')), 'sync_token': 'delta-token', 'resource_types': RESOURCES}),
              response({'sync_status': {note_op.uuid: 'ok'}, 'temp_id_mapping': {note_op.temp_id: 'comment'}})),
             (sync('delta-token'), response(delta())),
             (ExpectedRequest('GET', '/comments', 'secret', query={'task_id': 'task', 'limit': '200'}),
@@ -591,7 +598,7 @@ class CommandsTests(unittest.TestCase):
     def test_real_http_transport_serializes_single_uuid_command(self):
         op = Operation('item_update', {'id': 'task', 'content': 'Changed'})
         script = [
-            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': json.dumps([op.command()], separators=(',', ':'))}),
+            (ExpectedRequest('POST', '/sync', 'secret', form={'commands': json.dumps([op.command()], separators=(',', ':')), 'sync_token': 'prior-token', 'resource_types': RESOURCES}),
              Response(json.dumps({'sync_status': {op.uuid: 'ok'}, 'unknown': True}).encode())),
             (ExpectedRequest('POST', '/sync', 'secret', form={'sync_token': 'prior-token', 'resource_types': RESOURCES}),
              Response(json.dumps(delta(items=[item(content='Changed')])).encode()))]
@@ -600,6 +607,93 @@ class CommandsTests(unittest.TestCase):
         r = Gateway(Transport('secret', opener=http), clock=lambda: NOW).execute(op, before=before())
         self.assertTrue(r.accepted)
         self.assertEqual(r.actual.title, 'Changed')
+
+
+
+
+class CombinedResponseTests(unittest.TestCase):
+    """Synthetic resources: retained Sync Overview/Incremental sync and ItemSyncView.
+
+    Independent resource rows are supplied explicitly; UUID receipts alone never
+    provide own effects. Real transport rejects different forms/URL/encoding.
+    """
+    def execute(self, resources, *, reads=(), status='ok', history=None, op=None, initial=None):
+        op = op or Operation('item_update', {'id': 'task', 'content': 'Changed & café'})
+        response = dict(resources)
+        if status is not None:
+            response['sync_status'] = {op.uuid: status}
+        steps = [(ExpectedRequest('POST', '/sync', 'secret', form={
+            'commands': json.dumps([op.command()], ensure_ascii=False, separators=(',', ':')),
+            'sync_token': 'prior-token', 'resource_types': RESOURCES}),
+            Response(json.dumps(response).encode()))]
+        for token, raw in reads:
+            steps.append((ExpectedRequest('POST', '/sync', 'secret', form={
+                'sync_token': token, 'resource_types': RESOURCES}),
+                raw if isinstance(raw, (Response, Exception)) else Response(json.dumps(raw).encode())))
+        http = ControlledHTTP(steps)
+        self.addCleanup(http.assert_done)
+        result = Gateway(Transport('secret', opener=http), history=history, clock=lambda: NOW).execute(
+            op, before=initial or before(), start=START, end=END)
+        return result, http
+
+    def test_receipt_only_token_and_empty_delta_cannot_skip_unincorporated_state(self):
+        for receipt in ({'sync_token': 'receipt-only'}, delta(sync_token='receipt-only')):
+            with self.subTest(receipt=receipt):
+                result, http = self.execute(receipt, reads=[('prior-token',
+                    delta(sync_token='proven', items=[item(content='Changed & café')]))])
+                self.assertFalse(result.issues)
+                self.assertEqual(result.after.sync_token, 'proven')
+                self.assertEqual(len(http.requests), 2)
+
+    def test_failed_required_read_does_not_publish_insufficient_candidate_token(self):
+        result, http = self.execute(delta(sync_token='receipt-only'),
+            reads=[('prior-token', Response(b'{invalid'))])
+        self.assertTrue(result.accepted)
+        self.assertTrue(result.partial)
+        self.assertIsNone(result.after)
+        self.assertEqual(len(http.requests), 2)
+
+    def test_sufficient_delta_preserves_actual_normalization_and_independent_attribution(self):
+        raw = delta(sync_token='combined', items=[item(content='Provider normalized')])
+        result, http = self.execute(raw)
+        self.assertTrue(result.accepted)
+        self.assertTrue(result.partial)
+        self.assertEqual(result.actual.title, 'Provider normalized')
+        self.assertEqual(result.after.sync_token, 'combined')
+        self.assertEqual(len(http.requests), 1)
+        unknown, _ = self.execute(raw, status=None)
+        self.assertEqual(unknown.outcome, Outcome.UNKNOWN)
+        rejected, _ = self.execute(raw, status={'error_code': 22, 'error': 'refused'})
+        self.assertEqual(rejected.outcome, Outcome.REJECTED)
+
+    def test_invalid_resources_controls_account_identity_are_not_empty_deltas_or_recovery(self):
+        rows = [delta(items=None), delta(items=[item(priority=9)]),
+                delta(items=[item(id=42)]), delta(full_sync='false'),
+                delta(sync_token='*'), {'sync_token': None}, {'sync_token': '*'}, delta(user={'id': 'alien', 'tz_info': {'timezone': 'UTC'}}),
+                delta(notes=[{'id': 'note', 'is_deleted': False}]),
+                {'items': [item(content='Changed & café')], 'sync_token': 'missing-control'}]
+        for raw in rows:
+            with self.subTest(raw=raw):
+                result, http = self.execute(raw)
+                self.assertTrue(result.accepted)
+                self.assertTrue(result.partial)
+                self.assertIsNone(result.after)
+                self.assertEqual(len(http.requests), 1)
+
+    def test_recurring_combined_state_still_needs_scoped_occurrence_evidence(self):
+        schedule = due()
+        schedule['is_recurring'] = True
+        old = Item('task', 'cat', 'Original', attention=resolve_remote_due(schedule, 'UTC'))
+        record_item = replace(old, completed_at=stamp(NEXT))
+        occurrence = Occurrence('occurrence', 'task', stamp(NEXT), True)
+        history = History(records=[CompletedRecord(record_item, occurrence)])
+        result, http = self.execute(delta(items=[item(content='Original', due=schedule)]),
+            op=Operation('item_update_date_complete', {'id': 'task', 'is_forward': 1, 'reset_subtasks': 0}),
+            history=history, initial=before(old))
+        self.assertTrue(result.accepted)
+        self.assertTrue(any(call[0] == 'completed' for call in history.calls))
+        self.assertEqual(result.occurrences, (occurrence,))
+        self.assertEqual(len(http.requests), 1)
 
 
 if __name__ == '__main__':
