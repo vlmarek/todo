@@ -1,3 +1,38 @@
+# Current continuation: TODO3-PLAN-017
+
+Approved Design revision 18 in `docs/design/mutation-response-reuse.md` governs
+combined ordinary mutations and incremental resource retrieval. T37 owns the coupled
+Gateway/current response consumption, accepted-publication/caller adaptation,
+strict fixture migration and distinguishing integrated/copied acceptance. Reuse
+accepted integration `b42d078b63056118f83d4ed19e566129b5575c95`; preserve all
+36 accepted assignments, referenced definitions/interfaces/checks and evidence.
+The technical `docs/design/external/todoist/combined-response-notes.md` supplies
+bounded source/API navigation and uncertainty handling without new product promises.
+
+The new nonfinal stage activates REQ-SYNC-038 and REQ-VERIFY-036. All 154 earlier
+planned requirements are satisfied; revision-16's four notice-removal requirements
+remain explicitly deferred under their separate direct-delivery instruction.
+No delivery record or satisfied coverage is invented from uncommitted draft code.
+The separate operator draft has been reversibly preserved outside the preparation
+target; workers must not import or restore it. This increment does not declare
+final project completion or promise direct-delivery eligibility.
+
+Keep cached stable-ID preflight, full current-resource validation and necessary
+history/archived-owner/recurring evidence. Validate and save each accepted result
+before submitting the next write; use its proven resource baseline/token. Receipt-only
+tokens cannot skip unincorporated state. Full candidates retain bounded freshness.
+Keep publication failures, interruption, pending history, deferred intervals and
+report/cursor protections. Category/provisioning and refresh/report policy remain.
+One coherent task owns affected fixture migrations before the unchanged shared
+final-delivery gate; no second worker full suite or new framework is required.
+
+Preparation commits/publication/readiness are authorized by the retained current
+operator instruction. The coordinating operator retains the requested subsequent
+implementation authority under existing limits and must stop for persistent serious
+failure or a further Design/Plan change. This authoring pass performs no adoption,
+resume, paid work or independent review. Earlier continuation sections below
+retain their historical scope and provenance.
+
 # Current continuation: TODO3-PLAN-016
 
 Design revision 17 in `docs/design/mutation-retrieval-reuse.md` governs ordinary-write

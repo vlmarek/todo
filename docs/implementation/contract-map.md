@@ -1,12 +1,13 @@
 # Prepared ownership and evidence
 
-Design revision 17 adds ordinary-write evidence reuse and affected-state historical
-retrieval. T36 owns the complete coupled implementation, consumer migration and
-distinguishing acceptance. All 151 previously planned requirements are satisfied;
-35 historical assignments remain unchanged. The four revision-16 notice-removal
-requirements remain deferred pending their separate direct-delivery completion and
-retained evidence; no manual coverage or final completion is claimed. Observations
-append to `docs/implementation/acceptance-evidence.md`.
+Design revision 18 adds combined ordinary mutation and incremental Sync response
+reuse. T37 owns implementation, consumer/strict-fixture adaptation and integrated
+acceptance. All 154 earlier planned requirements are satisfied; all 36 accepted
+assignments remain unchanged. Four revision-16 notice-removal requirements remain
+deferred under their separate direct-delivery instruction, with exact operator
+drafts preserved outside the clean preparation target. No manual coverage or final
+completion is claimed. Observations append to
+`docs/implementation/acceptance-evidence.md`.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -823,18 +824,18 @@ requirements:
     planned_evidence:
     - t35-focused
   REQ-SYNC-036:
-    stage_status: active
-    primary_owner: T36
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t36-focused
   REQ-SYNC-037:
-    stage_status: active
-    primary_owner: T36
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t36-focused
   REQ-VERIFY-035:
-    stage_status: active
-    primary_owner: T36
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t36-focused
   REQ-OUT-026:
@@ -853,4 +854,16 @@ requirements:
     stage_status: deferred
     primary_owner: null
     planned_evidence: []
+  REQ-SYNC-038:
+    stage_status: active
+    primary_owner: T37
+    planned_evidence:
+    - t37-focused
+    - final-delivery
+  REQ-VERIFY-036:
+    stage_status: active
+    primary_owner: T37
+    planned_evidence:
+    - t37-focused
+    - final-delivery
 ```

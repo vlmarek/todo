@@ -575,3 +575,16 @@ interfaces:
     Keep public request/result/error shapes, cached stable-ID preflight, actual receipts, locking, per-file
     publication, outcome classification and finalization. Document concrete compatible evidence arguments
     in existing adapter/workflows API.md.
+- id: combined-operation-evidence
+  owner: adapter
+  supersedes_ref: shared-operation-evidence
+  description: Compatible successor of Gateway.execute(Operation, before=Current)
+    -> Result. For ordinary task/step operations request commands, the proven baseline
+    sync_token and the existing JSON resource_types together. Consume returned full/delta
+    resources with their matching baseline through the shared Current merge/validation/hydration/freshness
+    path; preserve independent UUID/temp-ID attribution, normalized actual result
+    and scoped evidence. Complete sufficient evidence feeds the existing accepted-publication
+    boundary without an equivalent Sync read. Receipt-only tokens never advance past
+    unincorporated resources; necessary lifecycle/archived-owner and ambiguous-outcome
+    reads remain. Provisioning/category policy and public Result compatibility remain
+    unchanged.

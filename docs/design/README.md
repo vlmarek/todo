@@ -1,9 +1,38 @@
 # todo-3 product specification
 
-Design revision: **17 — reuse mutation retrieval and scope historical reconciliation, 2026-10-29**.
+Design revision: **18 — combine ordinary mutations with incremental Sync, 2026-10-29**.
 State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 17
+## Current revision 18
+
+Read [mutation-response-reuse.md](mutation-response-reuse.md) first. Ordinary
+task/step mutations request incremental current resources in the same Sync request
+as their command and reuse sufficient authoritative returned state. Do not issue
+a separate Sync read solely because the response also carried a mutation receipt.
+This covers creation, scalar/scheduling/hiding changes, reminders, moves,
+lifecycle operations and comment mutations, including each operation in composed
+commands. Verify and publish each accepted operation before submitting the next.
+
+REQ-SYNC-038 narrowly qualifies the separate-read interpretation of
+REQ-SYNC-026/036/037; REQ-VERIFY-036 defines representative distinguishing evidence.
+Retain extra retrieval where combined evidence is insufficient, required full-
+response freshness, necessary history/activity/archived-comment reads, strict
+validation, outcome attribution and existing recovery. Current Sync cannot stand
+in for historical coverage. Explicit refresh/report completeness, commands and
+output remain unchanged. Category creation and initialization/provisioning retain
+their existing policies and are outside this amendment.
+
+The operator redirected the request from Planning to Design, asked which other
+workflows could benefit, then answered "I agree" to the recommendation covering
+all ordinary task/step mutations through the shared gateway. This completes the
+scoped documentation approval; actual excerpts and the preceding proposal are
+retained separately in the external Design report. No new commit, Planning,
+implementation, adoption or execution is authorized. Combined read/write support
+is established by retained provider evidence; operation-specific response
+completeness and normalized-result conformance remain delegated technical work.
+No numerical latency or request-count guarantee is added.
+
+## Preserved revision 17
 
 Read [mutation-retrieval-reuse.md](mutation-retrieval-reuse.md) first. Ordinary
 task/step writes retain incremental current-state synchronization and authoritative
@@ -461,7 +490,8 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped clarification
-and successor precedence in mutation-retrieval-reuse.md, routine-notices.md,
+and successor precedence in mutation-response-reuse.md,
+mutation-retrieval-reuse.md, routine-notices.md,
 named-timezone-scheduling.md, item-date-display.md, cached-selection.md,
 completion-reconciliation.md, report-retrieval-reuse.md, request-conformance.md,
 historical-reminder-contradiction.md, todoist-tolerance.md,
