@@ -1291,3 +1291,130 @@ notification delivery, future recurrence advancement or future independent revie
 No live account/network gate, provider emulator, production test mode or new test
 dependency was introduced. Historical evidence bytes and contract-map.md remain
 unchanged.
+
+## T36 — operation evidence reuse and affected historical reconciliation (2026-10-29)
+
+Observed subject: worktree HEAD `f3f0bdcd51170ddc0fc3ba3dd121d6342d8eb907`
+(the revision-17 plan over accepted application `5b99bbbccc2f317036faab2ca924ef88b2fb5684`),
+plus this task's uncommitted deliverables. SHA-256 of sorted changed/new paths,
+each encoded as path + NUL + file bytes + NUL, excluding this append-only log:
+`b56aa3e9fe520f0ac4963387ed9432576d058bd25bad1a18a2cfd6a1e4ad8dfb`.
+Earlier evidence bytes and frozen contract inputs are preserved. This task does
+not implement or claim revision-16 notice removal.
+
+Implemented producer/consumer slice: `Result.before_token` pairs complete
+`Gateway.execute` current evidence with the submitted baseline. Exhausted
+`Retrieval` values carry endpoint, scope, owner, interval/pages and any relevance
+filter; only matching complete operation-local evidence is shared. Capture,
+lifecycle, comments and moves use the result before any subsequent submission.
+All merged active changes are validated; required missing/invalid state remains a
+classified failure. Ordinary history work covers affected owners, required known
+and returned ancestry/subtrees, missing open owners and lifecycle occurrences.
+Unrelated archived comments and recurring activities are deferred. Explicit Sync
+comment tombstones/ownership loss survive deferral and necessary hydration.
+
+No saved schema field or cross-command history cache was added. The existing
+cursor-bound refresh/report retrieval covers deferred pending intervals even when
+writes advance `synced_at`; current-resource membership/token remain separate
+from archived context. Ordinary publication preserves coverage, unrelated pending
+observations/comments and cursor. Full refresh/report policy and report
+output/flush -> cursor -> cleanup remain intact. Category provisioning retains
+its full policy. Concrete compatible symbols are documented in adapter/workflows
+API.md and existing module docstrings.
+
+Observed commands and successful results (all offline, CPython 3.11):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.adapter.commands.test_commands tests.workflows.sync.test_sync tests.workflows.report.test_report tests.workflows.test_cached_selection -v
+# 181 tests, OK; final captured output /tmp/t36-focused-complete.log.
+
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.capture.test_capture tests.workflows.capture.test_coexistence tests.workflows.capture.test_named_timezones tests.workflows.capture.test_reminders tests.workflows.moves.test_moves tests.workflows.lifecycle.test_lifecycle tests.workflows.comments.test_workflow tests.workflows.comments.test_codec tests.workflows.comments.test_tolerance tests.workflows.init.test_init tests.workflows.init.test_tolerance tests.workflows.reads.test_reads tests.workflows.reads.test_reminders tests.workflows.report.test_tolerance tests.adapter.commands.test_reminders tests.adapter.current.test_reminders tests.adapter.current.test_tolerance tests.adapter.history.test_history tests.adapter.history.test_tolerance -v
+# 301 tests, OK; /tmp/t36-affected-settled.log.
+
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/cli -t . -v
+# 41 tests, OK; /tmp/t36-cli-settled.log.
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/local -t . -v
+# 25 tests, OK; /tmp/t36-local-settled.log.
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.delivery.final.test_verify -v
+# 3 miniature harness regressions, OK; /tmp/t36-harness-settled.log.
+git diff --check
+# exit 0.
+```
+
+The additional affected checks were necessary because t36-focused does not load
+all reminder/named-zone, composed public CLI, provisioning, move, comment-editor,
+local-state and delivery doubles that share the changed interfaces. Initial
+feedback exposed obsolete duplicate-read/all-category expectations, required
+recovery reads after failed Current mapping, and a synthetic clock truncation
+that made a completion interval reverse. Fixtures were migrated explicitly;
+strict ordering, scope, pagination, nonzero failure and stopping assertions remain.
+No new xfail, expected-failure or skipped behavior was introduced. The 301/41/25/3
+runs use the final runtime bytes; the last focused rerun also strengthens saved
+completion-occurrence assertions. Log paths are ephemeral worker artifacts, not
+installation dependencies.
+
+Distinguishing evidence in `MutationReuseTests` and Current tests:
+
+- Real Transport/Gateway/Synchronizer/StateStore creation starts with a valid
+  saved baseline/token. One sufficient delta incorporates the actual mapped new
+  ID and an unrelated active update. The completion HTTP expectation opens a new
+  StateStore and asserts saved identity, title, current membership and new token
+  before accepting the next command. One bounded completed retrieval is reused;
+  completed state and its occurrence are saved. Strict expectations permit no
+  unrelated recurring activity, archived comments or full creation replacement.
+- An invalid unrelated active resource stops the composed command after accepted
+  creation, preserves protected bytes, and leaves completion unattempted. Existing
+  entrant, scope-expansion, legacy, full-freshness, tombstone and invalid-arrival
+  checks retain necessary hydration and validation-before-hydration evidence.
+- An archived owner and a recurring owner are established at October 21 13:00Z.
+  Their deferred events at 18:00Z/18:00:01Z precede the October 22 writes' saved
+  synchronization time. Both intervening writes leave pending context/cursor
+  intact. The later report's literal cursor-bound HTTP queries retrieve the
+  deferred comment and recurrence; eligible work appears in output. Required
+  comment-read failure preserves all prior protected bytes. Injected final-output
+  and cursor failures preserve the pending bytes present at the failing boundary
+  and the old cursor; a later report still includes the work.
+- Paginated comments on a completed owner are reused without a second owner
+  request, preserving another archived owner's own comments/observation time.
+  A note ID colliding with an unrelated recurring item's ID remains in its own
+  resource namespace and does not freshly stamp that item's history. Explicit
+  archived-note deletion is applied without refreshing unrelated history; the
+  identity evidence also survives a necessary entrant hydration.
+
+Reused failure/correctness coverage includes unresolved active absence, invalid
+actual state, required comments, candidate/first/later publication failures,
+unknown/rejected exact UUID outcomes, SIGINT, scalar/reminder replacement stopping,
+hierarchy/category moves and inherited completed descendants, recent reopen,
+activity-only recurrence/undo and cross-endpoint occurrence association, protected
+history reload, and report finalization. No commands were batched or replayed.
+
+The settled subject also ran the existing copied-entrypoint and real-less probes
+without a complete-suite invocation. The actual command constructed isolated
+HOME/bin/outside directories, copied unchanged launcher/modules, supplied only
+the existing strict offline opener and clock hooks, invoked `todo help` through
+PATH, then ran:
+
+```python
+subprocess.run(['python3.11', '-I', '-B', str(outside / 'copy_probe.py'), str(install)],
+               cwd=outside, env=env, check=True, timeout=60)
+subprocess.run(['python3.11', '-I', '-B', str(outside / 'less_probe.py'), str(install)],
+               cwd=outside, env=env, check=True, timeout=60)
+```
+
+Both exited 0; `/tmp/t36-copied-settled.log` records all phases, including the new
+`affected-create` and separate-process `affected-reload`. That write uses a saved
+token, exact UUID/temp-ID mapping and one incremental current response, with no
+historical REST request; reload observes its real saved ID/title/token. Unrelated
+pending observations/comments and cursor are checked unchanged. All copied runtime
+file bytes are compared with the source after execution. Existing public receipts,
+report/cleanup, tolerance/named-zone, cached selection and installation isolation
+phases pass. Real GNU less preserves truecolor, exits for short fitting output,
+and reaches final long output with G then q in its 8x100 PTY.
+
+Limits: synthetic request traces establish algorithm/conformance, not measured
+production latency, live-account behavior or provider guarantees. No network call,
+production test switch, benchmark target, new dependency/framework, or speculative
+caching service was introduced. No complete worker suite was run. The unchanged
+runner `final-delivery` gate must still run `scripts/verify-clean` on the settled
+integrated subject: one complete offline suite plus its distinct unchanged-copy,
+PATH and real-less probes. Earlier passes do not certify that later gate.

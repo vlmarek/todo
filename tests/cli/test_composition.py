@@ -323,9 +323,8 @@ class PublicLifecycle(unittest.TestCase):
         steps = [complete.step(),
             f.sync('delta-token', full(items=[item('A', added_at=sync_fixture.CREATED)])),
             f.sync('full-token', delta()), f.completed([sync_fixture.completed_b()]),
-            *f.external(), comment.step(), f.sync('delta-token', delta()), self.comments('B', rest),
-            f.sync('delta-token', delta(notes=[note('public', 'B', content='Done: public progress', posted_at=sync_fixture.COMMENT)])),
-            f.completed([]), self.comments('B', rest)]
+            f.comments(), comment.step(), f.sync('delta-token', delta()), self.comments('B', rest),
+            f.completed([])]
         transport, _ = f.boundary(steps)
         status, out, err, _ = invoke(self, ['done', 'B', '--comment', 'public progress'], transport, now=sync_fixture.NOW)
         self.assertEqual(status, 0, err)
@@ -335,8 +334,6 @@ class PublicLifecycle(unittest.TestCase):
         reopened = lifecycle_fixture.CommandRequest(self, 'item_uncomplete', {'id': 'B'})
         restored = [item('B', parent_id='A', added_at=sync_fixture.CREATED)]
         transport, _ = f.boundary([reopened.step(), f.sync('delta-token', delta(items=restored)),
-            f.sync('*', full(items=[item('A'), *restored], notes=[note('public', 'B', content='Done: public progress', posted_at=sync_fixture.COMMENT)])),
-            f.sync('full-token', delta()), f.sync('delta-token', delta(items=restored)),
             f.sync('*', full(items=[item('A'), *restored], notes=[note('public', 'B', content='Done: public progress', posted_at=sync_fixture.COMMENT)])),
             f.sync('full-token', delta())])
         status, out, err, _ = invoke(self, ['reopen', 'B'], transport, now=sync_fixture.NOW)

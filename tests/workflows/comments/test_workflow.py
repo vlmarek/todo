@@ -198,8 +198,6 @@ class WorkflowTests(unittest.TestCase):
             return
         self.queue_refresh(notes)
         self.wire.comments(notes if actual is None else actual, pages=pages, malformed=malformed)
-        if status == 'ok':
-            self.queue_refresh(notes)
 
     def test_unchanged_and_removed_starter_exact_timestamps_and_own_identity(self):
         for removed in (False, True):

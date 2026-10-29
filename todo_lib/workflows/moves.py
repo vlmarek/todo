@@ -15,7 +15,7 @@ from todo_lib.adapter.transport import HTTPFailure, redact
 from todo_lib.local import LocalError, exclusive_lock, load_config, prepare_candidates
 from todo_lib.syntax import parse
 from .reads import combined_snapshot, choose, select_child, select_title
-from .sync import SyncError, SyncInterrupted, SyncResult, _reconcile
+from .sync import SyncError, SyncInterrupted, SyncResult, _reconcile, OperationEvidence, affected_ids
 
 
 class MoveError(d.DomainError):
@@ -254,10 +254,10 @@ class MoveWorkflow:
                     retained[item.id] = replace(item,
                         category_id=current.snapshot.items[ancestor.id].category_id)
             candidate = replace(candidate, items=retained)
-            adapter = HistoryAdapter(sync.transport, timezone=current.account.timezone)
+            adapter = OperationEvidence(HistoryAdapter(sync.transport, timezone=current.account.timezone), operation)
             snapshot, history = _reconcile(current, candidate, state.history, adapter,
-                min((state.cursor, state.synced_at or state.cursor), key=d.instant_key),
-                result.now, state.cursor, settings.hidden_from_now)
+                state.cursor, result.now, state.cursor, settings.hidden_from_now,
+                affected=affected_ids(operation, candidate, current))
             actual = snapshot.items.get(source.id)
             if actual is None:
                 raise MoveError('accepted source unavailable')

@@ -284,7 +284,7 @@ class LifecycleWorkflow:
                     if deliver and receipt.stdout:
                         self._show(receipt.stdout.rstrip('\n'))
                     # Acceptance is recorded before any reconciliation/publication.
-                    state = self.synchronizer.reconcile_accepted_locked()
+                    state = self.synchronizer.reconcile_accepted_locked(result)
                     snapshot = state.snapshot
                     if result.issues:
                         raise d.DomainError('; '.join(result.issues) +

@@ -49,10 +49,20 @@ class Page:
 
 @dataclass(frozen=True)
 class Retrieval:
+    """Exhausted endpoint result with original request coverage and ownership.
+
+    Legacy positional constructors remain readable; absent provenance cannot be
+    used for operation-local sharing. Only successfully exhausted producers may
+    construct a complete value, including an empty result.
+    """
     records: tuple
     pages: tuple[Page, ...]
     start: ExactInstant | datetime | None = None
     end: ExactInstant | datetime | None = None
+    endpoint: str | None = None
+    scope: tuple[tuple[str, str], ...] = ()
+    owner_id: str | None = None
+    required_ids: frozenset[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -268,7 +278,7 @@ class HistoryAdapter:
                         seen.add(key)
                         records.append(value)
             lower = boundary
-        return Retrieval(tuple(records), tuple(pages), start, end)
+        return Retrieval(tuple(records), tuple(pages), start, end, _COMPLETED, filters)
 
     def activities(self, start, end, scope=None):
         filters = _scope(scope, '/activities')
@@ -287,7 +297,7 @@ class HistoryAdapter:
                         continue
                     seen.add(value.id)
                 records.append(value)
-        return Retrieval(tuple(records), tuple(pages), start, end)
+        return Retrieval(tuple(records), tuple(pages), start, end, '/activities', filters)
 
     def comments(self, owner_id):
         return self._comments(owner_id)
@@ -319,7 +329,8 @@ class HistoryAdapter:
                 seen[identity] = comment
                 if comment is not None:
                     records.append(comment)
-        return Retrieval(tuple(records), tuple(pages))
+        return Retrieval(tuple(records), tuple(pages), endpoint='/comments', owner_id=owner_id,
+                         required_ids=None if required_ids is None else frozenset(required_ids))
 
     def required_comments(self, current_items, completed, activities, *, complete_comments=None):
         """Return current text separately from events and historical item text.

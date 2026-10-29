@@ -14,6 +14,10 @@ paired with that cache's token. Active owners' own comments come from the same
 validated merged snapshot; archived context never supplies active membership.
 waiting_label_ids independently records exact-name label membership proven at the
 same sync_token; it stores no unrelated label names. Missing means unknown.
+synced_at and the paired token certify current resources only. Historical
+coverage is independent: ordinary writes preserve History.coverage, pending
+observations and cursor; explicit refresh/report retrieve from a bound no later
+than the report cursor, regardless of intervening current publications.
 Legacy caches omit current membership and remain usable offline, requiring hydration
 before online incremental retrieval.
 """

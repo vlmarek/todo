@@ -245,9 +245,9 @@ class CaptureWorkflow:
             try:
                 method = getattr(self.gateway, action.method)
                 if action.method == 'create_task':
-                    receipt = method(**kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders)
+                    receipt = method(**kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders, start=synchronized.state.cursor)
                 else:
-                    receipt = method(target, **kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders)
+                    receipt = method(target, **kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders, start=synchronized.state.cursor)
                 outcome = receipt.outcome.value
                 issues = list(receipt.issues)
                 actual = receipt.actual
@@ -261,7 +261,8 @@ class CaptureWorkflow:
                 if action.method == 'create_task':
                     ids[action.target] = receipt.target_id
                     target = receipt.target_id
-                synchronized = self.synchronizer.reconcile_accepted_locked()
+                synchronized = (self.synchronizer.reconcile_accepted_locked() if action.method == 'provision_category'
+                                else self.synchronizer.reconcile_accepted_locked(receipt))
                 snapshot = synchronized.snapshot
                 if action.method == 'create_task' and target in snapshot.items:
                     selected_owners[target] = snapshot.items[target]

@@ -322,7 +322,7 @@ class CommentWorkflow:
                         raise KeyboardInterrupt
                     # Always reconcile accepted work, including accepted outcomes
                     # with incomplete gateway evidence. Never retry the mutation.
-                    current = self.synchronizer.reconcile_accepted_locked()
+                    current = self.synchronizer.reconcile_accepted_locked(remote)
                     if owner.id in current.snapshot.items:
                         snapshot = current.snapshot
                         owner = snapshot.items[owner.id]
