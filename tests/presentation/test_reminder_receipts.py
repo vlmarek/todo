@@ -26,7 +26,7 @@ class ReminderReceiptTests(unittest.TestCase):
         reminder = replace(snapshot.reminders['abs'], item_id='timed')
         snapshot = replace(snapshot, reminders={'rel': snapshot.reminders['rel'], 'abs': reminder})
         values = reminder_values(snapshot, 'timed')
-        self.assertEqual(values, '0m, at 2025-02-12 09:00:00 Europe/Prague')
+        self.assertEqual(values, '0m, at 2025-02-12 09:00:00 Europe/Prague (2025-02-12 09:00:00 Europe/Madrid)')
         doc = p.render_mutation(snapshot, snapshot.items['timed'], changes=[('Reminders', None, values)])
         self.assertIn('  Reminders: none -> 0m, at 2025-02-12 09:00:00 Europe/Prague', doc.stdout)
 

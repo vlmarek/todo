@@ -256,12 +256,23 @@ def phase(install, name):
             assert 'cada día a las 9' in out and 'every day at nine' not in out
             assert r'Amendment\nline\ttab' in out
             assert store.load_consistent_state().snapshot.items['E'].attention is None
+            # Due dates / Sync Update a task: a named request, independent actual
+            # response, two authoritative reads, then a fresh-process detail.
+            row['due'] = dict(date='2026-11-12T14:00:00Z', timezone='America/New_York',
+                              string='November 12 at 9', lang='en', is_recurring=False)
+            out = call(['schedule', 'Amendment', '--at', '2026-11-12 09:00 America/New_York'],
+                [accepted('item_update', {'id': 'E', 'due': {
+                    'date': '2026-11-12T14:00:00Z', 'lang': 'en', 'timezone': 'America/New_York'}}),
+                 *reconciled(items=[row])])
+            assert 'Due: none -> 2026-11-12 15:00:00 Europe/Prague (2026-11-12 09:00:00 America/New_York)' in out
         else:
             # A new interpreter consumes only published files, with no HTTP read.
             saved = store.load_consistent_state().snapshot
             assert saved.reminders['absolute'].due.language == 'es'
             out = call(['task', 'Amendment'])
             assert '[no text]' in out and 'cada día a las 9' in out
+            assert 'Due: 2026-11-12 15:00:00 Europe/Prague (2026-11-12 09:00:00 America/New_York) · ' in out
+            assert saved.items['E'].attention.zone == 'America/New_York'
             out = call(['schedule', 'Amendment', '--reminder-at', 'every Monday at 9am'],
                        [], expected_status=1)
             assert r'Reminder replacement for: Amendment\nline\ttab' in out

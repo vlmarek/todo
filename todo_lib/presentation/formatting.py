@@ -42,13 +42,18 @@ def compact(value, zone):
     return f'{local.year:04d}-{local:%m-%d %H:%M}'
 
 
-def actual_due(value, zone):
+def actual_due(value, zone, *, schedule_zone=False):
+    """Account value; optionally append the retained fixed schedule zone."""
     if value is None:
         return 'none'
     if not value.exact:
         return value.date_value.isoformat()
     local = instant_datetime(value.instant).astimezone(account_timezone(zone))
-    return f'{local.year:04d}-{local:%m-%d %H:%M:%S} {zone}'
+    text = f'{local.year:04d}-{local:%m-%d %H:%M:%S} {zone}'
+    if schedule_zone and value.kind == 'fixed' and value.zone and value.zone != zone:
+        scheduled = instant_datetime(value.instant).astimezone(account_timezone(value.zone))
+        text += f' ({scheduled.year:04d}-{scheduled:%m-%d %H:%M:%S} {value.zone})'
+    return text
 
 
 def ancestor_path(snapshot, item):
@@ -119,7 +124,7 @@ def reminder_text(minutes):
             return f'{minutes // divisor}{unit} before'
 
 
-def reminders_text(reminders, zone):
+def reminders_text(reminders, zone, *, schedule_zone=False):
     """Relative offsets, then exact absolute occurrences and original rules."""
     reminders = tuple(reminders)
     relative = sorted(r.minutes if hasattr(r, 'minutes') else r for r in reminders
@@ -128,17 +133,17 @@ def reminders_text(reminders, zone):
                       key=lambda r: (attention_order(r.due, zone), r.id))
     values = [reminder_text(m) for m in relative]
     for r in absolute:
-        text = 'at ' + r.due.instant.astimezone(account_timezone(zone)).strftime('%Y-%m-%d %H:%M:%S') + ' ' + zone
+        text = 'at ' + actual_due(r.due, zone, schedule_zone=schedule_zone)
         if r.due.recurring:
             text += ' ↻ ' + (r.due.rule if r.due.rule and r.due.rule.strip() else 'recurring')
         values.append(text)
     return ', '.join(values)
 
 
-def timing(value, reminders, now, zone):
+def timing(value, reminders, now, zone, *, schedule_zone=False):
     """Return relative text and overdue state, using exact rational arithmetic."""
     if value is None:
-        text = reminders_text(reminders, zone)
+        text = reminders_text(reminders, zone, schedule_zone=schedule_zone)
         return 'none' + (' reminders:' + text if text else ''), False
     if not value.exact:
         days = (value.date_value - instant_datetime(now).astimezone(account_timezone(zone)).date()).days
@@ -165,18 +170,18 @@ def timing(value, reminders, now, zone):
             core = magnitude + (' overdue' if overdue else ' left')
     if value.recurring:
         core += ' ↻ ' + (value.rule if value.rule and value.rule.strip() else 'recurring')
-    text = reminders_text(reminders, zone)
+    text = reminders_text(reminders, zone, schedule_zone=schedule_zone)
     if text:
         core += ' reminders:' + text
     return core, overdue
 
 
-def time_block(value, reminders, now, zone, color=Color(), *, detail=False):
-    relative, overdue = timing(value, reminders, now, zone)
+def time_block(value, reminders, now, zone, color=Color(), *, detail=False, schedule_zone=False):
+    relative, overdue = timing(value, reminders, now, zone, schedule_zone=schedule_zone)
     if value is None:
         text = ('none' if detail else 'due:none') + relative.removeprefix('none')
         return color.paint(text, 'blue') if ' reminders:' in relative else text
-    text = actual_due(value, zone) + ' · ' + relative if detail else 'due:' + relative
+    text = actual_due(value, zone, schedule_zone=schedule_zone) + ' · ' + relative if detail else 'due:' + relative
     return color.paint(text, 'red' if overdue else 'blue')
 
 

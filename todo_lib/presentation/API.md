@@ -134,3 +134,16 @@ fragments and type-specific retention hints. Unresolved additions are labelled
 directly and invokes the shared default-cancel prompt before any mutation.
 Accepted reminder receipts use reconciled values with scalar `0m`/offsets and
 the shared `at ...` absolute fragment. Creation shows `  Reminders: RESULT`.
+
+
+`actual_due(value, zone, *, schedule_zone=False)`,
+`reminders_text(reminders, zone, *, schedule_zone=False)`,
+`timing(value, reminders, now, zone, *, schedule_zone=False)` and
+`time_block(..., detail=False, schedule_zone=False)` retain account-only defaults.
+Opting in appends ` (YYYY-MM-DD HH:MM:SS IANA_TIMEZONE)` for each exact fixed
+value with a different retained named zone. `render_detail` opts in only for its
+selected owner's Due block, before countdown/recurrence text; descendant rows,
+compact views and replacement previews keep defaults. Creation attention in
+`render_mutation` opts in. CaptureWorkflow's receipt-only `reminder_values` and
+Due scalar callers opt in using authoritative previous/result/retained objects
+before converting to strings. Existing fractional-change fallback remains exact.

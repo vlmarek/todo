@@ -120,7 +120,7 @@ def render_detail(snapshot, item, now, *, color=Color()):
     item = _item(snapshot, item)
     zone = snapshot.account.timezone
     title = scalar_title(item.title) + (color.context(' — ' + ancestor_path(snapshot, item)) if item.parent_id is not None else '')
-    sections = [f'{color.priority(item.priority)}  {snapshot.categories[item.category_id].name}  {title}\nDue: ' + time_block(item.attention, _reminders(snapshot, item), now, zone, color, detail=True), _waiting_section(snapshot, item, now)]
+    sections = [f'{color.priority(item.priority)}  {snapshot.categories[item.category_id].name}  {title}\nDue: ' + time_block(item.attention, _reminders(snapshot, item), now, zone, color, detail=True, schedule_zone=True), _waiting_section(snapshot, item, now)]
     ordinary, _ = item_description(item)
     if edge(ordinary):
         sections.append('Description\n' + multiline(ordinary, '  ', '  '))

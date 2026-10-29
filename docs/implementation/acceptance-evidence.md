@@ -1165,3 +1165,129 @@ passes. The runner's settled integrated `scripts/verify-clean` remains responsib
 for exactly one complete offline suite followed by distinct copy/PATH/real-less
 probes; this worker did not duplicate that full-suite run. Detailed date cases
 remain in pure/read tests rather than being replicated throughout the copy probe.
+
+
+## T35 — revision-15 dual-zone presentation and composed audit (2026-10-29)
+
+Observed subject: worktree T35-079dcba960f54097, base HEAD
+`9a5eaf6dfd08399a9ac17e48e65ed3fa735b6605`, plus this task's uncommitted
+presentation/capture/API/test changes. No commits or Git metadata were changed.
+Settled copied subject SHA256:
+`07ead1309c65e9cb1760b783a03557e1337b8b0c82199b84a6ee5cf5c897a1c8`.
+Digest input is `todo`, sorted `todo_lib/**/*.py`, then
+`tests/delivery/final/copy_probe.py`; each relative path, NUL, exact file bytes,
+NUL is fed to SHA256. This evidence append does not change that subject.
+
+The amendment and retained named-timezone notes were inspected against the actual
+T34 domain, Gateway, Current, codec/publication and CaptureWorkflow APIs. The
+retained OpenAPI Due dates description and manifest remain provider evidence;
+per-value input policy, strict local validation and the timed-reminder restriction
+remain application contracts. No protected design/provider inputs were edited.
+
+`actual_due`, `reminders_text`, `timing` and `time_block` have a keyword-only
+`schedule_zone=False` opt-in. Only selected-owner detail and existing accepted
+schedule-bearing receipt callers enable it. Receipt scalars are formed from the
+actual previous/result/retained schedule objects, preserving public result shapes
+and framing. Exact fixed values append one space and the full schedule-local
+instant/zone, independently per reminder; floating, date-only, unzoned and same
+named zone values do not gain a duplicate. The exact fractional-change fallback
+is unchanged. No clock, remote read, parser or new account authority was added.
+
+Observed checks (all commands run from the assigned repository root):
+
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.presentation.test_named_timezones tests.cli.test_named_timezones -v`
+  — PASS, 7 tests; final log `/tmp/t35-focused-final.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/presentation -t . -v`
+  — PASS, 67 tests; `/tmp/t35-presentation.log`. The subsequently added named-zone
+  compact-view assertions and unzoned case passed in the final focused command.
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.capture.test_capture tests.workflows.capture.test_reminders tests.workflows.capture.test_named_timezones tests.workflows.capture.test_coexistence tests.workflows.reads.test_reads tests.workflows.reads.test_reminders tests.workflows.test_cached_selection tests.domain.test_named_timezones tests.adapter.commands.test_reminders tests.adapter.current.test_reminders tests.local.test_reminders tests.cli.test_cli tests.cli.test_reminders tests.cli.test_named_timezones tests.cli.test_coexistence tests.cli.test_composition -q`
+  — PASS, 186 tests; `/tmp/t35-dependencies-final.log`. The additional actual-HTTP
+  public case subsequently passed in the final focused command.
+- Standalone unchanged-copy plus real-less probes — PASS, all 14 existing copy
+  phases in separate processes, then real less short-fit and long-scroll/color
+  observations; `/tmp/t35-copy-final.log`. Exact command body follows. This does
+  not execute a full suite or replace the runner's final-delivery gate.
+- `git diff --check` — PASS.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY_COPY'
+import importlib.util
+from pathlib import Path
+import shutil, subprocess, tempfile
+root = Path.cwd()
+spec = importlib.util.spec_from_file_location('verify', root / 'scripts/verify_clean.py')
+verify = importlib.util.module_from_spec(spec); spec.loader.exec_module(verify)
+with tempfile.TemporaryDirectory(prefix='t35-copy-') as temp:
+    base = Path(temp)
+    home, install, outside = (base / n for n in ('home', 'bin', 'outside'))
+    for path in (home, install, outside): path.mkdir(mode=0o700)
+    shutil.copy2(root / 'todo', install / 'todo')
+    shutil.copytree(root / 'todo_lib', install / 'todo_lib')
+    env = verify.environment(home, install, outside)
+    for name in ('copy_probe.py', 'less_probe.py'):
+        shutil.copy2(root / 'tests/delivery/final' / name, outside / name)
+        subprocess.run(['python3.11', '-I', '-B', str(outside / name), str(install)],
+                       cwd=outside, env=env, check=True, timeout=60)
+    for source in [root / 'todo', *(root / 'todo_lib').rglob('*.py')]:
+        assert source.read_bytes() == (install / source.relative_to(root)).read_bytes()
+    print('T35 unchanged copy and real-less probes passed')
+PY_COPY
+```
+
+New distinguishing evidence:
+
+- Pure selected detail places the New York fragment before the middle-dot
+  countdown, and the independent Tokyo reminder fragment before recurrence.
+  Tests cover full-date crossing, same-zone omission, date-only/floating/unzoned
+  absence, safe titles, stream/color-stripped equality and unchanged named-zone
+  Steps/search/someday/now/waiting/chooser rows and removal previews. The one
+  affected exact receipt golden now includes its retained Madrid zone even though
+  Madrid and Prague share the same offset at that instant.
+- Public parser -> CaptureWorkflow -> Gateway -> Current -> local publication ->
+  saved detail composition establishes independent due/reminder zones and a
+  crossing date, via real Transport and strict source-cited ControlledHTTP plus
+  CommandRequest fakes. Commands are first; UUID/args/form/auth/origin and the
+  authoritative read order are checked independently of normalized responses.
+  Offline detail reload makes no Transport construction. Additional public cases
+  cover alias scalars, reminder-only creation, provider-normalized short-code
+  metadata, omitted account-default zones, previous/resulting reminder sets and
+  retained reminder receipts. Accepted named delegated date-only attention stays
+  valid; an accepted unsuitable absolute reminder yields nonzero partial failure,
+  preserves published earlier attention, and leaves the next addition unattempted.
+- The copied tolerance phase starts with an undated owner, performs an actual
+  named New York scheduling operation, checks the accepted dual-zone receipt,
+  and tolerance-read observes dual-zone detail from reloaded metadata in a new
+  interpreter. It does not pre-seed the correct result. Existing cached stable-ID
+  ordering, independent post-operation reads, ordinary report/finalization,
+  PATH/editor, removal-cancel and real-less behavior remain intact.
+
+Coverage reused rather than multiplied: T34's domain named-zone tests distinguish
+New York/Prague tomorrow at 00:30Z, calendar arithmetic versus elapsed durations,
+invalid zones/DST ambiguity/nonexistence, exact precision, floating recurrence,
+wire zones and same-first-instant matching. Its capture/adapter cases cover
+creation/alias validation without writes, explicit recurring requests, independent
+reminder normalization, wrong-zone accepted partial outcomes and original
+unresolved expressions in cancelled previews. The DST request/result audit now
+asserts full returned instant, rule, language and named zone across both offsets;
+the cross-zone occurrence move asserts the retained Spanish rule/language/New York
+zone and its actual receipt, rather than accepting only a shared first instant.
+Existing capture/reminder, cached-selection, presentation/report and public suites
+retain keep/removal consent, rejected/unknown UUID attribution, unattempted
+remainder, fractional-display fallback, completion/comment/cursor and report
+finalization evidence. No producer or codec defect required repair.
+
+Initial focused feedback found an obsolete Madrid receipt expectation and test
+fixture mistakes (aware view time, creation defaults, invalid-reminder history
+hydration and the move fixture's UTC account); these were corrected without
+weakening strict fake checks or production validation. No full worker suite was
+run. The unchanged runner final-delivery gate must still execute
+`scripts/verify-clean` on the settled integrated subject: exactly one complete
+`scripts/check` suite followed by distinct unchanged-copy/PATH/real-less probes.
+Earlier recorded passes are not certification of this changed subject.
+
+Limits: synthetic recurrence and short-code fixtures establish request/response
+conformance only. They do not prove live Todoist abbreviation acceptance,
+notification delivery, future recurrence advancement or future independent review.
+No live account/network gate, provider emulator, production test mode or new test
+dependency was introduced. Historical evidence bytes and contract-map.md remain
+unchanged.
