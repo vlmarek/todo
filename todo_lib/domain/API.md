@@ -178,3 +178,37 @@ raw due in current account authority; fixed values retain their instant.
 identity, type, scheduling and known metadata without comparing raw encodings.
 `preserves_item(previous, actual, account_zone)` checks owner scalar/lifecycle
 preservation with equivalent due under that same account authority.
+
+Per-value named scheduling (revision 15): `parse_attention(expression, now,
+account_zone)` accepts a final slash-containing IANA location token or `UTC`.
+It validates that token locally and uses it for supported calendar and ISO local
+wall inputs; offset/Z instants retain their exact epoch and fractional digits.
+Without a suffix, ISO attention datetimes still require an offset. Short codes
+remain delegated wording. `parse_boundary` and account-day policy are unchanged.
+`Attention.expression` retains the original scalar for unresolved previews;
+`Attention.zone` is the applicable schedule zone, never an account authority.
+Delegated named input uses `raw_due` for stripped `string` and `timezone` request
+metadata, while resolved authoritative values retain the original complete due
+object. Resolved local values need no raw object. Date-only values have no zone.
+No constructor fields or stored schema were added.
+
+`attention_prediction(value, account_zone)` supplies the provider's fixed-request
+account-zone default for locally parsed nonrecurring unzoned values without
+altering their omitted-zone wire request. Local no-op/reminder identity checks
+apply this prediction explicitly; `same_attention` itself remains exact.
+`reconciles_attention` permits inclusive two-second slack for known occurrences
+with strict kind/day/rule/language/zone semantics. For delegated input it checks
+that a timed result retains any explicit named zone; attention may normalize to
+a date-only value. Absolute reminder callers additionally require exact time.
+
+`retain_recurrence(proposal, previous, account_zone=None)` retains the previous
+rule, language and recurrence zone only after resolving a local occurrence move.
+The optional binding zone permits preserving a floating rule by expressing the
+resolved instant as floating local wall text. Scheduling and Gateway callers pass
+it. Date-only moves retain the rule but carry no clock zone; delegated replacement
+expressions retain their new wording and explicit zone. `due_arguments` sends
+exact UTC `date` plus applicable named timezone, or delegated stripped `string`,
+`lang: en` and optional timezone. Recurring occurrence moves retain original
+language/rule/zone without restoring an obsolete date. Current mapping and codec
+continue retaining authoritative metadata and precise epochs through snapshots
+and pending history; no last-input-zone field is persisted.

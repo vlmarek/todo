@@ -148,10 +148,20 @@ def render_help(command=None):
     if command in ('schedule', 'hide', 'add'):
         result += ('Scalar values support --option=VALUE and --option VALUE. Quote multiword dates, category names and reasons. '
                    '--hide is boolean; --hide --reason "no time" sets a reason and --reason= removes only the reason.\n')
+    if command in ('schedule', 'hide', 'task', 'step', 'add'):
+        result += ('Each attention (--at/--due/--schedule) or --reminder-at value may end in an IANA location zone or UTC. '
+                   'Quote the whole value: --at "2026-11-12 09:00 America/New_York" or '
+                   '--reminder-at="Friday 08:30 Asia/Tokyo". Separated and equals forms apply to task/step actions and creation too. '
+                   'Each omitted zone uses the account timezone independently. Named zones allow ISO local wall times; '
+                   'without a zone ISO attention datetimes require an offset or Z. '
+                   'Calendar dates/arithmetic use that value’s zone; minutes/hours are elapsed. '
+                   'Unknown location zones and locally ambiguous/nonexistent times fail before writes. '
+                   'Other English wording goes to Todoist with its named zone; CET/CEST/CST/EST stay in the wording without local mappings. '
+                   'Attention may be date-only; absolute reminders require exact time. Moving an occurrence retains its existing recurrence zone.\n')
     if command in ('schedule', 'task', 'step', 'add'):
         result += ('Reminders form one complete set: repeat/mix --reminder OFFSET (before timed task due; 0m is at due) '
                    'and --reminder-at WHEN (independent exact time, also on undated/date-only tasks). '
-                   'Absolute WHEN uses account time: 2h is elapsed time, calendar units retain wall time; ambiguous/nonexistent local DST times fail. '
+                   'Absolute WHEN uses its named zone or account time: 2h is elapsed time, calendar units retain wall time; ambiguous/nonexistent local DST times fail. '
                    'Unknown/recurring English expressions such as "every Monday at 09:00" go to Todoist; exact time is required. '
                    'Omitting both options preserves all reminders. --reminder keep retains relative IDs/metadata; '
                    '--reminder-at keep retains absolute IDs/metadata. Keep is lowercase and occurs once per type. '

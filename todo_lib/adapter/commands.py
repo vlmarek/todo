@@ -22,7 +22,7 @@ import json
 from uuid import UUID, uuid4
 
 from todo_lib.domain import (
-    rebase_attention, preserves_reminder,
+    rebase_attention, preserves_reminder, attention_prediction,
     Attention, DomainError, Item, account_timezone, resolve_reminder_due, instant_key, instant_text,
     reconciles_attention, retain_recurrence, validate_body,
     validate_title,
@@ -247,10 +247,10 @@ def due_arguments(attention, previous=None):
         raise DomainError('attention must be an Attention value')
     value = retain_recurrence(attention, previous)
     raw = deepcopy(dict(value.raw_due or {}))
-    if previous is not None and previous.recurring and value.recurring:
+    if previous is not None and previous.recurring and value.recurring and value.kind != 'unresolved':
         raw = {**deepcopy(dict(previous.raw_due or {})), **raw}
     if value.kind == 'unresolved':
-        raw['string'] = value.expression
+        raw['string'] = raw.get('string', value.expression)
     elif value.kind == 'date':
         raw['date'] = value.date_value.isoformat()
     else:
@@ -266,13 +266,17 @@ def due_arguments(attention, previous=None):
             raw['date'] = text
     if value.recurring and value.language is not None:
         raw['lang'] = value.language
-    elif not value.recurring and (value.kind == 'unresolved' or not value.raw_due):
+    elif not value.recurring and (value.kind == 'unresolved' or not value.raw_due or 'date' not in value.raw_due):
         raw['lang'] = 'en'
+    if value.zone is not None:
+        raw['timezone'] = value.zone
+    if value.kind == 'date' and 'timezone' in raw:
+        raw['timezone'] = None
     if value.recurring:
         raw['is_recurring'] = True
         if value.rule is not None:
             raw['string'] = value.rule
-        if value.zone is not None or 'timezone' in raw:
+        if value.kind != 'date' and (value.zone is not None or 'timezone' in raw):
             raw['timezone'] = value.zone
     return raw
 
@@ -490,7 +494,9 @@ class Gateway:
                             and 'timezone' not in raw):
                         prediction = replace(prediction, zone=account_zone)
                     if prediction is _UNSET or prediction.kind == 'unresolved':
-                        differs = actual.due is None or not actual.due.exact
+                        differs = (actual.due is None or not actual.due.exact
+                                   or (raw.get('timezone') is not None
+                                       and (actual.due.kind != 'fixed' or actual.due.zone != raw['timezone'])))
                     else:
                         differs = not reconciles_attention(prediction, actual.due, account_zone)
                     # Requested due has prediction tolerance; retained due must
@@ -509,16 +515,19 @@ class Gateway:
                     and 'due' in op.args and actual.attention is None
                     and op.expected_attention is _UNSET):
                 issues.append('accepted attention expression returned no attention')
-            if isinstance(actual, Item) and op.expected_attention is not _UNSET:
-                requested = op.expected_attention
+            if (isinstance(actual, Item) and op.expected_attention is _UNSET
+                    and isinstance(op.args.get('due'), dict)):
+                named = op.args['due'].get('timezone')
                 returned = actual.attention
-                # English parser input has no locally predicted occurrence,
-                # kind or recurrence to compare. Current/history mapping validates
-                # the provider's resolved value; missing attention is still partial.
-                if requested is not None and requested.kind == 'unresolved':
-                    matches = returned is not None and returned.kind in ('date', 'floating', 'fixed')
-                else:
-                    matches = reconciles_attention(requested, returned, account_zone)
+                if (named is not None and returned is not None and returned.kind != 'date'
+                        and (returned.kind != 'fixed' or returned.zone != named)):
+                    issues.append('accepted attention differs from requested named timezone')
+            if isinstance(actual, Item) and op.expected_attention is not _UNSET:
+                requested = attention_prediction(op.expected_attention, account_zone)
+                returned = actual.attention
+                # Delegated input has no predicted occurrence; the shared check
+                # still enforces explicit timed zone semantics.
+                matches = reconciles_attention(requested, returned, account_zone)
                 if not matches:
                     issues.append('requested attention ' + repr(requested) + '; actual attention ' + repr(returned))
             if isinstance(actual, Item):
@@ -569,7 +578,7 @@ class Gateway:
         expected = attention
         if attention is not _UNSET:
             before = context['before'].snapshot.items.get(item_id) or (context.get('known_owners') or {})[item_id]
-            expected = retain_recurrence(attention, before.attention) if attention is not None else None
+            expected = retain_recurrence(attention, before.attention, context['before'].snapshot.account.timezone) if attention is not None else None
             args['due'] = due_arguments(expected, before.attention)
         return self.execute(Operation('item_update', args, expected_attention=expected), **context)
 
@@ -599,7 +608,7 @@ class Gateway:
             args.update(is_forward=int(forward), reset_subtasks=0)
             if attention is not _UNSET:
                 source = context['before'].snapshot.items.get(item_id) or (context.get('known_owners') or {}).get(item_id)
-                expected = retain_recurrence(attention, source.attention) if attention is not None else None
+                expected = retain_recurrence(attention, source.attention, context['before'].snapshot.account.timezone) if attention is not None else None
                 args['due'] = due_arguments(expected, source.attention)
             kind = 'item_update_date_complete'
         else:

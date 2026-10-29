@@ -28,7 +28,7 @@ def equivalent(left, right, zone):
         return False
     if left.type == 'relative':
         return left.minutes == right.minutes
-    a, b = left.due, right.due
+    a, b = (d.attention_prediction(v, zone) for v in (left.due, right.due))
     if a.kind == 'unresolved' or b.kind == 'unresolved':
         return False
     for due in (a, b):
@@ -63,15 +63,7 @@ def propose(request, snapshot, item, now):
     attention = item.attention
     if 'at' in options:
         attention = d.retain_recurrence(d.parse_attention(options['at'], now,
-            snapshot.account.timezone), item.attention)
-        # Locally resolved instants serialize as fixed UTC due.date values.
-        # The provider defaults their omitted timezone to the account timezone.
-        # Retained recurring zones (including floating None) remain authoritative.
-        if attention.exact and not attention.recurring and attention.zone is None:
-            attention = replace(attention, zone=snapshot.account.timezone)
-        # Date-only occurrences have no applicable recurrence timezone on the wire.
-        if attention.kind == 'date' and attention.zone is not None:
-            attention = replace(attention, zone=None)
+            snapshot.account.timezone), item.attention, snapshot.account.timezone)
     if clear:
         attention = None
     labels = item.labels - {'waiting'} if clear or unhide else item.labels
@@ -109,8 +101,6 @@ def propose(request, snapshot, item, now):
                 due = d.parse_attention(value, now, snapshot.account.timezone)
                 if due.kind != 'unresolved' and not due.exact:
                     raise d.DomainError('absolute reminders require an exact time')
-                if due.exact and due.zone is None:
-                    due = replace(due, zone=snapshot.account.timezone)
                 due = replace(due, language='en')
                 contributions = [d.Reminder('requested', item.id, None, type='absolute', due=due)]
             prior = tuple(desired)

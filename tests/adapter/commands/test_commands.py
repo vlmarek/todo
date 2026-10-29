@@ -356,7 +356,9 @@ class CommandsTests(unittest.TestCase):
                 with self.subTest(create=create, expression=expression, date=date):
                     proposed = parse_attention(expression, NOW, 'UTC')
                     self.assertEqual(proposed.kind, 'unresolved')
-                    wire_due = {'string': expression, 'lang': 'en'}
+                    wire_due = {'string': expression.removesuffix(' Europe/Prague'), 'lang': 'en'}
+                    if expression.endswith(' Europe/Prague'):
+                        wire_due['timezone'] = 'Europe/Prague'
                     returned = None if date is None else {
                         'date': date, 'string': expression, 'lang': 'en',
                         'is_recurring': recurring, 'timezone': zone}

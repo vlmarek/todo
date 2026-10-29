@@ -54,3 +54,6 @@ __all__ += ('resolve_reminder_due',)
 from .time import rebase_attention
 from .model import preserves_reminder, preserves_item
 __all__ += ('rebase_attention', 'preserves_reminder', 'preserves_item')
+
+from .time import attention_prediction
+__all__ += ('attention_prediction',)
