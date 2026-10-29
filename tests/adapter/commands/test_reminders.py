@@ -176,3 +176,14 @@ class ReminderGatewayTests(unittest.TestCase):
                     read=[delta(reminders=[absolute('r', FIXED, item_id='task', **returned)])])
                 result = g.execute(Operation('reminder_update', {'id':'r', **args}), before=initial)
                 self.assertTrue(result.partial)
+
+    def test_raw_item_parser_request_still_checks_explicit_named_zone(self):
+        from tests.adapter.current.test_current import item
+        g, _ = self.gateway('item_update', {'id': 'task', 'due': {
+            'string': 'next Monday at 9', 'timezone': 'America/New_York', 'lang': 'en'}},
+            read=[delta(items=[item('task', due={**base.due('2026-11-02T14:00:00Z'), 'timezone': 'Europe/Prague'})])])
+        result = g.execute(Operation('item_update', {'id': 'task', 'due': {
+            'string': 'next Monday at 9', 'timezone': 'America/New_York'}}), before=base.before())
+        self.assertTrue(result.accepted)
+        self.assertTrue(result.partial)
+        self.assertIn('named timezone', '; '.join(result.issues))

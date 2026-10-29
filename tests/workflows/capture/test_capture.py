@@ -530,7 +530,7 @@ class CaptureTests(unittest.TestCase):
     def test_recurrence_preserving_date_timed_floating_and_fixed_sources(self):
         for source, named_zone, expression, returned in [
             ('2026-10-23', None, 'tomorrow', '2026-10-23'),
-            ('2026-10-23T10:00:00', None, 'tomorrow 11', '2026-10-23T11:00:00Z'),
+            ('2026-10-23T10:00:00', None, 'tomorrow 11', '2026-10-23T11:00:00'),
             ('2026-10-23T10:00:00Z', 'Europe/Prague', 'tomorrow 11', '2026-10-23T11:00:00Z'),
             ('2026-10-23T10:00:00Z', 'Europe/Prague', 'tomorrow', '2026-10-23')]:
             with self.subTest(source=source, expression=expression):

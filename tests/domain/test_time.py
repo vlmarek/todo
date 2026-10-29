@@ -247,7 +247,7 @@ class TimeTests(unittest.TestCase):
                                   'is_recurring': True, 'string': 'every day at 10', 'lang': 'en'}, self.zone)
         moved = retain_recurrence(parse_attention('tomorrow', self.now, self.zone), old)
         self.assertEqual((moved.recurring, moved.rule, moved.language, moved.zone),
-                         (True, 'every day at 10', 'en', self.zone))
+                         (True, 'every day at 10', 'en', None))
         expr = parse_attention('every week', self.now, self.zone)
         self.assertIs(retain_recurrence(expr, old), expr)
 

@@ -7,7 +7,7 @@ another mutation. Failure receipts retain remote classification without replay.
 """
 from dataclasses import dataclass, field, replace
 from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, Operation, due_arguments, _UnsubmittedOperation
+from todo_lib.adapter.commands import Gateway, due_arguments, _UnsubmittedOperation
 from todo_lib.adapter.current import Current
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import exclusive_lock, load_config, LocalError
@@ -60,7 +60,7 @@ def reminder_values(snapshot, owner_id):
 def _same_item(left, right, zone):
     return (left.title, left.priority, left.description, left.labels) == (
         right.title, right.priority, right.description, right.labels) and d.same_attention(
-        d.rebase_attention(left.attention, zone), right.attention, zone)
+        d.rebase_attention(left.attention, zone), d.attention_prediction(right.attention, zone), zone)
 
 
 def _require_waiting_label(state):
@@ -197,7 +197,7 @@ class CaptureWorkflow:
                 kwargs = {}
                 for name in ('attention', 'labels', 'description'):
                     old, new = getattr(item, name), getattr(proposal.item, name)
-                    same = d.same_attention(old, new, snapshot.account.timezone) if name == 'attention' else old == new
+                    same = d.same_attention(old, d.attention_prediction(new, snapshot.account.timezone), snapshot.account.timezone) if name == 'attention' else old == new
                     if not same:
                         kwargs[name] = new
                 if proposal.removals and not options.get('clear') and options.get('reminder') != ('clear',):
@@ -245,17 +245,6 @@ class CaptureWorkflow:
                 method = getattr(self.gateway, action.method)
                 if action.method == 'create_task':
                     receipt = method(**kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders)
-                elif (action.method == 'update_task' and kwargs.get('attention') is not None
-                      and kwargs['attention'].kind == 'date' and old.recurring and old.attention.zone is not None):
-                    # update_task retains the previous zone unconditionally. A date-only
-                    # occurrence cannot carry that timed zone (Due dates contract).
-                    # Submit the validated semantic update through the same gateway.
-                    attention = kwargs['attention']
-                    args = {'id': target, 'due': due_arguments(attention, old.attention)}
-                    args['due']['timezone'] = None
-                    args.update({k: list(v) if k == 'labels' else v for k, v in kwargs.items() if k != 'attention'})
-                    receipt = self.gateway.execute(Operation('item_update', args,
-                        expected_attention=attention), before=before, known_owners=selected_owners, known_reminders=selected_reminders)
                 else:
                     receipt = method(target, **kwargs, before=before, known_owners=selected_owners, known_reminders=selected_reminders)
                 outcome = receipt.outcome.value
@@ -286,11 +275,8 @@ class CaptureWorkflow:
                     else:
                         creating = action.method == 'create_task'
                         if creating or 'attention' in kwargs:
-                            attention = expected.attention
-                            if attention is not None and attention.kind == 'unresolved':
-                                valid_due = actual.attention is not None
-                            else:
-                                valid_due = d.reconciles_attention(attention, actual.attention, snapshot.account.timezone)
+                            attention = d.attention_prediction(expected.attention, snapshot.account.timezone)
+                            valid_due = d.reconciles_attention(attention, actual.attention, snapshot.account.timezone)
                             if not valid_due:
                                 issues.append(f'accepted attention differs: requested {attention!r}; actual {actual.attention!r}')
                         if any(getattr(expected, name) != getattr(actual, name)
@@ -306,7 +292,7 @@ class CaptureWorkflow:
                     elif 'minutes' in kwargs:
                         if actual.type != 'relative' or actual.minutes != kwargs['minutes']:
                             issues.append('accepted reminder differs from reconciled offset')
-                    elif actual.type != 'absolute' or not actual.due.exact or (kwargs['due'].kind != 'unresolved' and not d.reconciles_attention(kwargs['due'], actual.due, snapshot.account.timezone)):
+                    elif actual.type != 'absolute' or not actual.due.exact or not d.reconciles_attention(d.attention_prediction(kwargs['due'], snapshot.account.timezone), actual.due, snapshot.account.timezone):
                         # Keep provider precision and scheduling semantics in the
                         # failure, without exposing unrelated open-object fields.
                         actual_due = ({k: v for k, v in actual.due.raw_due.items()

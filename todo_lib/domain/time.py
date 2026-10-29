@@ -232,6 +232,48 @@ def _absolute(value: str, zone: str | ZoneInfo, *, offset_required: bool) -> Att
 
 
 def parse_attention(expression: str, now: datetime, account_zone: str | ZoneInfo) -> Attention:
+    """Interpret one scalar in its final location zone, or the binding default.
+
+    Original input remains expression. For delegated named input raw_due carries
+    request metadata and stripped wording, never a guessed rule.
+    Date-only values have no persistent clock zone.
+    """
+    require_aware(now, 'now')
+    if not isinstance(expression, str) or not expression.strip():
+        raise DomainError('attention expression must be nonempty')
+    if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in expression):
+        raise DomainError('attention expression contains a control character')
+    wording = expression.strip()
+    parts = wording.rsplit(None, 1)
+    token = parts[-1]
+    explicit = token == 'UTC' or '/' in token
+    if explicit:
+        try:
+            chosen = account_timezone(token)
+        except DomainError:
+            raise DomainError(f'unknown scheduling timezone: {token}') from None
+        if len(parts) != 2:
+            raise DomainError('timezone requires a scheduling expression')
+        wording = parts[0]
+    else:
+        chosen = account_timezone(account_zone)
+    # Abbreviations belong to the provider expression even after a locally
+    # recognizable ISO date or datetime; they are not location-zone suffixes.
+    if (not explicit and len(parts) == 2 and token.isalpha()
+            and (DATE.fullmatch(parts[0]) or ISO.fullmatch(parts[0]))):
+        result = Attention('unresolved', expression=expression)
+    else:
+        result = _parse_attention(wording, now, chosen, offset_required=not explicit)
+    metadata = None
+    if explicit and result.kind == 'unresolved':
+        metadata = {'timezone': token, 'string': wording}
+    return replace(result, expression=expression,
+                   zone=token if explicit and result.kind != 'date' else None,
+                   raw_due=metadata)
+
+
+def _parse_attention(expression: str, now: datetime, account_zone: str | ZoneInfo,
+                     *, offset_required=True) -> Attention:
     """Resolve supported scalar grammar; pass other English expressions unchanged.
 
     ISO attention date-times require an offset. Relative days/weeks/business days
@@ -248,7 +290,7 @@ def parse_attention(expression: str, now: datetime, account_zone: str | ZoneInfo
     if lower in ('ask', 'none', '-', 'clear'):
         raise DomainError('invalid attention expression')
     if re.match(r'^\d{4}-\d{2}-\d{2}', value):
-        return replace(_absolute(value, zone, offset_required=True), expression=expression)
+        return replace(_absolute(value, zone, offset_required=offset_required), expression=expression)
     local = now.astimezone(zone)
     match = re.fullmatch(r'(today|tomorrow|' + '|'.join(WEEKDAYS) + r')(?:\s+(\d{1,2})(?::(\d{2}))?)?', lower)
     if lower == 'next week' or match:
@@ -417,6 +459,12 @@ def same_attention(left: Attention | None, right: Attention | None, account_zone
 
 def reconciles_attention(left: Attention | None, right: Attention | None, account_zone: str | ZoneInfo) -> bool:
     """Remote-only <=2s tolerance; local day, kind, rule and zone remain strict."""
+    if left is not None and left.kind == 'unresolved':
+        # Parser-owned kind/rule/instant, but a requested named timed zone must
+        # survive normalization. Full-day attention has no clock timezone.
+        return (right is not None and right.kind in ('date', 'fixed', 'floating')
+                and (right.kind == 'date' or left.zone is None
+                     or (right.kind == 'fixed' and right.zone == left.zone)))
     return _compare(left, right, account_zone, Decimal(2))
 
 
@@ -436,11 +484,26 @@ def _compare(left, right, zone, tolerance):
     return abs(attention_order(left, zone) - attention_order(right, zone)) <= tolerance
 
 
-def retain_recurrence(proposal: Attention, previous: Attention | None) -> Attention:
+def retain_recurrence(proposal: Attention, previous: Attention | None, account_zone=None) -> Attention:
     """Copy a current recurring rule onto a locally resolved occurrence move."""
     if previous is None or not previous.recurring or proposal.kind == 'unresolved':
         return proposal
-    return replace(proposal, recurring=True, rule=previous.rule, language=previous.language, zone=previous.zone)
+    if previous.kind == 'floating' and proposal.exact and account_zone is not None:
+        # Resolve the requested occurrence first; only then express that instant
+        # as an account-local floating occurrence for the retained floating rule.
+        wall = proposal.instant.astimezone(account_timezone(account_zone)).replace(tzinfo=None, microsecond=0)
+        text = wall.isoformat()
+        epoch = proposal.epoch_seconds if proposal.epoch_seconds is not None else _epoch(proposal.instant)
+        if epoch is not None:
+            scale = max(0, -epoch.as_tuple().exponent)
+            if scale:
+                fraction = Fraction(epoch) % 1
+                digits = str(fraction.numerator * (10**scale // fraction.denominator)).zfill(scale)
+                text += '.' + digits
+        proposal = replace(proposal, kind='floating', raw_due={'date': text, 'timezone': None, 'is_recurring': True,
+                'string': previous.rule, 'lang': previous.language})
+    return replace(proposal, recurring=True, rule=previous.rule, language=previous.language,
+                   zone=previous.zone if proposal.exact else None)
 
 
 def resolve_reminder_due(raw_due, account_zone):
@@ -464,4 +527,17 @@ def rebase_attention(value, account_zone, *, reminder=False):
     """Resolve retained floating wall time under current account authority."""
     if value is not None and value.kind == 'floating':
         return resolve_remote_due(value.raw_due, account_zone, reminder=reminder)
+    return value
+
+
+def attention_prediction(value, account_zone):
+    """Expected fixed request default, without changing omitted wire semantics.
+
+    Local parsed fixed input has no raw provider object. A missing zone on such
+    a nonrecurring request defaults to the account zone at the provider boundary.
+    Authoritative raw nulls and retained recurrence semantics stay distinct.
+    """
+    if (value is not None and value.kind == 'fixed' and not value.recurring
+            and value.zone is None and value.raw_due is None):
+        return replace(value, zone=account_timezone(account_zone).key)
     return value
