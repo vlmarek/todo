@@ -64,3 +64,36 @@ class ReminderMappingTests(unittest.TestCase):
                                 absolute(schedule={**minimal, **changes})]
             with self.subTest(changes=changes), self.assertRaises(d.DomainError):
                 retrieve(boundary(self, [('*', raw)]), BINDING)
+
+    def test_unusable_reminder_identity_or_owner_remains_strict(self):
+        for changes in ({'id': ''}, {'id': None}, {'item_id': ''}, {'item_id': None},
+                        {'item_id': {'private': 'never dump'}}):
+            raw = response()
+            raw['reminders'] = [absolute(type='unsupported', **changes)]
+            with self.subTest(changes=changes), self.assertRaises(d.DomainError) as caught:
+                if 'id' in changes:
+                    from tests.adapter.current.test_current import BINDING
+                    retrieve(boundary(self, [('*', raw)]), BINDING)
+                else:
+                    observed(self, raw)
+            self.assertIn('ID', str(caught.exception))
+            self.assertIn('reminder', str(caught.exception))
+            self.assertNotIn('never dump', str(caught.exception))
+
+    def test_required_operation_owner_cannot_be_silently_discarded(self):
+        from todo_lib.adapter.current import _resolved_reminders
+        raw = response()
+        raw['reminders'] = [absolute(item_id='required-owner', type='unsupported')]
+        current = observed(self, raw)
+        with self.assertRaisesRegex(d.DomainError, 'unresolved reminder owner required-owner.*reminder abs'):
+            _resolved_reminders(current, current.snapshot.items, current.snapshot.categories,
+                                required={'required-owner'})
+
+    def test_never_known_reminder_still_requires_usable_lifecycle_context(self):
+        for deleted in (None, 'false', 0, 'omitted'):
+            raw = response()
+            raw['reminders'] = [absolute(item_id='never-known', type='unsupported', is_deleted=deleted)]
+            if deleted == 'omitted':
+                del raw['reminders'][0]['is_deleted']
+            with self.subTest(deleted=deleted), self.assertRaisesRegex(d.DomainError, 'is_deleted'):
+                observed(self, raw)

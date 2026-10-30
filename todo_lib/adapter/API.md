@@ -55,3 +55,30 @@ not completed-endpoint pagination or historical interval coverage. Recurring
 completion/undo retains scoped occurrence retrieval. Own-resource inclusion is
 checked from actual returned resources; the retained Sync capability does not
 promise every mutation response contains its normalized effect.
+
+Reminder records with usable IDs remain transient until the caller has completed
+its required lifecycle/history reconciliation. The private `_resolved_reminders`
+mapper then attaches/validates managed owners and silently discards never-known,
+operation-irrelevant owners without interpreting their unused fields. Init and
+report use the same mapper after their own required discovery. `Current` and
+`Result` shapes and retrieval injection keywords are unchanged. Raw
+`Current.reminder_ids` is transient resource evidence; StateStore's existing
+managed snapshot/history intersection determines persisted membership. Reminder
+failures add safe available context, labeling prior-only owner observations as
+cached, without diagnostic requests.
+
+Private merge/duplicate and init discovery helpers accept optional `known`
+managed context solely for diagnostics when malformed identity/lifecycle fields
+fail before mapping. No owner catalogue is retained. Gateway reminder issues
+remain strings (`ReminderDiagnostic` is a string subtype carrying only transient
+repair classification); their existing accepted/unknown facts and Result fields
+are unchanged. Consumers retain this classification when choosing failure guidance.
+
+`current.retrieve(..., cached_item_ids=frozenset())` optionally identifies validated
+prior-only ancestors injected into init's initial replay. It affects diagnostic
+provenance only; a genuine freshness update marks the owner fresh. Init passes
+only its injected ancestor IDs. Other callers and retrieval hooks retain their
+existing keywords. Private `_merge` accepts the same optional provenance input.
+Early reminder diagnostics use only managed-scope current owners or retained
+managed owners; strict failures without established managed relevance expose
+identity context without unused type/schedule or outside owner/project payloads.

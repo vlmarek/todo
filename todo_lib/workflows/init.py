@@ -128,13 +128,14 @@ class _Catalogue:
         return projects
 
 
-def _discover(transport, binding=None, *, stderr=None):
+def _discover(transport, binding=None, *, stderr=None, known=None):
     """Full plus exactly one freshness read, including metadata validation."""
     first, token, full = current._read(transport, '*')
     if not full:
         raise d.DomainError('requested full Sync returned a delta')
     raw = {name: {} for name in current.RESOURCE_TYPES[2:]}
-    current._merge(raw, first, True)
+    raw['_binding'] = binding
+    current._merge(raw, first, True, known=known)
     user = current._required(first, 'user')
     limits = current._required(first, 'user_plan_limits')
     uid = current._id(current._required(user, 'id'), 'user.id')
@@ -143,7 +144,7 @@ def _discover(transport, binding=None, *, stderr=None):
     fresh, _, full = current._read(transport, token)
     if full:
         raise d.DomainError('freshness Sync returned another full response')
-    current._merge(raw, fresh, False)
+    current._merge(raw, fresh, False, known=known)
     user, limits = fresh.get('user', user), fresh.get('user_plan_limits', limits)
     account = current._account(user, limits, b)
     for value in raw['labels'].values():
@@ -268,7 +269,7 @@ def _observe(catalogue, root, history, hidden, now):
     responses[0]['items'] = responses[0]['items'] + list(additions.values())
     binding = old.binding if old else d.Binding(catalogue.account.id, root.id)
     live = current.retrieve(_Replay(responses), binding, prior=old, replace=True,
-                            hidden_names=hidden)
+                            hidden_names=hidden, cached_item_ids=frozenset(additions))
     if additions:
         # Injected historical ancestors support reconciliation, not active Sync
         # membership. The next online read must hydrate a genuine baseline.
@@ -301,7 +302,7 @@ def _observe(catalogue, root, history, hidden, now):
         current._bool(current._required(value, 'is_deleted'), 'notes.is_deleted')
         comments[identity] = d.Comment(identity, owner, d.incoming_text(value.get('content', '')),
                                        _timestamp(value, 'posted_at', 'note'))
-    current._check_duplicates(raw, {root.id, *categories}, set(retained))
+    current._check_duplicates(raw, {root.id, *categories}, set(retained), known=old)
     occurrences = {k: o for k, o in history.snapshot.occurrences.items()
                    if o.item_id in retained and (retained[o.item_id].completed or retained[o.item_id].recurring)}
     occurrences.update(snapshot.occurrences)
@@ -309,18 +310,15 @@ def _observe(catalogue, root, history, hidden, now):
     # Its final reminder truth supersedes old reminders even for pending-only
     # owners; retaining their observations does not retain omitted reminders.
     reminders = dict(snapshot.reminders)
-    for value in live.unresolved_reminders:
-        owner = value['item_id']
-        if owner in removed:
-            continue
-        if owner not in retained:
-            raise d.DomainError('unresolved reminder owner ' + owner)
-        reminders[value['id']] = current._reminder(value, snapshot.account.timezone)
+    reminders.update(current._resolved_reminders(live, retained, snapshot.categories,
+        known_items=old.items if old else (), removed=removed,
+        cached_owner_ids=set(retained) - snapshot.items.keys()))
     reminders = {k: replace(r, due=d.rebase_attention(r.due, snapshot.account.timezone, reminder=True))
                  if r.type == 'absolute' else r for k, r in reminders.items()}
 
     joined = d.validate(replace(snapshot, items=retained, comments=comments,
-                               reminders=reminders, occurrences=occurrences), hidden)
+                               reminders=reminders, occurrences=occurrences), hidden,
+        cached_owner_ids=set(retained) - snapshot.items.keys())
     # Both arguments to merge_history must already have complete ancestor context
     # and current timezone/scope; remove superseded lifecycle evidence explicitly.
     base = replace(history, snapshot=joined,
@@ -504,6 +502,7 @@ class Initializer:
                 check_paths(root)
             with exclusive_lock('init', root):
                 state = self._local()
+                known = _pending(state).snapshot if state else None
                 if wizard:
                     phase = 'terminal setup'
                     if self.environ.get('TODOIST_TOKEN', ''):
@@ -518,7 +517,7 @@ class Initializer:
                         credentials = resolve_credentials(environ=self.environ, wizard_token=secret)
                     transport = self.transport or self.transport_factory(credentials.token())
                     phase = 'remote discovery'
-                    catalogue = _discover(transport, state.binding if state else None, stderr=self.stderr)
+                    catalogue = _discover(transport, state.binding if state else None, stderr=self.stderr, known=known)
                     projects = catalogue.projects
                     phase = 'terminal setup'
                     config, catalogue, selected = self._wizard(credentials, catalogue, projects, state)
@@ -531,7 +530,7 @@ class Initializer:
                     catalogue = selected = None
                 phase = 'preflight'
                 if catalogue is None:
-                    catalogue = _discover(transport, state.binding if state else None, stderr=self.stderr)
+                    catalogue = _discover(transport, state.binding if state else None, stderr=self.stderr, known=known)
                 target = _root(catalogue, config, state.binding if state else None, selected)
                 observation_time = self.clock()
                 d.instant_key(observation_time)
@@ -572,7 +571,7 @@ class Initializer:
                     if kind == 'root':
                         target = result.actual
                 phase = 'post-provision validation'
-                after = _discover(transport, d.Binding(catalogue.account.id, target.id), stderr=self.stderr)
+                after = _discover(transport, d.Binding(catalogue.account.id, target.id), stderr=self.stderr, known=known)
                 # Once chosen/created, stable identity cannot change during init.
                 actual = after.projects.get(target.id)
                 if actual is None:

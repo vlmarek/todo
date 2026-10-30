@@ -15,6 +15,7 @@ Project sharing follows required boolean is_shared in PersonalProjectSyncView/
 WorkspaceProjectSyncView (inspected 2026-10-26); the retained Sync prose says
 shared instead. Only the typed-schema spelling is supported.
 """
+from todo_lib.domain.reminder_context import context, failure, safe
 from copy import deepcopy
 from dataclasses import dataclass, replace as dataclass_replace
 import json
@@ -253,7 +254,40 @@ def _signature(raw, name):
     return json.dumps(normalized, sort_keys=True)
 
 
-def _merge(state, response, full):
+def _wire_reminder_context(state, raw, known=None):
+    owner = raw.get('item_id')
+    binding = state.get('_binding')
+    projects = state['projects']
+    scoped = set()
+    if binding is not None:
+        # Saved membership is not proof that fresh payloads remain managed.
+        # In particular, merge-time identity failures precede project validation:
+        # a moved/shared/retired category must not expose its new owners here.
+        # Missing delta projects are already seeded from the proven baseline.
+        scoped.update(k for k, v in projects.items()
+                      if v.get('parent_id') == binding.root_id
+                      and v.get('is_deleted') is False
+                      and v.get('is_archived') is False
+                      and v.get('is_shared') is False
+                      and v.get('inbox_project', False) is False
+                      and v.get('workspace_id') is None)
+    wire = state['items'].get(owner) if isinstance(owner, str) else None
+    managed = (wire is not None and wire.get('is_deleted') is not True
+               and isinstance(wire.get('project_id'), str) and wire['project_id'] in scoped)
+    if managed:
+        items = {owner: wire}
+        categories = {k: v for k, v in projects.items() if k in scoped}
+        cached = owner not in state.get('_fresh_items', ())
+    elif known is not None and isinstance(owner, str) and owner in known.items:
+        items, categories, cached = known.items, known.categories, True
+    else:
+        # Identity/lifecycle remains strict, but unused outside-scope payloads
+        # are not diagnostic context, even when they contain valid scalars.
+        return 'reminder ' + safe(raw.get('id')) + '; owner ' + safe(owner)
+    return context(raw, items, categories, cached=cached)
+
+
+def _merge(state, response, full, *, known=None, cached_item_ids=()):
     """Whole changed resources replace earlier resources; omissions retain state."""
     for name in _COLLECTIONS:
         if name not in response and not full:
@@ -264,7 +298,14 @@ def _merge(state, response, full):
         live = {}
         for value in records:
             raw = _object(value, name + ' record')
-            identity = _id(_required(raw, 'id'), name + '.id')
+            try:
+                identity = _id(_required(raw, 'id'), name + '.id')
+            except DomainError as error:
+                if name == 'reminders':
+                    raise failure(error, _wire_reminder_context(state, raw, known)) from error
+                raise
+            if name == 'items' and identity not in cached_item_ids:
+                state.setdefault('_fresh_items', set()).add(identity)
             raw = {k: deepcopy(raw[k]) for k in _FIELDS[name] if k in raw}
             if name == 'labels':
                 relevant = state.setdefault('_waiting_seen', set())
@@ -284,7 +325,7 @@ def _merge(state, response, full):
             state[name][identity] = raw
 
 
-def _check_duplicates(state, projects, items):
+def _check_duplicates(state, projects, items, *, known=None):
     """Defer unused body comparisons until scope is established; context is strict."""
     contexts = {'projects': ('parent_id', 'is_deleted'),
                 'items': ('project_id', 'is_deleted'),
@@ -294,9 +335,12 @@ def _check_duplicates(state, projects, items):
     for name, left, right in state.get('_duplicates', ()):
         if state[name][right['id']].get('is_deleted') is True:
             continue
-        context = contexts[name]
-        if any(left.get(k) != right.get(k) for k in context):
-            raise CurrentError('contradictory ' + name + ' ownership/lifecycle ' + right['id'])
+        fields = contexts[name]
+        if any(left.get(k) != right.get(k) for k in fields):
+            error = CurrentError('contradictory ' + name + ' ownership/lifecycle ' + (safe(right['id']) if name == 'reminders' else right['id']))
+            if name == 'reminders':
+                raise failure(error, _wire_reminder_context(state, right, known)) from error
+            raise error
         if name == 'projects':
             relevant = right['id'] in projects
         elif name == 'items':
@@ -306,7 +350,10 @@ def _check_duplicates(state, projects, items):
         else:
             relevant = right['id'] in state.get('_waiting_seen', ())
         if relevant and _signature(left, name) != _signature(right, name):
-            raise CurrentError('contradictory live ' + name + ' representations ' + right['id'])
+            error = CurrentError('contradictory live ' + name + ' representations ' + (safe(right['id']) if name == 'reminders' else right['id']))
+            if name == 'reminders':
+                raise failure(error, _wire_reminder_context(state, right, known)) from error
+            raise error
 
 
 def _projects(state, binding, known_items):
@@ -328,7 +375,7 @@ def _projects(state, binding, known_items):
     return root, categories, binding
 
 
-def _reminder(raw, zone):
+def _reminder_value(raw, zone):
     """Map only the actual type's schedule, preserving retained ID metadata."""
     owner = _id(_required(raw, 'item_id'), 'reminder.item_id')
     _bool(_required(raw, 'is_deleted'), 'reminder.is_deleted')
@@ -346,7 +393,36 @@ def _reminder(raw, zone):
     if kind == 'absolute':
         return Reminder(raw['id'], owner, type=kind,
                         due=resolve_reminder_due(_required(raw, 'due'), zone), **metadata)
-    raise CurrentError('managed reminder type unsupported: ' + str(kind))
+    raise CurrentError('managed reminder type unsupported')
+
+
+def _reminder(raw, zone, items=(), categories=(), *, cached=False):
+    try:
+        return _reminder_value(raw, zone)
+    except DomainError as error:
+        raise failure(error, context(raw, items, categories, cached=cached)) from error
+
+
+def _resolved_reminders(current, items, categories, *, known_items=(), required=(),
+                        removed=(), cached_owner_ids=()):
+    """Map final transient records only after the caller's required reconciliation."""
+    result = {}
+    for raw in current.unresolved_reminders:
+        owner = raw['item_id']
+        if owner in removed:
+            continue
+        cached = owner in cached_owner_ids
+        if owner not in items:
+            if owner not in known_items and owner not in required:
+                continue
+            raise failure(DomainError('unresolved reminder owner ' + safe(owner)),
+                context(raw, known_items, categories, cached=True))
+        for left, right in current.reminder_duplicates:
+            if right['id'] == raw['id'] and _signature(left, 'reminders') != _signature(right, 'reminders'):
+                raise failure(DomainError('contradictory live reminders representations ' + safe(raw['id'])),
+                    context(raw, items, categories, cached=cached))
+        result[raw['id']] = _reminder(raw, current.account.timezone, items, categories, cached=cached)
+    return result
 
 
 def _map(state, binding, account, prior, hidden_names, known=None):
@@ -374,23 +450,35 @@ def _map(state, binding, account, prior, hidden_names, known=None):
         for raw in state[name].values():
             if raw.get('is_deleted') is True:
                 continue
-            owner = _id(_required(raw, 'item_id'), name + '.item_id')
+            try:
+                owner = _id(_required(raw, 'item_id'), name + '.item_id')
+            except DomainError as error:
+                if name == 'reminders':
+                    raise failure(error, _wire_reminder_context(state, raw, known or prior)) from error
+                raise
+            if name == 'reminders' and owner not in state['items']:
+                try:
+                    _bool(_required(raw, 'is_deleted'), 'reminder.is_deleted')
+                except DomainError as error:
+                    raise failure(error, _wire_reminder_context(state, raw, known or prior)) from error
             if owner not in items:
                 continue
-            _bool(_required(raw, 'is_deleted'), name + '.is_deleted')
             if name == 'notes':
+                _bool(_required(raw, 'is_deleted'), name + '.is_deleted')
                 try:
                     comments[raw['id']] = Comment(raw['id'], owner,
                         incoming_text(raw.get('content', '')), _timestamp(raw, 'posted_at'))
                 except DomainError as error:
                     raise CurrentError(f'comment {raw["id"]} owner {owner}: {error}') from error
             else:
-                reminders[raw['id']] = _reminder(raw, account.timezone)
-    _check_duplicates(state, {root.id, *categories}, set(items))
+                reminders[raw['id']] = _reminder(raw, account.timezone, items, categories,
+                    cached=owner not in state.get('_fresh_items', ()))
+    _check_duplicates(state, {root.id, *categories}, set(items), known=known or prior)
     occurrences = {k: o for k, o in (prior.occurrences.items() if prior else ())
                    if o.item_id in items}
     snapshot = validate(Snapshot(binding, account, root, categories, items,
-                                 comments, reminders, occurrences), hidden_names)
+                                 comments, reminders, occurrences), hidden_names,
+                        cached_owner_ids=set(items) - state.get('_fresh_items', set()))
     missing = set(known_items) - items.keys() - deleted - departed
     return snapshot, frozenset(missing), frozenset(deleted), frozenset(departed)
 
@@ -422,10 +510,12 @@ def _response(response):
 def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
              sync_token: str | None = None, replace=False, hidden_names=(),
              known=None, reminder_ids=None, waiting_label_ids=None, created_ids=frozenset(),
-             supplied_response=None, supplied_token=None) -> Current:
+             supplied_response=None, supplied_token=None, cached_item_ids=frozenset()) -> Current:
     """Read a complete candidate. No mutation, files, retries beyond transport,
     or account history access. A full response receives exactly one freshness read.
 
+    cached_item_ids labels prior-only ancestors injected by init into its initial
+    replay; a subsequent genuine resource update establishes fresh provenance.
     prior must be a proven current baseline; known optionally supplies retained
     identities for tombstone/departure reconciliation without seeding resources.
     On scope expansion from a minimal prior Snapshot, request a replacement to
@@ -470,7 +560,8 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     state['_waiting_seen'] = set(waiting_label_ids or ())
     if not full and waiting_label_ids is not None:
         state['labels'] = {k: dict(id=k, name='waiting', is_deleted=False) for k in waiting_label_ids}
-    _merge(state, response, full)
+    state['_binding'] = binding
+    _merge(state, response, full, known=known or prior, cached_item_ids=cached_item_ids)
     account = prior.account if prior else None
 
     def metadata(response, full, account):
@@ -489,7 +580,7 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
     scoped_items = {k for k, v in state['items'].items()
                     if v.get('is_deleted') is not True and isinstance(v.get('project_id'), str)
                     and v['project_id'] in scoped_projects}
-    _check_duplicates(state, scoped_projects, scoped_items)
+    _check_duplicates(state, scoped_projects, scoped_items, known=known or prior)
     earlier_departures = set()
     if not full:
         _, current_categories, _ = _projects(state, binding, prior.items)
@@ -525,8 +616,9 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
                 if known is not None and identity in known.comments
                 and (raw.get('is_deleted') is True or raw.get('item_id') != known.comments[identity].item_id)}
             state = {name: {} for name in _COLLECTIONS}
+            state['_binding'] = binding
             labels_known = True
-            _merge(state, response, True)
+            _merge(state, response, True, known=known or prior)
             # Keep explicit deletion evidence across hydration, never stale live
             # objects. A later live representation supersedes that evidence.
             for identity, raw in earlier_tombstones.items():
@@ -538,7 +630,7 @@ def retrieve(transport, binding: Binding, *, prior: Snapshot | None = None,
         response, token, again_full = _read(transport, token)
         if again_full:
             raise CurrentError('freshness Sync returned another full response')
-        _merge(state, response, False)
+        _merge(state, response, False, known=known or prior)
         account = metadata(response, False, account)
     snapshot, missing, deleted, departed = _map(state, binding, account, prior, hidden_names, known)
     departed = departed | (earlier_departures - state['items'].keys())

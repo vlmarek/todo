@@ -212,3 +212,11 @@ exact UTC `date` plus applicable named timezone, or delegated stripped `string`,
 language/rule/zone without restoring an obsolete date. Current mapping and codec
 continue retaining authoritative metadata and precise epochs through snapshots
 and pending history; no last-input-zone field is persisted.
+
+`validate(snapshot, hidden_names=(), *, cached_owner_ids=frozenset())` accepts
+command-local diagnostic provenance for reminder owners. It does not change
+validation, model equality, or persisted data. Reminder mapping/invariant errors
+retain their exception class and reason and add bounded consumed-field context;
+`managed_reminder` on these exceptions identifies a remote-data correction
+condition for workflow diagnostics. Titles use scalar display escaping; malformed
+objects are summarized, never dumped. Domain formatting remains offline.

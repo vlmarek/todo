@@ -41,6 +41,7 @@ class SyncError(LocalError):
                  publication_started=False, saved_state_available=False,
                  refresh_permitted=True, remote_outcome='unattempted'):
         self.phase = phase
+        self.managed_reminder = getattr(cause, 'managed_reminder', False)
         self.cache_cleared = cache_cleared
         self.publication_started = publication_started
         self.saved_state_available = saved_state_available
@@ -58,7 +59,9 @@ class SyncError(LocalError):
             message += ' Previous protected files were preserved.'
             if not cache_cleared:
                 message += ' The previous cache was not replaced.'
-        if refresh_permitted:
+        if getattr(cause, 'managed_reminder', False):
+            message += ' Repair the identified managed reminder in the provider; do not replay an accepted mutation.'
+        elif refresh_permitted:
             message += ' Read-only recovery: todo --refresh now.'
         else:
             message += (' Repair the identified local validation problem or restore a consistent saved set;'
@@ -155,6 +158,16 @@ def affected_ids(result, known, current):
 
 def _reconcile(current, known, history, adapter, start, end, cursor, hidden_names, *, affected=None):
     s = current.snapshot
+    def owner_failure(reason, identity, fresh=None):
+        from todo_lib.domain.reminder_context import context, failure
+        error = d.DomainError(reason)
+        reminders = [r for r in current.unresolved_reminders if r['item_id'] == identity]
+        if reminders:
+            owners = {identity: fresh} if fresh is not None else known.items
+            return failure(error, *(context(r, owners, s.categories, cached=fresh is None)
+                                    for r in reminders))
+        return error
+
     removed = set(current.deleted_ids | current.departed_ids)
     # Explicit parent deletion/scope departure removes its known subtree too.
     while True:
@@ -182,6 +195,7 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
         if isinstance(adapter, OperationEvidence):
             recurring &= adapter.lifecycle_ids
     records = []
+    fresh_owners = set(s.items)
     if isinstance(adapter, OperationEvidence):
         records = [r for e in adapter.reads if e.endpoint == '/tasks/completed/by_completion_date'
                    for r in e.records if r.item.id in affected]
@@ -218,7 +232,7 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
                 if record.deleted or d.instant_key(record.occurrence.completed_at) <= d.instant_key(cursor):
                     continue
                 if not item.completed:
-                    raise d.DomainError('unresolved historical recurring owner ' + item.id)
+                    raise owner_failure('unresolved historical recurring owner ' + d.scalar_title(item.id), item.id, item)
                 # Eligible bounded observations join pending storage, with required
                 # ancestor resolution below; this is not an arbitrary archive scan.
                 missing.add(item.id)
@@ -236,13 +250,14 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
             record = latest.get(identity)
             if record is not None:
                 if not record.item.completed:
-                    raise d.DomainError('unresolved disappeared recurring/open item ' + identity)
+                    raise owner_failure('unresolved disappeared recurring/open item ' + d.scalar_title(identity), identity, record.item)
                 items[identity] = record.item
+                fresh_owners.add(identity)
             elif identity in known.items and known.items[identity].completed:
                 # Omission does not retract an already established completion.
                 items[identity] = retained(known.items[identity])
             else:
-                raise d.DomainError('unresolved disappeared managed item ' + identity + '; supported lifecycle evidence required')
+                raise owner_failure('unresolved disappeared managed item ' + d.scalar_title(identity) + '; supported lifecycle evidence required', identity)
     while True:
         expanded = removed | {i.id for i in {**known.items, **items}.values() if i.parent_id in removed}
         if expanded == removed:
@@ -281,23 +296,18 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
     reminders.update(s.reminders)
     reminders = {k: r for k, r in reminders.items() if r.item_id in items}
     # Resolve final active reminder records against authoritative historical owners.
-    from todo_lib.adapter.current import _reminder, _signature
-    for raw in current.unresolved_reminders:
-        owner = raw['item_id']
-        if owner in removed:
-            continue
-        if owner not in items:
-            raise d.DomainError('unresolved reminder owner ' + owner)
-        for left, right in current.reminder_duplicates:
-            if right['id'] == raw['id'] and _signature(left, 'reminders') != _signature(right, 'reminders'):
-                raise d.DomainError('contradictory live reminders representations ' + raw['id'])
-        reminders[raw['id']] = _reminder(raw, s.account.timezone)
+    from todo_lib.adapter.current import _resolved_reminders
+    cached_owners = set(known.items) - fresh_owners
+    reminders.update(_resolved_reminders(current, items, s.categories,
+        known_items=known.items, required=affected or (), removed=removed,
+        cached_owner_ids=cached_owners))
     if known.account.timezone != s.account.timezone:
         reminders = {k: replace(r, due=d.resolve_reminder_due(r.due.raw_due, s.account.timezone))
             if r.type == 'absolute' and r.due.kind == 'floating' else r
             for k, r in reminders.items()}
     snapshot = d.validate(replace(s, items=items, comments=comments,
-        reminders=reminders, occurrences=occurrences), hidden_names)
+        reminders=reminders, occurrences=occurrences), hidden_names,
+        cached_owner_ids=cached_owners)
     observed = set(items) if affected is None else set(affected)
     if affected is not None:
         observed |= {k for k, item in s.items.items() if item != known.items.get(k)}

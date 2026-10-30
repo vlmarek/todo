@@ -260,10 +260,13 @@ class ReminderWorkflowTests(unittest.TestCase):
                     self.assertIn('Reminders: none -> at ', result.document.stdout)
                 else:
                     self.assertNotIn('Reminders:', result.document.stdout)
-                    self.assertIn("requested {'date': '2026-11-02T10:00:00Z'", result.document.stderr)
-                    self.assertIn("actual {'date': '" + returned + "'", result.document.stderr)
-                    self.assertIn("'timezone': '" + extra.get('timezone', 'UTC') + "'", result.document.stderr)
+                    self.assertIn('requested date=2026-11-02T10:00:00Z', result.document.stderr)
+                    self.assertIn('date=' + returned, result.document.stderr)
+                    self.assertIn('timezone=' + extra.get('timezone', 'UTC'), result.document.stderr)
                     self.assertIn('account timezone UTC', result.document.stderr)
+                    for value in ('reminder new', 'title Parent', 'category cat', 'type absolute'):
+                        self.assertIn(value, result.document.stderr)
+                    self.assertNotIn('Read-only recovery:', result.document.stderr)
 
     def test_later_rejection_preserves_accepted_removal_and_retained_id(self):
         self.mixed()

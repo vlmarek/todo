@@ -12,6 +12,7 @@ Error, Projects, Tasks, Task comments, Reminders and Due dates. Read-only Sync
 responses may supply attribution; there is no invented command-status endpoint.
 Current/history model records are returned directly, never rebuilt via datetime.
 """
+from todo_lib.domain.reminder_context import context as reminder_context, ReminderDiagnostic
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
@@ -428,7 +429,8 @@ class Gateway:
             # A failed necessary read cannot leave the insufficient first
             # candidate/token available for accepted-operation publication.
             after = None
-            issues.append('current reconciliation unavailable: ' + str(error))
+            issue = 'current reconciliation unavailable: ' + str(error)
+            issues.append(ReminderDiagnostic(issue) if getattr(error, 'managed_reminder', False) else issue)
         outcome, target = _proof(op, observed.responses)
         if http_rejected and outcome == Outcome.UNKNOWN:
             outcome = Outcome.REJECTED
@@ -564,7 +566,10 @@ class Gateway:
                     expected = replace(expected, due=actual.due)
                 differs |= not preserves_reminder(expected, actual, account_zone)
                 if differs:
-                    issues.append('accepted reminder differs from request')
+                    issues.append(ReminderDiagnostic('accepted reminder differs from request [' +
+                        reminder_context(actual, snapshot.items, snapshot.categories,
+                            cached=actual.item_id not in {r.get('id') for response in resource_responses
+                                for r in response.get('items', ()) if isinstance(r, dict)}) + ']'))
             if actual is not None and op.type in ('project_add', 'label_add'):
                 if actual.name != op.args['name'] or (op.type == 'project_add' and actual.parent_id != op.args.get('parent_id')):
                     issues.append('accepted provision differs from request')

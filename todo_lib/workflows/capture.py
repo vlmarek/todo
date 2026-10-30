@@ -288,6 +288,7 @@ class CaptureWorkflow:
                         if creating and (actual.parent_id != ids.get(expected.parent_id, expected.parent_id)
                                 or actual.category_id != expected.category_id):
                             issues.append('accepted item has unexpected parent/category')
+                reminder_issue_start = len(issues)
                 if action.method == 'create_reminder':
                     if actual is None or actual.item_id != target:
                         issues.append('accepted reminder differs from reconciled owner')
@@ -295,14 +296,12 @@ class CaptureWorkflow:
                         if actual.type != 'relative' or actual.minutes != kwargs['minutes']:
                             issues.append('accepted reminder differs from reconciled offset')
                     elif actual.type != 'absolute' or not actual.due.exact or not d.reconciles_attention(d.attention_prediction(kwargs['due'], snapshot.account.timezone), actual.due, snapshot.account.timezone):
-                        # Keep provider precision and scheduling semantics in the
-                        # failure, without exposing unrelated open-object fields.
-                        actual_due = ({k: v for k, v in actual.due.raw_due.items()
-                            if k in ('date', 'timezone', 'is_recurring', 'string', 'lang')}
-                            if actual.due is not None and actual.due.raw_due is not None else actual.due)
+                        from todo_lib.domain.reminder_context import safe
+                        requested = due_arguments(kwargs['due'])
+                        summary = ', '.join(k + '=' + safe(requested[k])
+                            for k in ('date', 'timezone', 'string') if k in requested)
                         issues.append('accepted absolute reminder differs from requested exact schedule: '
-                            f'requested {due_arguments(kwargs["due"])!r}; actual {actual_due!r} '
-                            f'(type {actual.type}; account timezone {snapshot.account.timezone})')
+                            f'requested {summary}; account timezone {safe(snapshot.account.timezone)}')
                 elif action.method == 'delete_reminder' and target in snapshot.reminders:
                     issues.append('accepted reminder deletion remains in reconciled state')
                 elif action.method == 'complete' and (actual is None or not actual.completed):
@@ -310,12 +309,22 @@ class CaptureWorkflow:
                 if action.method == 'provision_category':
                     if actual is None or (actual.name, actual.parent_id) != (kwargs['name'], target):
                         issues.append('accepted category differs from reconciled name/parent')
+                if action.method in ('create_reminder', 'delete_reminder'):
+                    from todo_lib.domain.reminder_context import context, ReminderDiagnostic
+                    value = actual or before.snapshot.reminders.get(receipt.target_id)
+                    if value is None:
+                        value = dict(receipt.operation.args, id=receipt.target_id)
+                    detail = context(value, {**before.snapshot.items, **snapshot.items}, snapshot.categories,
+                        cached=actual is None and action.method == 'delete_reminder')
+                    issues[reminder_issue_start:] = [ReminderDiagnostic(issue + ' [' + detail + ']')
+                                                     for issue in issues[reminder_issue_start:]]
                 outcomes[-1] = replace(outcomes[-1], actual=actual, issues=tuple(issues))
                 if not issues:
                     documents.append(self._document(action, old, actual, snapshot, now, before.snapshot))
                 rendered = True
                 if issues:
-                    failure = '; '.join(issues) + '. Read-only recovery: todo --refresh now; do not replay the mutation.'
+                    from todo_lib.domain.reminder_context import repair_guidance
+                    failure = '; '.join(issues) + '. ' + repair_guidance(issues)
                     status = 1
                     break
             except (SyncError, SyncInterrupted, d.DomainError, LocalError, HTTPFailure, OSError, KeyboardInterrupt) as error:

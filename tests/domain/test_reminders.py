@@ -15,7 +15,8 @@ class ReminderTests(unittest.TestCase):
         self.assertEqual(s.reminders['floating'].due.kind, 'floating')
         d.validate(s)
         d.validate(replace(s, items={**s.items, 'undated': replace(s.items['undated'], attention=d.resolve_remote_due({'date': '2026-10-30'}, s.account.timezone))}))
-        for changes in ({'minutes': False}, {'minutes': -1}, {'item_id': 'unknown'}):
+        for changes in ({'minutes': False}, {'minutes': -1}, {'item_id': 'unknown'},
+                        {'item_id': None}, {'item_id': {'private': 'never dump'}}):
             with self.subTest(changes=changes), self.assertRaises(d.DomainError):
                 d.validate(replace(s, reminders={'rel': replace(s.reminders['rel'], **changes)}))
         with self.assertRaises(d.DomainError):
@@ -31,3 +32,26 @@ class ReminderTests(unittest.TestCase):
                     {**MINIMAL, 'lang': None}, {**MINIMAL, 'timezone': 'bad'}):
             with self.subTest(raw=raw), self.assertRaises(d.DomainError):
                 d.resolve_reminder_due(raw, 'UTC')
+
+    def test_duplicate_offsets_identify_both_reminders_and_owner(self):
+        s = observed(self).snapshot
+        first = s.reminders['rel']
+        s = replace(s, reminders={'rel': first, 'other': replace(first, id='other')})
+        with self.assertRaises(d.DomainError) as caught:
+            d.validate(s)
+        message = str(caught.exception)
+        for value in ('duplicate reminder offsets', 'reminder rel', 'reminder other',
+                      'title timed', 'category cat', 'type relative', 'offset 0'):
+            self.assertIn(value, message)
+
+    def test_managed_capability_eligibility_and_identity_failures_have_context(self):
+        s = observed(self).snapshot
+        cases = [replace(s, account=replace(s.account, capabilities=d.Capabilities())),
+                 replace(s, items={**s.items, 'timed': replace(s.items['timed'], attention=None)}),
+                 replace(s, reminders={'rel': replace(s.reminders['rel'], id='wrong')})]
+        for candidate, reason in zip(cases, ('capability', 'exact attention', 'key/ID mismatch')):
+            with self.subTest(reason=reason), self.assertRaises(d.DomainError) as caught:
+                d.validate(candidate)
+            message = str(caught.exception)
+            for value in (reason, 'owner timed', 'title timed', 'category cat', 'type relative', 'offset 0'):
+                self.assertIn(value, message)

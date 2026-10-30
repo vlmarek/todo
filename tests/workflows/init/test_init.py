@@ -600,6 +600,31 @@ class InitTests(unittest.TestCase):
         self.assertFalse(offline.snapshot.reminders)
         self.assertEqual(offline.history.observations, before.history.observations)
 
+    def test_init_discards_never_known_reminders_after_full_and_freshness(self):
+        from tests.support.reminders import absolute
+        self.put('config', CONFIG)
+        ignored = absolute('private-reminder', item_id='private-owner', type='location',
+                           due={'private': 'unused'})
+        raw = full(labels=[LABEL], items=[item(added_at=CREATED),
+            item('private-owner', project_id='elsewhere', content='Private title')],
+            reminders=[ignored])
+        # Second observation has no owner resource at all; freshness still carries
+        # a live unsupported reminder with usable stable identity/ownership.
+        later = full(labels=[LABEL], items=[item(added_at=CREATED)])
+        boundary = Boundary([raw, (later, delta(reminders=[ignored], sync_token='init-final'))])
+        _, out, err = self.run_init(boundary)
+        self.assertEqual(err, '')
+        self.assertNotIn('private', out)
+        self.assertFalse(boundary.mutations)
+        self.assertEqual(len(boundary.requests), 4)
+        saved = StateStore(self.root).load_consistent_state()
+        self.assertEqual(saved.sync_token, 'init-final')
+        self.assertFalse(saved.current_reminder_ids)
+        for name in ('cache.json', 'history.json', 'binding.json'):
+            data = (self.root / name).read_bytes()
+            for value in (b'private-reminder', b'private-owner', b'Private title', b'unused'):
+                self.assertNotIn(value, data)
+
     def test_invalid_final_pending_only_reminder_preserves_state(self):
         from tests.support.reminders import absolute
         self.initialize_existing()
@@ -608,9 +633,33 @@ class InitTests(unittest.TestCase):
         before = self.bytes()
         bad = deepcopy(omitted)
         bad['reminders'] = [absolute('bad', {'date': '2026-10-30'}, item_id='task')]
-        with self.assertRaises(InitError):
+        with self.assertRaises(InitError) as caught:
             self.run_init(Boundary([bad]))
+        for value in ('exact time', 'reminder bad', 'cached title task', 'cached category cat',
+                      'type absolute', 'date=2026-10-30'):
+            self.assertIn(value, str(caught.exception))
         self.assertEqual(self.bytes(), before)
+
+    def test_repeat_init_injected_ancestor_failure_context_is_cached(self):
+        from tests.support.reminders import absolute
+        self.initialize_existing(full(labels=[LABEL], items=[
+            item('A', content='Previously saved parent'), item('B', parent_id='A')]))
+        before = self.bytes()
+        for changes, reason in (({'due': {'date': '2026-10-30'}}, 'exact time'),
+                                ({'id': ''}, 'ID')):
+            with self.subTest(changes=changes):
+                raw = full(labels=[LABEL], items=[item('B', parent_id='A', checked=True,
+                    completed_at=POSTED)], reminders=[absolute('bad', item_id='A', **changes)])
+                boundary = Boundary([raw])
+                with self.assertRaises(InitError) as caught:
+                    self.run_init(boundary)
+                message = str(caught.exception)
+                for value in (reason, 'cached title Previously saved parent',
+                              'cached category cat', 'type absolute'):
+                    self.assertIn(value, message)
+                self.assertEqual(len(boundary.requests), 2 if reason == 'exact time' else 1)
+                self.assertFalse(boundary.mutations)
+                self.assertEqual(self.bytes(), before)
 
     def test_invalid_retained_owner_note_blocks_all_provisions(self):
         self.initialize_existing()

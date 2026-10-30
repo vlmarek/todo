@@ -222,6 +222,45 @@ class Reports(unittest.TestCase):
                 self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
                 previous = extras
 
+    def test_unknown_reminder_does_not_skip_required_report_history_or_comments(self):
+        from tests.support.reminders import absolute
+        steps = self.requests(rows=[completed_b()], current_items=[item('A')], events=[event(1, LAST)])
+        steps[0][1]['reminders'] = [absolute('private-reminder', item_id='never-known',
+            type='unsupported', due={'private': 'unused'})]
+        result, streams = self.run_report(steps)
+        self.assertEqual(streams.stderr.getvalue(), '')
+        self.assertNotIn('private', streams.stdout.getvalue())
+        self.assertEqual(len(self.last_http.requests), 5)
+        saved = StateStore(self.root).load_consistent_state()
+        self.assertTrue(saved.snapshot.items['B'].completed)
+        self.assertFalse(saved.current_reminder_ids)
+        for name in ('cache.json', 'history.json'):
+            self.assertNotIn(b'private-reminder', (self.root / name).read_bytes())
+
+    def test_report_required_history_discovers_reminder_owner_before_final_mapping(self):
+        from tests.support.reminders import absolute
+        self.assertNotIn('C', self.store.load_history().snapshot.items)
+        owner = item('C', checked=True, completed_at=LAST, content='Discovered owner')
+        for malformed in (True, False):
+            steps = self.requests(rows=[owner])
+            steps[0][1]['user_plan_limits']['current']['reminders'] = True
+            steps[0][1]['reminders'] = [absolute('discovered-reminder', item_id='C',
+                **({'due': {'date': '2026-10-30'}} if malformed else {}))]
+            before = {name: (self.root / name).read_bytes()
+                      for name in ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
+            if malformed:
+                streams = self.streams()
+                with self.assertRaisesRegex(SyncError, 'exact time.*reminder discovered-reminder.*title Discovered owner'):
+                    self.run_report(steps, ['--final'], streams)
+                self.assertEqual(streams.stdout.getvalue(), '')
+                self.assertEqual({name: (self.root / name).read_bytes() for name in before}, before)
+            else:
+                self.run_report(steps)
+                saved = StateStore(self.root).load_consistent_state()
+                self.assertEqual(saved.history.snapshot.reminders['discovered-reminder'].item_id, 'C')
+                self.assertEqual(saved.current_reminder_ids, {'discovered-reminder'})
+            self.assertEqual(len(self.last_http.requests), 5)
+
     def test_both_archived_reminder_types_survive_pending_only_report_publication(self):
         from tests.support.reminders import absolute
         rows = [completed_b(due=due())]
