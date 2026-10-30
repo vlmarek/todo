@@ -209,8 +209,7 @@ else:
         from tests.support.reminders import absolute
         cases = [([absolute('historical', {'date': '2025-02-12'}, item_id='C')], True),
                  ([absolute('historical', item_id='C'), absolute('historical',
-                    {'date': '2025-02-12T10:00:00', 'timezone': 'Europe/Madrid'}, item_id='C')], True),
-                 ([absolute('historical', item_id='C')], False)]
+                    {'date': '2025-02-12T10:00:00', 'timezone': 'Europe/Madrid'}, item_id='C')], True)]
         for final, resolved in cases:
             with self.subTest(final=final, resolved=resolved):
                 before = self.bytes()
@@ -218,6 +217,79 @@ else:
                 with self.assertRaisesRegex(SyncError, 'exact time|contradictory|unresolved reminder owner'):
                     workflow.refresh()
                 self.assertEqual(self.bytes(), before)
+
+    def test_never_known_final_owner_is_silently_discarded_after_required_history(self):
+        from tests.support.reminders import absolute
+        raw = absolute('historical', item_id='C', type='unsupported', due={'private': 'unused'})
+        workflow, http = self.workflow(self.reminder_hydration([raw], resolved=False))
+        result = workflow.refresh()
+        self.assertFalse(result.warnings)
+        state = StateStore(self.root).load_consistent_state()
+        self.assertNotIn('C', state.snapshot.items)
+        self.assertFalse(state.snapshot.reminders)
+        self.assertEqual(state.current_reminder_ids, frozenset())
+        self.assertEqual(state.sync_token, 'delta-token')
+        self.assertEqual(len(http.requests), 5)
+
+    def test_full_unrelated_owner_then_reminder_only_delta_saves_managed_baseline(self):
+        from tests.support.reminders import absolute
+        outside = item('private-owner', project_id='elsewhere', content='Unrelated private title')
+        ignored = absolute('private-reminder', item_id='private-owner', type='unsupported',
+                           due={'unrelated': 'unused payload'})
+        workflow, http = self.workflow([
+            self.sync('delta-token', full(
+                items=[item('A', added_at=CREATED), item('B', parent_id='A', added_at=CREATED), outside],
+                reminders=[ignored])), self.sync('full-token', delta(sync_token='managed-baseline'))])
+        self.assertFalse(workflow.refresh().warnings)
+        self.assertEqual(len(http.requests), 2)
+        state = StateStore(self.root).load_consistent_state()
+        self.assertNotIn('private-owner', state.snapshot.items)
+        self.assertNotIn('private-owner', state.history.snapshot.items)
+        self.assertEqual(state.current_reminder_ids, frozenset())
+        workflow, http = self.workflow([self.sync('managed-baseline', delta(
+            reminders=[ignored], sync_token='ignored-delta-token'))])
+        self.assertFalse(workflow.refresh().warnings)
+        self.assertEqual(len(http.requests), 1)
+        state = StateStore(self.root).load_consistent_state()
+        self.assertEqual(state.sync_token, 'ignored-delta-token')
+        self.assertEqual(state.current_reminder_ids, frozenset())
+        for data in self.bytes().values():
+            for text in (b'private-owner', b'private-reminder', b'Unrelated private', b'unused payload'):
+                self.assertNotIn(text, data)
+
+    def test_known_owner_reminder_cannot_hide_unresolved_lifecycle(self):
+        from tests.support.reminders import absolute
+        before = self.bytes()
+        workflow, http = self.workflow([
+            self.sync('delta-token', full(items=[item('A', added_at=CREATED)],
+                reminders=[absolute('known-reminder', item_id='B')])),
+            self.sync('full-token', delta()), self.completed([])])
+        with self.assertRaises(SyncError) as caught:
+            workflow.refresh()
+        for value in ('unresolved disappeared managed item B', 'supported lifecycle evidence required',
+                      'reminder known-reminder', 'cached title B', 'cached category cat', 'type absolute'):
+            self.assertIn(value, str(caught.exception))
+        self.assertNotIn('Read-only recovery:', str(caught.exception))
+        self.assertEqual(self.bytes(), before)
+        self.assertEqual(len(http.requests), 3)
+
+    def test_cached_managed_reminder_failure_keeps_reason_context_and_files(self):
+        from tests.support.reminders import absolute
+        workflow, _ = self.workflow(self.reminder_hydration([absolute('historical', item_id='C')]))
+        workflow.refresh()
+        before = self.bytes()
+        raw = absolute('historical', {'date': {'private': 'do not dump'}}, item_id='C')
+        workflow, http = self.workflow([self.sync('delta-token', delta(reminders=[raw])), *self.retained(c=True)])
+        with self.assertRaises(SyncError) as caught:
+            workflow.refresh()
+        message = str(caught.exception)
+        for text in ('due.date must be', 'reminder historical', 'owner C', 'cached title C',
+                     'cached category cat', 'type absolute', 'date=<malformed object>'):
+            self.assertIn(text, message)
+        self.assertNotIn('do not dump', message)
+        self.assertNotIn('Read-only recovery:', message)
+        self.assertEqual(len(http.requests), 4)
+        self.assertEqual(self.bytes(), before)
 
     def test_reminder_delta_update_delete_and_full_omission_after_history_resolution(self):
         from tests.support.reminders import absolute, MINIMAL
@@ -979,6 +1051,38 @@ class MutationReuseTests(unittest.TestCase):
             self.assertEqual(after.history.coverage, saved.history.coverage)
             self.assertEqual(len(http.requests), 5 if archived_completion else 2)
         return result
+
+    def test_accepted_parent_move_ignores_unrelated_reminder_with_one_dispatch(self):
+        from io import StringIO
+        from todo_lib.adapter.commands import Gateway
+        from todo_lib.presentation import OriginalStreams
+        from todo_lib.workflows.moves import MoveWorkflow
+        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        from tests.support.reminders import absolute
+        ignored = absolute('ignored-reminder', item_id='never-managed', type='location',
+                           due={'private': 'unused'}, minute_offset={'private': 'unused'})
+        op = CommandRequest(self, 'item_move', {'id': 'B', 'project_id': 'cat'},
+            resources=delta(items=[item('B', parent_id=None, content='Normalized result')],
+                            reminders=[ignored], sync_token='moved-token'))
+        transport, http = self.boundary([op.step()])
+        sync = Synchronizer(transport, self.store, clock=lambda: NOW)
+        streams = OriginalStreams(StringIO(), StringIO(), StringIO())
+        result = MoveWorkflow(sync, gateway=Gateway(transport, clock=lambda: d.instant_datetime(NOW)),
+                              streams=streams).execute(['move', 'B', '--task', '', '--to', 'cat'])
+        self.assertEqual(result.status, 0)
+        self.assertEqual(result.document.stderr, '')
+        self.assertEqual(len(op.commands), 1)
+        self.assertEqual(len(http.requests), 1)
+        saved = StateStore(self.root).load_consistent_state()
+        self.assertEqual(saved.snapshot.items['B'].title, 'Normalized result')
+        self.assertIsNone(saved.snapshot.items['B'].parent_id)
+        self.assertEqual(saved.sync_token, 'moved-token')
+        self.assertEqual(saved.current_snapshot.items['B'], saved.snapshot.items['B'])
+        self.assertFalse(saved.current_reminder_ids)
+        for data in self.bytes().values():
+            self.assertNotIn(b'ignored-reminder', data)
+            self.assertNotIn(b'never-managed', data)
+        self.assertNotIn('ignored', result.document.stdout)
 
     def test_composed_incremental_create_published_before_complete_reuses_required_proof(self):
         self.compose()

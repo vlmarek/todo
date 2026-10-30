@@ -385,7 +385,7 @@ def validate_hiding_enable(snapshot: Snapshot, item_id: str, now: datetime, hidd
     validate(snapshot, hidden_names)
 
 
-def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
+def validate(snapshot: Snapshot, hidden_names: Iterable[str] = (), *, cached_owner_ids=frozenset()) -> Snapshot:
     """Validate complete candidate scope, hierarchy, own fields and invariants.
 
     No mutation, I/O, inference of timestamps or report-event eligibility occurs.
@@ -409,8 +409,20 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
     if caps.history_limit is not None and (type(caps.history_limit) is not int or caps.history_limit < -1):
         raise DomainError('history_limit must be -1 or a nonnegative integer')
     _project(snapshot.root, None)
+    from .reminder_context import context, failure
     for name, record_type in (('categories', Category), ('items', Item), ('comments', Comment), ('reminders', Reminder), ('occurrences', Occurrence)):
-        _keyed(getattr(snapshot, name), name, record_type)
+        collection = getattr(snapshot, name)
+        if name == 'reminders' and isinstance(collection, Mapping):
+            for key, reminder in collection.items():
+                try:
+                    _keyed({key: reminder}, name, record_type)
+                except DomainError as error:
+                    if isinstance(reminder, Reminder):
+                        raise failure(error, context(reminder, snapshot.items, snapshot.categories,
+                            cached=isinstance(reminder.item_id, str) and reminder.item_id in cached_owner_ids)) from error
+                    raise
+        else:
+            _keyed(collection, name, record_type)
     for category_id in snapshot.binding.category_ids:
         _id(category_id, 'binding.category_ids')
     for item in snapshot.items.values():
@@ -456,29 +468,38 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> Snapshot:
         incoming_text(comment.body)
         if comment.added_at is not None:
             _timestamp(comment.added_at, 'comment.added_at')
-    offsets: dict[str, list[int]] = {}
+    offsets: dict[str, list[Reminder]] = {}
     for reminder in snapshot.reminders.values():
-        if reminder.item_id not in snapshot.items:
-            raise DomainError('reminder.item_id outside managed items')
-        item = snapshot.items[reminder.item_id]
-        if not caps.reminders:
-            raise DomainError('reminders require account capability')
-        if reminder.notify_uid is not None:
-            _id(reminder.notify_uid, 'reminder.notify_uid')
-        if reminder.is_urgent is not None and type(reminder.is_urgent) is not bool:
-            raise DomainError('reminder.is_urgent must be boolean')
-        if reminder.type == 'relative':
-            if item.attention is None or not item.attention.exact:
-                raise DomainError('relative reminders require exact attention')
-            offsets.setdefault(item.id, []).append(reminder.minutes)
-        elif reminder.type == 'absolute':
-            _validate_attention(reminder.due, snapshot.account.timezone, reminder=True)
-            if not reminder.due.exact:
-                raise DomainError('absolute reminder requires exact time')
-        else:
-            raise DomainError('managed reminder type unsupported')
+        try:
+            _id(reminder.item_id, 'reminder.item_id')
+            if reminder.item_id not in snapshot.items:
+                raise DomainError('reminder.item_id outside managed items')
+            item = snapshot.items[reminder.item_id]
+            if not caps.reminders:
+                raise DomainError('reminders require account capability')
+            if reminder.notify_uid is not None:
+                _id(reminder.notify_uid, 'reminder.notify_uid')
+            if reminder.is_urgent is not None and type(reminder.is_urgent) is not bool:
+                raise DomainError('reminder.is_urgent must be boolean')
+            if reminder.type == 'relative':
+                if item.attention is None or not item.attention.exact:
+                    raise DomainError('relative reminders require exact attention')
+                offsets.setdefault(item.id, []).append(reminder)
+            elif reminder.type == 'absolute':
+                _validate_attention(reminder.due, snapshot.account.timezone, reminder=True)
+                if not reminder.due.exact:
+                    raise DomainError('absolute reminder requires exact time')
+            else:
+                raise DomainError('managed reminder type unsupported')
+        except DomainError as error:
+            raise failure(error, context(reminder, snapshot.items, snapshot.categories,
+                cached=isinstance(reminder.item_id, str) and reminder.item_id in cached_owner_ids)) from error
     for values in offsets.values():
-        validate_reminder_offsets(values)
+        try:
+            validate_reminder_offsets([r.minutes for r in values])
+        except DomainError as error:
+            raise failure(error, *(context(r, snapshot.items, snapshot.categories,
+                cached=r.item_id in cached_owner_ids) for r in values)) from error
     for occurrence in snapshot.occurrences.values():
         if occurrence.item_id not in snapshot.items:
             raise DomainError('occurrence.item_id outside surviving managed items')

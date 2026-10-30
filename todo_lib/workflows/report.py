@@ -289,16 +289,25 @@ class Reporter:
             comments = adapter.required_comments(current.snapshot.items, self.completed, qualifying,
                 complete_comments=evidence.comments)
             items = dict(comments.owners)
+            # Required report history/comment-owner discovery may establish an
+            # owner that ordinary lifecycle reconciliation did not need to join.
+            from todo_lib.adapter.current import _resolved_reminders
+            reminders = {k: v for k, v in snapshot.reminders.items() if v.item_id in items}
+            cached_owners = set(known.items) - current.snapshot.items.keys() - {r.item.id for r in records}
+            reminders.update(_resolved_reminders(current, {**pending.snapshot.items, **items}, snapshot.categories,
+                known_items=known.items, removed=removed, cached_owner_ids=cached_owners))
             snapshot = d.validate(replace(snapshot, items=items, comments=comments.comments,
-                reminders={k: v for k, v in snapshot.reminders.items() if v.item_id in items},
-                occurrences={k: v for k, v in snapshot.occurrences.items() if v.item_id in items}), config.hidden_from_now)
+                reminders={k: v for k, v in reminders.items() if v.item_id in items},
+                occurrences={k: v for k, v in snapshot.occurrences.items() if v.item_id in items}), config.hidden_from_now,
+                cached_owner_ids=cached_owners)
             # Persist the selected activity times for ordinary owners too, so
             # final cleanup retains context for later unreported occurrences.
             occurrences = reconcile_completions({**pending.snapshot.items, **snapshot.items},
                 self.completed.records, activities.records, pending.snapshot.occurrences.values())
             snapshot = replace(snapshot, occurrences={k: o for k, o in occurrences.items()
                 if o.item_id in items})
-            pending = replace(pending, snapshot=replace(pending.snapshot, occurrences=occurrences))
+            pending = replace(pending, snapshot=replace(pending.snapshot,
+                occurrences={k: o for k, o in occurrences.items() if o.item_id in pending.snapshot.items}))
             incoming = History(snapshot, {k: now for k in items})
             pending = merge_history(pending, incoming,
                 removed_comment_ids={k for k, c in pending.snapshot.comments.items()

@@ -1512,3 +1512,248 @@ No live calls or complete worker suite were run. The unchanged CML final-deliver
 runner still owns `./scripts/verify-clean`: one complete offline suite plus its
 distinct unchanged-copy/PATH/real-less probes on the integrated subject. The
 standalone copied observation is not a claim that this final gate ran here.
+
+### T38 — revision 19 reminder ownership and available-context failures (2026-10-30)
+
+Observed subject: uncommitted implementation in the assigned T38 worktree on
+`99f0024ae498235494c17dbdfe8c6e6532f150f3` (planning follow-up to accepted integration
+`6d1f5c67da96c16ada615c88892b9b7397701b90`). The final changed implementation,
+test and API files have SHA-256
+`86b0c511a1d45a8806c143fd20094d4f4c8bcfac4c4042259f146482c1210d52`:
+sorted changed/untracked paths excluding this evidence file, hashing each UTF-8
+path, NUL, complete file bytes, NUL. There are 18 such files. No commit was made.
+Historical observations above and the frozen ledger were not changed.
+
+Distinguishing offline observations on that subject:
+
+- `SyncTests.test_full_unrelated_owner_then_reminder_only_delta_saves_managed_baseline`
+  first reads a full resource containing an unrelated owner and unsupported
+  reminder, saves only managed data, then consumes a reminder-only delta for the
+  now-never-known owner. Exactly two initial full/freshness requests and one later
+  delta request occur. Warnings are empty; matching tokens advance through reload;
+  neither ignored IDs, title, payload nor membership survives in protected files.
+- The existing `reminder_hydration` strict transport discovers C through required
+  completed history, with no pre-seeded C. Replacement, optional-default duplicate
+  equivalence, final contradictory/date-only failure, archived membership, delta
+  update/tombstone/full omission, floating timezone and pending-history tests pass.
+  Its former never-seen C failure case is now a separate silent success. A new
+  known B reminder plus unresolved lifecycle case still fails with unchanged
+  protected bytes after exactly the existing three required requests.
+- Init's separate full/freshness `_observe` path silently discards never-known
+  reminders, including unsupported unused content in freshness. Its strict
+  boundary observes four reads and no mutation across the two normal observations.
+  Retained-owner malformed schedules still fail before publication, with cached
+  owner title/category context. Existing provisioning/interruption/history tests
+  remain enabled.
+- Report tolerance still performs the required completed, activity and archived
+  comment retrieval (five requests), without warning or ignored membership.
+  A separate report starts without C, discovers C in normal required history,
+  attaches its valid reminder and saves its membership; malformed C schedules
+  retain the cursor/protected bytes and produce no report output. Report final
+  mapping uses newly established owner context. The occurrence join keeps newly
+  discovered owners and their occurrences together, rather than putting an orphan
+  occurrence into the old pending candidate before merging the incoming owner.
+  Existing missing qualifying comment-owner and output/cursor failures still pass.
+- `MutationReuseTests.test_accepted_parent_move_ignores_unrelated_reminder_with_one_dispatch`
+  crosses actual Transport -> Gateway -> MoveWorkflow/shared reconciliation ->
+  StateStore. Strict `CommandRequest` accepts exactly one `item_move` promoting B
+  into cat and returns normalized B plus an ignored reminder in combined resources.
+  One HTTP request/one mutation dispatch suffices; reload proves actual title,
+  parent, current baseline and matching `moved-token`. Stderr is empty and ignored
+  IDs/payload/membership are absent. Existing combined-response publication before
+  subsequent writes, scoped history reuse, necessary extra reads and accepted,
+  unknown, publication and interruption stopping checks remain enabled.
+- Managed mapping, historical contradiction/lifecycle, capability, eligibility,
+  keyed identity and duplicate-offset errors retain their reason/classification
+  and identify affected reminder(s), available owner/category, type and schedule
+  or offset. A cached historical-owner malformed-object test uses exactly its four
+  normal requests and preserves every protected byte. The public CLI unsafe-title
+  and synthetic `secret` test proves nonzero/stderr-only failure, scalar newline/tab
+  escaping, credential redaction, no arbitrary nested-object dump, no unrelated
+  reminder disclosure and no added reads. Relevant unusable identity/owner fields and unresolved-owner lifecycle
+  context remain strict. Previously established outside-scope owners retain
+  ownership-first filtering of their unused reminder fields. Failure guidance asks for provider correction rather than repeated
+  ordinary refresh or cache clearing; accepted/no-replay and publication facts stay.
+
+Provider-shaped synthetic data is source-cited in `tests/support/reminders.py`
+and the existing strict Sync/mutation/history fixtures against retained
+`docs/design/external/todoist/upstream/api-v1.openapi.json`: Sync Read resources,
+Incremental sync, command UUID/Move a task, Reminders, Due dates,
+`NotificationSyncView` stable string IDs, boolean lifecycle fields, relative
+minute offsets, and open/nullable due object. Its due example was inspected
+locally; synthetic dates and unsupported unused type/body variants are deliberate
+controlled cases, not new documented examples or provider guarantees. No real
+account, credentials or network was used.
+
+Final verification commands, run from the assigned repository root:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.adapter.current.test_reminders tests.adapter.current.test_tolerance tests.adapter.commands.test_reminders tests.workflows.sync.test_sync tests.workflows.init.test_init tests.workflows.init.test_tolerance tests.workflows.report.test_report tests.workflows.report.test_tolerance tests.cli.test_reminders tests.local.test_reminders -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.domain.test_model tests.domain.test_reminders tests.adapter.commands.test_commands tests.workflows.capture.test_capture tests.workflows.capture.test_coexistence tests.workflows.capture.test_named_timezones tests.workflows.capture.test_reminders tests.workflows.moves.test_moves tests.workflows.lifecycle.test_lifecycle tests.workflows.comments.test_workflow tests.workflows.comments.test_tolerance tests.workflows.comments.test_codec tests.workflows.test_cached_selection tests.cli.test_composition tests.local.test_local -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.domain.test_reminders tests.workflows.capture.test_reminders -v
+git diff --check
+```
+
+Outcomes: focused 217 tests passed (`/tmp/t38-focused-final.log`, exit 0);
+affected consumers 292 tests passed (`/tmp/t38-affected-final.log`, exit 0);
+targeted reminder consumers 20 tests passed
+(`/tmp/t38-reminder-consumers-final.log`, exit 0); diff check passed. The 20-test
+helper/capture run observed preceding subject
+`469dbca21c5b89929d68673157742a23cbee5c7dbf97469becdc0d6c5516349f`, before the final
+adapter-only unresolved-owner lifecycle guard; the final 292-test command includes
+those same modules on the final subject. The dependency
+selection extends the focused list because shared exception/issue formatting,
+domain validation and acceptance publication affect capture, move, lifecycle,
+comment, cached selection, CLI composition and storage consumers. It was repeated
+after final formatter/identity and unresolved-owner lifecycle edits to observe the same final subject. Earlier
+feedback exposed fixture freshness expectations for early identity failure,
+explicit promotion syntax, the report owner/occurrence join, and existing outside-scope ownership-first
+filtering; these were fixed
+without skips, weaker assertions or a provider emulator.
+
+Limits: controlled traces establish the application behavior and pinned request
+conformance, not live provider state or universal combined-response inclusion.
+Reminders alone still cannot discover never-seen tasks. StateStore's existing
+managed snapshot/history membership intersection is reused without schema change;
+no owner index, recovery engine, diagnostic reads or mutation replay was added.
+Copied delivery probes were inspected; no affected unknown-owner failure fixture
+required migration. No complete worker suite or duplicate acceptance task was
+introduced. The unchanged runner `final-delivery` / `./scripts/verify-clean` owns
+the one complete offline suite and distinct copied-entrypoint, PATH and real-less
+probes on the integrated subject; this entry does not claim that gate ran here.
+
+### T38 correction — diagnostic scope and init provenance (2026-10-30)
+
+Subject: uncommitted correction to reporting baseline
+`8ad4dcca8a7ec58f628605eea9a680edbcca9bc5`, in the assigned correction worktree.
+The rejected integration's two findings were confirmed. Early diagnostics assumed
+all raw Sync owners/projects were safe context; init replay assumed all replayed
+items were freshly observed. Neither assumption holds. Early reminder failures
+now use scoped managed owners or retained managed context, suppressing unused
+payload fields when managed relevance cannot be established. Init identifies its
+injected prior-only ancestors before mapping, preserving cached labels even when
+mapping fails. A genuine freshness update still establishes fresh provenance.
+The optional retrieval keyword is documented in adapter/API.md; existing callers,
+Current/Result shapes, storage formats and injected ordinary retrieval hooks are
+unchanged. No additional reads or publication/recovery path was introduced.
+
+Distinguishing regressions extend the existing strict fixtures:
+`PublicReminders.test_early_unrelated_reminder_failures_do_not_disclose_payloads`
+checks public refresh stderr/nonzero status, empty stdout, exact one/two normal
+reads, unchanged protected files and absence of outside title/project/unused
+schedule/type for malformed identity, missing owner, invalid lifecycle and
+contradictory ownership. `InitTests.test_repeat_init_injected_ancestor_failure_context_is_cached`
+starts with a saved parent and child, then returns only the completed child and
+an invalid reminder for the omitted parent. Date-only mapping fails after two
+normal reads with cached parent/category context; malformed identity fails after
+one read with cached context. Both preserve protected bytes and submit no writes.
+These synthetic records use tests/support/reminders.py and the existing
+provider-shaped item/project fixtures, sourced to the retained API-v1
+NotificationSyncView identity/lifecycle/type/minute_offset/open due definitions
+and Sync resources. Unsupported managed schedule restrictions remain product
+rules. No provider contradiction was found.
+
+Commands and observations on the corrected subject:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_reminders.PublicReminders.test_early_unrelated_reminder_failures_do_not_disclose_payloads tests.workflows.init.test_init.InitTests.test_repeat_init_injected_ancestor_failure_context_is_cached -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.adapter.current.test_reminders tests.adapter.current.test_tolerance tests.adapter.commands.test_reminders tests.workflows.sync.test_sync tests.workflows.init.test_init tests.workflows.init.test_tolerance tests.workflows.report.test_report tests.workflows.report.test_tolerance tests.cli.test_reminders tests.local.test_reminders -v
+git diff --check
+```
+
+Directed regressions: 2 tests passed, exit 0. Focused suite: 219 tests passed,
+exit 0, captured in `/tmp/t38-focused.log`. Initial directed feedback exposed
+init's local Binding lacking domain category_ids; the helper now supports both
+binding representations and the final focused command includes that correction.
+An additional inline `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -` controlled
+regression comparison loaded HEAD's `_merge` and `_wire_reminder_context` by AST
+from `git show HEAD:todo_lib/adapter/current.py`, adapting only the new optional
+merge keyword away, and ran those same two tests. It confirmed five assertion
+failures (four disclosure variants and missing cached ancestor label), no test or
+transport errors; its assertion of those expected failures exited 0, captured in
+`/tmp/t38-rejected-regressions.log`. This comparison isolates rejected diagnostic
+assumptions, rather than claiming a complete execution of the old subject.
+Diff whitespace check passed.
+
+Content binding (SHA-256 before this evidence-only append):
+
+```text
+787b2a151be758fcf96503e5fdc452e8aff49efcf0814d3ddd94d7ee988c8da7  todo_lib/adapter/current.py
+6c674b9e4d0f4c544a66106cd6f0d90405ecfef9843fe91d2ee0edd28436a401  todo_lib/workflows/init.py
+74efc4409b827d95afee994502e073d9897d6e224bbac9cfa306ad09a0b8b5d5  todo_lib/adapter/API.md
+04d5b2c0477bf0f3e60fcf9763f2c0b6e78034b1f7411390feab70ac216eb019  tests/cli/test_reminders.py
+9610d956570ad60f1564b30e9969fb9915d8a6ca61be5ef4f989294e75276718  tests/workflows/init/test_init.py
+```
+
+Limits: offline synthetic evidence only; no live account, credentials or network.
+The focused suite retains accepted one-dispatch move/reload, managed-only delta
+membership, required history discovery, report comment-owner/cursor protection,
+strict managed failures and existing escaping/redaction evidence. The correction
+changes diagnostics/provenance only, so copied fixtures remain unaffected. No
+additional broad worker suite was needed. The unchanged runner final-delivery
+owns the complete suite and copied-entrypoint/PATH/real-less probes on the new
+integrated subject; earlier integrated passes do not certify this correction.
+
+### T38 correction: current category scope before early diagnostics (2026-10-30)
+
+Subject: uncommitted correction on task baseline
+`dd168babc8451d48532f986de8d00a69fa95b039`, addressing the reproduced disclosure
+in integrated subject `edbd2d7356a56c9e38ae5f7bd4f609225d837289`.
+The failed assumption was that saved/bound category membership authorized fresh
+owner and project payloads before current project validation. A category's current
+parent/lifecycle/sharing metadata can invalidate that assumption. Early reminder
+context now requires current merged project metadata establishing an active,
+personal, unshared direct child. Delta omissions still use the proven seeded
+baseline. Saved membership alone supplies no fresh scope authority. A previously
+managed owner instead uses retained title/category with cached labels. A
+never-known owner receives only safe identity context. Original identity failure,
+classification, publication protection and read counts remain unchanged; no public
+signature, persisted representation, retrieval or recovery behavior changed.
+
+The public CLI regression
+`PublicReminders.test_departed_category_cannot_authorize_fresh_failure_context`
+uses the existing strict HTTP boundary, StateStore fixtures and reminder helpers.
+It distinguishes full and incremental responses with category movement to another
+parent or the top level, deletion, archival, sharing and workspace transfer, for
+both a new owner and an already managed owner. Each malformed reminder ID fails
+with nonzero status, empty stdout, exactly one read, unchanged cache/history/
+binding/cursor bytes and no new outside title/project disclosure. Never-known
+owners disclose no unused type/schedule; known owners retain safe reminder fields
+and cached Parent/category context. The same test ran before the implementation
+change: 24 assertion failures, exit 1, exposing the outside title. After correction
+it passes. Existing active managed-context, escaping/redaction, unrelated-owner,
+repeat-init cached ancestor and lifecycle/report cases also pass.
+
+Provider source inspection: retained
+`docs/design/external/todoist/upstream/api-v1.openapi.json`,
+PersonalProjectSyncView required parent_id (nullable string), is_deleted,
+is_archived and is_shared, plus NotificationSyncView required id/item_id/lifecycle/
+type and nullable open due. Fixtures remain synthetic provider-shaped records;
+managed scope is an application restriction. No provider contradiction or new
+provider guarantee is asserted.
+
+Commands executed from the assigned worktree root:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_reminders.PublicReminders.test_departed_category_cannot_authorize_fresh_failure_context -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_reminders.PublicReminders.test_departed_category_cannot_authorize_fresh_failure_context tests.cli.test_reminders.PublicReminders.test_early_unrelated_reminder_failures_do_not_disclose_payloads tests.workflows.init.test_init.InitTests.test_repeat_init_injected_ancestor_failure_context_is_cached -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.adapter.current.test_reminders tests.adapter.current.test_tolerance tests.adapter.commands.test_reminders tests.workflows.sync.test_sync tests.workflows.init.test_init tests.workflows.init.test_tolerance tests.workflows.report.test_report tests.workflows.report.test_tolerance tests.cli.test_reminders tests.local.test_reminders -v
+git diff --check
+```
+
+The first command is the rejected-helper comparison above (captured in
+`/tmp/t38-departed-before.log`). The corrected directed command passes 3 tests,
+exit 0 (`/tmp/t38-departed-after.log`). The focused command passes 220 tests,
+exit 0 (`/tmp/t38-focused-correction.log`). Whitespace validation passes.
+Content binding for the corrected executable/test subject:
+
+```text
+4f9c248016c893b45f16f2394a75f03e1d2752f044b2116ba74e6bbf8656350e  todo_lib/adapter/current.py
+923bf5438dea0ba3f0f60eaa4b17e35189fa9e802bd986846196b9759da01ef2  tests/cli/test_reminders.py
+```
+
+Limits: offline synthetic evidence only, no real account/credentials/network.
+The change is diagnostic scope filtering; no copied fixture or probe adaptation
+was needed. No additional broad worker run was performed. The unchanged runner
+final-delivery owns the complete suite and copied-entrypoint/PATH/real-less probes
+on the integrated subject; previous passes do not certify this correction.

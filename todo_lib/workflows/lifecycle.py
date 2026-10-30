@@ -287,9 +287,11 @@ class LifecycleWorkflow:
                     state = self.synchronizer.reconcile_accepted_locked(result)
                     snapshot = state.snapshot
                     if result.issues:
-                        raise d.DomainError('; '.join(result.issues) +
-                            '. Remote operation accepted; do not replay. Read-only recovery: todo --refresh now.' +
-                            ' If synchronization still rejects invalid remote state, repair that state externally.')
+                        from todo_lib.domain.reminder_context import repair_guidance
+                        error = d.DomainError('; '.join(result.issues) +
+                            '. Remote operation accepted; do not replay. ' + repair_guidance(result.issues))
+                        error.managed_reminder = any(getattr(i, 'managed_reminder', False) for i in result.issues)
+                        raise error
                 else:
                     # Read-only reconciliation also follows API rejection/unknown.
                     self.synchronizer.refresh_locked(remote_outcome=result.outcome.value)
@@ -320,7 +322,9 @@ class LifecycleWorkflow:
                 stderr.append(f'{label}: {action} {identities[target]}')
             if any(o.outcome in ('accepted', 'unknown') for o in outcomes):
                 stderr.append('Do not repeat completion or undo to repair the cache.' +
-                    (' After repairing the local validation problem or manually restoring a consistent saved set, use todo --refresh now.'
+                    (' Repair the identified managed reminder externally before synchronizing.'
+                     if getattr(failure, 'managed_reminder', False) else
+                     ' After repairing the local validation problem or manually restoring a consistent saved set, use todo --refresh now.'
                      if getattr(failure, 'refresh_permitted', True) is False else
                      ' Read-only recovery: todo --refresh now.'))
         document = p.document('\n'.join(r.stdout for r in receipts if r.stdout), '\n'.join(stderr))
