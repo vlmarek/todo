@@ -1,9 +1,40 @@
 # todo-3 product specification
 
-Design revision: **18 — combine ordinary mutations with incremental Sync, 2026-10-29**.
+Design revision: **19 — tolerate unknown reminder owners, 2026-10-30**.
 State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 18
+## Current revision 19
+
+Read [reminder-ownership.md](reminder-ownership.md) first. After normal managed-state
+and lifecycle reconciliation, silently discard live reminders with usable identity
+and owner context whose owners remain unknown to managed state. Such reminders do
+not trigger ownership searches, full-refresh recovery, warnings or persistence.
+Previously known managed owners and owners required to verify the current
+operation retain strict reconciliation. Apply the same boundary during
+initialization, synchronization, mutation reconciliation, explicit refresh and
+reporting; comments, activity and ordinary report/task-discovery duties are unchanged.
+
+REQ-SYNC-039 narrowly qualifies unknown-reminder-owner failure duties;
+REQ-OUT-029 adds available managed-reminder failure context without diagnostic
+requests; REQ-VERIFY-037 defines representative distinguishing evidence. Preserve
+earlier definitions and accepted assignments as history. The accepted consequence
+is that reminders alone do not discover never-seen managed tasks, including tasks
+completed between synchronizations. Unknown ownership is not proof of external
+scope or lifecycle status.
+
+The operator answered yes to ignoring never-known owners after normal
+reconciliation, and yes to including already-available task/category, reminder ID,
+type and schedule information in managed-reminder failures. They then approved the
+concrete two-document proposal and requested fresh cml-plan authoring followed by
+delegated cml operator continuation, stopping for serious persistent failures or a
+further design/plan change. That operational authorization is separate from this
+product agreement. Exact excerpts and proposal context are retained externally.
+This Design pass changes only the two documented files; it grants no broader
+scope, provider guarantee or new recovery engine. Planning owns the necessary
+follow-up assignments, compatible adaptations and proportional offline evidence.
+No product question or new provider investigation remains in this scope.
+
+## Preserved revision 18
 
 Read [mutation-response-reuse.md](mutation-response-reuse.md) first. Ordinary
 task/step mutations request incremental current resources in the same Sync request
@@ -490,7 +521,7 @@ duplicate anonymous activity entries are accepted; omitted work is not.
 12. [todoist-dependencies.md](todoist-dependencies.md): informative ownership context.
 
 The `REQ-*` and `OUT-*` definitions specify behavior, with the scoped clarification
-and successor precedence in mutation-response-reuse.md,
+and successor precedence in reminder-ownership.md, mutation-response-reuse.md,
 mutation-retrieval-reuse.md, routine-notices.md,
 named-timezone-scheduling.md, item-date-display.md, cached-selection.md,
 completion-reconciliation.md, report-retrieval-reuse.md, request-conformance.md,

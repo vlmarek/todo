@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-017
-predecessor_revision_id: TODO3-PLAN-016
+revision_id: TODO3-PLAN-018
+predecessor_revision_id: TODO3-PLAN-017
 contract_sources:
+- docs/design/reminder-ownership.md
 - docs/design/mutation-response-reuse.md
 - docs/design/external/todoist/combined-response-notes.md
 - docs/design/mutation-retrieval-reuse.md
@@ -853,6 +854,16 @@ checks:
     tests.workflows.test_cached_selection tests.workflows.comments.test_workflow -v
   prerequisite_task_refs:
   - T37
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t38-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.current.test_current tests.adapter.current.test_reminders
+    tests.adapter.current.test_tolerance tests.adapter.commands.test_reminders tests.workflows.sync.test_sync
+    tests.workflows.init.test_init tests.workflows.init.test_tolerance tests.workflows.report.test_report
+    tests.workflows.report.test_tolerance tests.cli.test_reminders tests.local.test_reminders -v
+  prerequisite_task_refs:
+  - T38
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -7558,6 +7569,246 @@ tasks:
   - Migrate affected existing workflow/adapter/local/CLI and copied fixtures before shared gates;
     unchanged final-delivery performs one complete suite and distinct copied/PATH/real-less probes.
     Append truthful current-subject observations/limits to docs/implementation/acceptance-evidence.md.
+- id: T38
+  title: Tolerate never-known reminder owners and explain managed failures
+  origin_stage_ref: reminder-owner-tolerance
+  observable_outcome: All shared workflows silently discard never-known, operation-irrelevant reminders
+    after normal reconciliation, preserve strict managed validation and publication, and emit safe available-context
+    managed-reminder failures without extra reads.
+  dependencies:
+  - task_ref: T37
+    kind: interface
+    interface_ref: combined-operation-evidence
+    reason: Adapt the accepted combined mutation/current response path and preserve exact actual-state
+      evidence and no redundant reads.
+  - task_ref: T08
+    kind: interface
+    interface_ref: synchronized-state
+    reason: Extend the shared lifecycle/history reconciliation and protected publication boundary.
+  - task_ref: T11
+    kind: interface
+    interface_ref: initialization
+    reason: Apply the same ownership rule in the separate initialization observation path without adding
+      history preflight.
+  - task_ref: T15
+    kind: interface
+    interface_ref: report-finalization
+    reason: Preserve complete required report evidence and cursor/output ordering while sharing reminder
+      filtering.
+  - task_ref: T17
+    kind: repository_state
+    interface_ref: null
+    reason: Migrate any affected copied acceptance fixture and append observed evidence before the unchanged
+      shared gate.
+  goal: 'Implement Design revision 19 on accepted integration 6d1f5c67da96c16ada615c88892b9b7397701b90.
+    Read docs/design/reminder-ownership.md first: its narrow successor precedence governs this follow-up
+    wherever inherited unknown-owner failure text conflicts. Preserve all T01-T37 accepted effective assignments
+    and historical evidence. Deliver one consistent reminder-reconciliation behavior across initialization,
+    ordinary synchronization/explicit refresh, ordinary mutation verification and reports, with available-context
+    managed failures. Use the existing machinery and compatible public APIs; no new synchronization engine,
+    owner index or recovery layer.
+
+
+    Source navigation: adapter/current.py Current carries snapshot, sync_token, transient unresolved_reminders/reminder_duplicates,
+    reminder_ids and current_snapshot; retrieve(..., prior, known, reminder_ids, supplied_response, supplied_token)
+    merges real full/delta resources and maps managed active owners in _map/_reminder. workflows/sync.py
+    _reconcile(current, known, history, adapter, ..., affected=None) resolves known disappearance/completion
+    and required archived comments before mapping final unresolved reminders; affected_ids/OperationEvidence
+    scope accepted writes. Synchronizer.refresh_locked(operation_result=...) validates/publishes the exact
+    operation result. workflows/init.py _observe has a separate full/freshness and retained-owner reminder
+    loop; workflows/report.py Reporter._prepare retrieves complete report evidence and calls _reconcile.
+    adapter/commands.py Gateway.execute(Operation, before=Current, ...) returns Result(outcome, operation,
+    target_id, after, actual, evidence, issues, ... before_token); capture/moves/lifecycle/comments consume
+    this result and stop on accepted verification failure. Preserve those shapes and injected retrieval/history
+    hooks. domain/model.py validate currently emits uncontextualized reminder capability/eligibility/duplicate-offset
+    errors; current._reminder and final historical mapping can fail earlier. cli.py _SafeStream supplies
+    final secret redaction. Inspect directly affected callers/fakes before changing shared signatures;
+    document any material compatible API change in existing API.md files.
+
+
+    After each workflow''s normal required current/history/lifecycle reconciliation, discard only a live
+    reminder with usable stable reminder and owner IDs whose owner remains never-known in managed current/retained
+    data and is not required to verify the operation. Preserve transient records until normal required
+    reconciliation has had its opportunity to establish a managed owner. Do not trigger additional ownership/completed/activity/comment
+    searches, full refresh, warnings or diagnostic reads solely for discarded reminders, and do not parse
+    their unused type/schedule/body fields. Keep ordinary required task/history discovery and scope-entry
+    hydration. Known managed owners, required operation owners, unusable identity/ownership context, relevant
+    malformed reminders and other resource kinds remain strict. Keep final live duplicate checks for relevant
+    reminders and authoritative replacement/update/tombstone/full-omission semantics; do not resurrect
+    superseded records or add historical contradiction tracking.
+
+
+    Keep discarded unrelated payloads and IDs out of saved cache/history and current-resource membership.
+    local/store.py prepare_candidates already intersects current_reminder_ids with managed snapshot/history
+    reminder keys: verify and reuse this existing boundary rather than infer persistence from raw Current.reminder_ids
+    or invent a schema migration. Preserve valid membership for reminders attached through normal history
+    to retained archived owners, baseline/token pairing, subsequent delta updates/deletions and full omission.
+    Do not drop pending managed context or represent cached owner data as newly verified. Preserve scoped
+    ordinary-write history/reuse and sufficient combined-response publication before each next write;
+    no mutation replay or automatic cache clearing.
+
+
+    For failures concerning managed reminders, add the actual reason, reminder ID and available owner
+    title/category, type and schedule/offset from information already available to that command. Cover
+    active mapping, final historical mapping/contradictions and relevant domain invariant failures, including
+    multiple reminders where needed to identify duplicate offsets. Use safe summaries of malformed fields,
+    existing title escaping and token redaction; no raw arbitrary object repr/dump, unrelated data or
+    invented context. Mark information available only from a prior observation as cached. Missing fresh
+    owner fields may use safely available cached context with that label; never issue extra diagnostic
+    API requests. Preserve original exception/outcome classification, stderr/nonzero status, accepted/unknown
+    mutation facts, saved-file/publication diagnostics and no-replay guidance. Do not recommend repeating
+    ordinary refresh or cache clearing as a cure for malformed managed data. Diagnostic layout and small
+    shared helper placement are delegated; domain stays offline.
+
+
+    Adapt affected existing tests and fixtures before the unchanged shared final-delivery gate. In tests/workflows/sync/test_sync.py,
+    test_reminder_final_invalid_contradictory_or_unresolved_owner_preserves_state currently groups a never-seen
+    C case (resolved=False) with still-invalid managed cases: separate the new silent success from known-owner/relevant
+    failure protection. Reuse reminder_hydration, strict Wire/Expected transports, tests/support/reminders.py
+    and MutationReuseTests rather than building a provider emulator. Existing test modules named by t38-focused
+    are concrete initial feedback; add cases there or proportionately extend discovery and run their explicit
+    commands. Assess shared init/refresh/report and capture/move/lifecycle/comment consumers, with necessary
+    caller/fake/test adaptations inside this task''s scope.
+
+
+    Establish representative distinguishing offline evidence: start from a full read containing an unrelated
+    owner, save the managed-only baseline, then deliver a reminder-only delta for that now-never-known
+    owner with unused unsupported content. The normal operation succeeds silently, sends no added owner/recovery
+    reads, advances its matching token/state and saves no ignored payload/membership. A separate normal-required-history
+    case must discover C and attach/validate its reminder (do not pre-seed the owner that this case is
+    meant to discover); keep known-owner unresolved lifecycle and managed invalid schedule/identity failures
+    with unchanged protected bytes before publication. Exercise usable-ID unknown-owner tolerance consistently
+    through the distinct init _observe path and a report that still performs required history/comment
+    retrieval; preserve missing qualifying comment-owner failure and report cursor protection. Reuse existing
+    lifecycle/finalization cases when adequate rather than duplicate every command/layer.
+
+
+    At the actual Transport -> Gateway -> Synchronizer -> StateStore boundary, one accepted ordinary mutation
+    (prefer the reported category/parent move using existing strict move or mutation harness) accompanied
+    by an ignored reminder must dispatch exactly one mutation command, establish the actual managed result,
+    publish normalized state/token and remain silent about the ignored reminder. Assert the saved result
+    through reload; keep combined resource reuse and required extra reads unchanged. Contrast managed-reminder
+    failures with available active and cached owner context, reminder identity/type/schedule or safe malformed
+    summary, retained original reason, stderr/nonzero and no added diagnostic reads; include synthetic
+    secret/unsafe-text and unrelated-data non-disclosure. Keep existing accepted/unknown/publication/interruption
+    stopping and history/cursor checks meaningful. Source-cite synthetic provider shapes against retained
+    API-v1 evidence; no real account/credentials/network.
+
+
+    This task also owns integrated acceptance of its coupled change and appends exact observed subjects,
+    commands, outcomes and limits to docs/implementation/acceptance-evidence.md without editing the frozen
+    ledger or historical observations. Run focused/directed checks for implementation feedback; the existing
+    runner final-delivery performs the one complete offline suite and distinct copied-entrypoint/PATH/real-less
+    probes on the integrated subject. Adapt copied fixtures/probes only if affected; do not add another
+    mandatory full worker run or a duplicate acceptance task.'
+  failure_domain: Managed reminder ownership/reconciliation and truthful contextual failure across the
+    shared current/lifecycle boundary.
+  verification_rationale: Ownership filtering and context errors share transient Current evidence, historical
+    resolution and callers; splitting them would accept inconsistent initialization/mutation/report behavior
+    or a failing old fixture boundary. One task provides a usable coherent result without adapters or
+    speculative interfaces. t38-focused supplies bounded mapping/lifecycle/init/report/diagnostic feedback,
+    including strict identity and negative schedule checks, not only the silent-success algorithm. A targeted
+    real-transport accepted-write trace proves one dispatch and saved actual state; existing failure and
+    history/cursor tests preserve consequential boundaries. final-delivery reuses the existing single
+    complete-suite gate and distinct copied/PATH/real-less probes; workers need not repeat the full suite.
+  correction_instructions: Apply REQ-SYNC-039 only to never-known and operation-irrelevant owners after
+    normal required reconciliation. Do not convert unknown ownership into proof of outside scope/completion/deletion,
+    relax comments/activity/report completeness, skip relevant malformed data, add owner searches or generic
+    recovery, replay an accepted mutation, persist or print ignored data, or weaken existing gates. New
+    work changes accepted code through this follow-up only. Stop and report an actual provider contradiction
+    or further substantive Design/Plan change.
+  requirement_refs:
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
+  constraint_refs:
+  - REQ-SYNC-013
+  - REQ-SYNC-021
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-SYNC-038
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CLI-036
+  - REQ-INIT-008
+  - REQ-REPORT-003
+  - REQ-REPORT-011
+  - REQ-REPORT-014
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-OUT-015
+  - REQ-OUT-019
+  - REQ-DOM-018
+  - REQ-VERIFY-003
+  exclusion_refs:
+  - OUT-PRIVACY-001
+  - OUT-OPS-003
+  - OUT-REPORT-001
+  - OUT-TEST-001
+  - OUT-LOGGING-001
+  component_refs:
+  - adapter
+  - domain
+  - local
+  - workflows
+  - cli
+  - presentation
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - combined-operation-evidence
+  - synchronized-state
+  - initialization
+  - report-finalization
+  expected_paths:
+  - todo_lib/adapter/**
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/workflows/**
+  - todo_lib/cli.py
+  - todo_lib/presentation/**
+  - tests/adapter/**
+  - tests/domain/**
+  - tests/local/**
+  - tests/support/**
+  - tests/workflows/**
+  - tests/cli/**
+  - tests/presentation/**
+  - tests/delivery/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - README.md
+  - docs/user/**
+  - todo_lib/syntax/**
+  - scripts/**
+  check_refs:
+  - t38-focused
+  required_evidence:
+  - t38-focused
+  - 'Strict real-transport accepted ordinary mutation plus unknown reminder: exactly one mutation dispatch,
+    no added ownership/recovery requests, actual result and token saved/reloaded, no warning or unrelated
+    payload/membership persisted.'
+  - Normal history establishes and validates a previously unresolved owner; initialization and report
+    shared/independent paths preserve required reads. Known managed lifecycle, relevant malformed identity/schedule/final
+    contradiction, protected bytes and qualifying report-owner/cursor failures remain strict.
+  - Managed reminder errors show actual cause, ID, available owner/category, type and safe schedule/offset
+    context with truthful cached labels, safe scalar escaping, synthetic token redaction, correct stderr/status/outcome
+    and no additional diagnostic reads.
+  - Append current-subject evidence/limits to docs/implementation/acceptance-evidence.md; preserve historical
+    bytes and migrate affected fixtures before unchanged final-delivery (one complete offline suite plus
+    distinct copied/PATH/real-less probes).
 stages:
 - id: release-1
   final_project: false
@@ -7724,6 +7975,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -7891,6 +8145,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: todoist-coexistence
@@ -8058,6 +8315,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: request-conformance
@@ -8225,6 +8485,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: report-retrieval-reuse
@@ -8392,6 +8655,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: completion-reconciliation
@@ -8559,6 +8825,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: cached-selection
@@ -8726,6 +8995,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 
@@ -8894,6 +9166,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: named-timezone-scheduling
@@ -9061,6 +9336,9 @@ stages:
   - REQ-SYNC-037
   - REQ-VERIFY-034
   - REQ-VERIFY-035
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: mutation-retrieval-reuse
@@ -9228,6 +9506,9 @@ stages:
   - REQ-OUT-027
   - REQ-OUT-028
   - REQ-VERIFY-034
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
   check_refs:
   - final-delivery
 - id: combined-mutation-response
@@ -9390,6 +9671,179 @@ stages:
   - REQ-VERIFY-032
   - REQ-VERIFY-033
   - REQ-VERIFY-035
+  deferred_requirement_refs:
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-VERIFY-034
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
+  check_refs:
+  - final-delivery
+- id: reminder-owner-tolerance
+  final_project: false
+  active_requirement_refs:
+  - REQ-SYNC-039
+  - REQ-OUT-029
+  - REQ-VERIFY-037
+  satisfied_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-036
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-INIT-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-OUT-025
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-SYNC-038
+  - REQ-TIME-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-024
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-VERIFY-027
+  - REQ-VERIFY-028
+  - REQ-VERIFY-029
+  - REQ-VERIFY-030
+  - REQ-VERIFY-031
+  - REQ-VERIFY-032
+  - REQ-VERIFY-033
+  - REQ-VERIFY-035
+  - REQ-VERIFY-036
   deferred_requirement_refs:
   - REQ-OUT-026
   - REQ-OUT-027

@@ -1,3 +1,38 @@
+# Current continuation: TODO3-PLAN-018
+
+Approved Design revision 19 in `docs/design/reminder-ownership.md` governs this
+follow-up. T38 owns the coupled unknown-reminder-owner policy, contextual managed
+failures, shared initialization/refresh/mutation/report consumers, necessary fixture
+adaptations and integrated acceptance. Reuse accepted integration
+`6d1f5c67da96c16ada615c88892b9b7397701b90`; preserve all 37 accepted effective
+assignments, definitions/interfaces/checks and historical evidence. The successor's
+narrow precedence overrides earlier unresolved-owner failure wording only for its
+never-known, operation-irrelevant reminder exception.
+
+The appended nonfinal stage activates REQ-SYNC-039, REQ-OUT-029 and REQ-VERIFY-037.
+All 156 earlier planned requirements are satisfied; the four revision-16 notice
+removal requirements remain deferred under their separate instruction. No manual
+delivery or final project completion is invented. Keep ordinary required history,
+known managed and operation-result verification, privacy, full/delta/token
+provenance, no replay and publication between writes. Ignored reminders cause no
+extra discovery/recovery, routine output or persistence. Managed-reminder failures
+use only safe available command context and mark cached owner information.
+
+One coherent task keeps shared filtering/diagnostics and affected fixtures usable
+before the unchanged final-delivery gate. Existing component/interface contracts
+remain compatible; no new independently delivered capability or provider contract
+is needed. T38 may change shared paths only for its owned behavior and necessary
+consumer/fixture adaptations. Append observations to acceptance-evidence.md;
+workers do not alter the frozen contract ledger or run an extra mandatory full
+suite.
+
+The retained operator instruction authorizes scoped preparation commits and
+subsequent delegated implementation under existing settings and limits. The
+coordinating operator will inspect the concrete validated adoption/resume action;
+this Planning pass invokes no adoption, resume or paid work. Stop for a serious
+persistent failure or further needed Design/Plan change. Earlier sections below
+retain their historical scopes and provenance.
+
 # Current continuation: TODO3-PLAN-017
 
 Approved Design revision 18 in `docs/design/mutation-response-reuse.md` governs

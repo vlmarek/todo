@@ -1,11 +1,10 @@
 # Prepared ownership and evidence
 
-Design revision 18 adds combined ordinary mutation and incremental Sync response
-reuse. T37 owns implementation, consumer/strict-fixture adaptation and integrated
-acceptance. All 154 earlier planned requirements are satisfied; all 36 accepted
-assignments remain unchanged. Four revision-16 notice-removal requirements remain
-deferred under their separate direct-delivery instruction, with exact operator
-drafts preserved outside the clean preparation target. No manual coverage or final
+Design revision 19 adds never-known reminder-owner tolerance and useful managed
+reminder failures. T38 owns implementation, shared consumer/fixture adaptation and
+integrated acceptance. All 156 earlier planned requirements are satisfied; all 37
+accepted assignments remain unchanged. Four revision-16 notice-removal requirements
+remain deferred under their separate instruction. No manual coverage or final
 completion is claimed. Observations append to
 `docs/implementation/acceptance-evidence.md`.
 
@@ -855,15 +854,33 @@ requirements:
     primary_owner: null
     planned_evidence: []
   REQ-SYNC-038:
-    stage_status: active
-    primary_owner: T37
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t37-focused
     - final-delivery
   REQ-VERIFY-036:
-    stage_status: active
-    primary_owner: T37
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t37-focused
+    - final-delivery
+  REQ-SYNC-039:
+    stage_status: active
+    primary_owner: T38
+    planned_evidence:
+    - t38-focused
+    - final-delivery
+  REQ-OUT-029:
+    stage_status: active
+    primary_owner: T38
+    planned_evidence:
+    - t38-focused
+    - final-delivery
+  REQ-VERIFY-037:
+    stage_status: active
+    primary_owner: T38
+    planned_evidence:
+    - t38-focused
     - final-delivery
 ```
