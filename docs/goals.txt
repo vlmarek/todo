@@ -1,0 +1,72 @@
+TODO PROJECT GOALS
+==================
+
+Know what needs attention. Show what got done.
+
+todo helps one person manage daily work from the terminal, using Todoist
+for task storage, phone and web access, and reminder delivery. It should
+reduce the effort of deciding what to do, maintaining work, and reporting
+progress. These goals guide product and implementation choices; the
+accepted specification defines exact behavior and scope.
+
+- Make the next action clear. Show actionable tasks and steps in a useful
+  urgency order, with enough context to understand them. Keep intentionally
+  deferred work out of the normal queue and bring it back according to
+  its schedule. Prioritize avoiding missed urgent work over perfect filtering.
+
+- Reduce the effort of maintaining work. Make capture, inspection, progress
+  notes, scheduling, completion and ordinary changes direct and consistent.
+  Teach clear canonical commands, keep help useful, and avoid making the
+  user understand internal storage or synchronization machinery.
+
+- Keep progress visible. Support comments and completed steps as meaningful
+  progress before a whole task is finished. Preserve their relationship
+  to the task so reports explain both completed work and ongoing effort.
+
+- Make reporting trustworthy. Include eligible completions and progress
+  within the requested interval. Preserve known unreported work across
+  refreshes and cache rebuilding. Advance the report boundary only after
+  complete final output succeeds; never silently skip work because required
+  information could not be retrieved.
+
+- Change the intended item. Resolve ambiguity explicitly, keep identity
+  stable through renames and moves, and show the scope and consequences
+  of changes where confirmation is required. Do not guess the user's target
+  or silently repair unrelated state.
+
+- Respect scheduling intent. Keep attention dates, recurrence, hiding and
+  reminders coherent. Handle account timezones and explicit input zones
+  consistently, explain unsupported or ambiguous times, and show the actual
+  accepted schedule rather than merely repeating the requested expression.
+
+- Work alongside Todoist. Treat Todoist as authoritative for remote work
+  and accept supported changes made through its other clients. Validate
+  information needed for the managed workflow without rejecting harmless
+  external metadata or rewriting data merely to enforce CLI conventions.
+  Keep unrelated account data outside the application's retained scope.
+
+- Keep everyday interaction responsive. Use saved state for ordinary reads,
+  make refresh explicit, and reuse sufficient retrieved evidence. Avoid
+  redundant requests and unrelated historical retrieval while preserving
+  verification of accepted changes and completeness of reports.
+
+- Tell the truth about outcomes. Distinguish successful changes, rejected
+  changes, uncertain remote outcomes and failures to save local state.
+  Explain what is known, what remains uncertain and the applicable next
+  step. Keep routine successful output concise and failures actionable.
+
+- Protect user data and control. Preserve required history, credentials,
+  account binding and report boundaries. Keep disposable cache separate
+  from information that cannot simply be fetched again. Never present
+  incomplete or invalid state as an empty workload or a complete report.
+
+- Keep the product focused and maintainable. Favor the smallest coherent
+  solution for this personal terminal workflow. Share domain rules and
+  command behavior, keep installation and recovery understandable, and
+  avoid speculative frameworks or features without a concrete user need.
+
+- Verify meaningful behavior. Test complete user workflows and consequential
+  failures, including selection, external changes, scheduling, partial
+  mutations and report finalization. Keep automated verification isolated
+  from real accounts, and distinguish simulated evidence from behavior
+  actually observed against Todoist.
