@@ -22,20 +22,18 @@ from todo_lib.workflows.capture import CaptureWorkflow
 from todo_lib.workflows.comments import CommentWorkflow
 from todo_lib.workflows.lifecycle import LifecycleWorkflow
 from todo_lib.workflows.reads import NoMatch, AmbiguityError, recent_candidates
-from todo_lib.workflows.sync import Synchronizer, SyncError
-from tests.adapter.current.test_current import delta, full, item, note, reminder, RESOURCES
+from todo_lib.workflows.sync import Synchronizer
+from tests.support.current import delta, item, note, reminder, RESOURCES
 from tests.support.http import ControlledHTTP, ExpectedRequest, Response
-from tests.workflows.capture import test_capture as capture
-from tests.workflows.comments import test_workflow as comments
-from tests.workflows.moves import test_moves as moves
-from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+from tests.support import capture as capture
+from tests.support import comments as comments
+from tests.support import moves as moves
+from tests.support.lifecycle import CommandRequest
 
 
 class CachedSelectionTests(unittest.TestCase):
     def setUp(self):
-        self.f = capture.CaptureTests('runTest')
-        self.f.setUp()
-        self.addCleanup(self.f.doCleanups)
+        self.f = capture.CaptureFixture(self)
         self.f.wire_items += [item('child', content='Saved child', parent_id='parent'),
                               item('leaf', content='Saved leaf', parent_id='child')]
         self.f.seed()
@@ -139,7 +137,7 @@ class CachedSelectionTests(unittest.TestCase):
         self.assertEqual(len(http.requests), 3)
 
     def test_mixed_destination_preserves_source_and_complete_known_subtree(self):
-        f = moves.MoveTests('runTest'); f.setUp(); self.addCleanup(f.doCleanups)
+        f = moves.MoveFixture(self)
         wf, http = f.workflow(f.after('B', 'P', 'cat'), {'id':'B', 'parent_id':'P'})
         result = wf.execute(['move', 'B', 'P'])
         self.assertEqual(result.snapshot.items['B'].parent_id, 'P')
@@ -148,7 +146,7 @@ class CachedSelectionTests(unittest.TestCase):
         self.assertEqual(result.snapshot.items['E'].parent_id, 'D')
 
     def test_move_accepts_changed_destination_category_and_detached_descendant(self):
-        f = moves.MoveTests('runTest'); f.setUp(); self.addCleanup(f.doCleanups)
+        f = moves.MoveFixture(self)
         rows = deepcopy(f.rows)
         for row in rows:
             if row['id'] in ('P','Q','B'):
@@ -379,7 +377,7 @@ class CachedSelectionTests(unittest.TestCase):
 
 class CachedEditorTests(unittest.TestCase):
     def setUp(self):
-        self.f=comments.WorkflowTests('runTest');self.f.setUp();self.addCleanup(self.f.doCleanups)
+        self.f = comments.CommentFixture(self)
 
     def test_cached_comments_seed_unchanged_and_invalid_buffers_without_requests(self):
         f=self.f
@@ -414,9 +412,7 @@ class CachedEditorTests(unittest.TestCase):
     def test_comment_receipts_use_reconciled_owner_title_and_hierarchy(self):
         for editing in (True, False):
             with self.subTest(editing=editing):
-                f = comments.WorkflowTests('runTest')
-                f.setUp()
-                self.addCleanup(f.doCleanups)
+                f = comments.CommentFixture(self)
                 if editing:
                     f.save(comments.encode_buffer(f.owner_comments()).replace('\nolder\n', '\nchanged\n'))
                     returned = [dict(n, content='changed') if n['id'] == 'z-older' else n for n in f.notes]
@@ -426,9 +422,6 @@ class CachedEditorTests(unittest.TestCase):
                     f.wire.command('note_add', {'item_id': 'C', 'content': 'added'})
                 state = comments.tree(returned)
                 state['items'][2].update(content='Remote leaf', parent_id='A')
-                f.wire.sync('delta-token', state)
-                f.wire.sync('full-token', delta())
-                f.wire.comments(returned)
                 f.wire.sync('delta-token', state)
                 f.wire.sync('full-token', delta())
                 result = f.edit() if editing else f.workflow.execute(['comment', 'Leaf', '--comment', 'added'])

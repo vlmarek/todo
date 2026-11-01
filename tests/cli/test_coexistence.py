@@ -8,23 +8,23 @@ from copy import deepcopy
 import unittest
 from unittest.mock import patch
 
-from tests.cli.test_cli import invoke
-from tests.workflows.capture import test_capture as f
-from tests.workflows.capture.test_coexistence import Terminal
-from tests.workflows.capture import test_reminders as reminders
-from tests.workflows.report import test_report as reports
-from tests.adapter.current.test_current import full, delta, item
+from tests.support.cli import invoke
+from tests.support import capture as f
+from tests.support.terminal import Terminal
+from tests.support import capture_reminders as reminders
+from tests.support import report as reports
+from tests.support.current import full, delta, item
 from tests.support.reminders import absolute, FIXED
 from todo_lib.workflows.comments import CommentWorkflow
 from todo_lib.syntax.help import render_help
 
 
 class PublicText(unittest.TestCase):
-    setUp = reports.Reports.setUp
-    put = reports.Reports.put
-    sync = reports.Reports.sync
-    boundary = reports.Reports.boundary
-    requests = reports.Reports.requests
+    setUp = reports.ReportSupport.setUp
+    put = reports.ReportSupport.put
+    sync = reports.ReportSupport.sync
+    boundary = reports.ReportSupport.boundary
+    requests = reports.ReportSupport.requests
 
     def test_help_teaches_imported_text_and_collision_distinctions(self):
         self.assertIn('Imported duplicates', render_help('rename'))
@@ -77,13 +77,13 @@ class PublicText(unittest.TestCase):
 
 
 class PublicSets(unittest.TestCase):
-    setUp = f.CaptureTests.setUp
-    state = f.CaptureTests.state
-    seed = f.CaptureTests.seed
-    refresh = f.CaptureTests.refresh
-    queue_refresh = f.CaptureTests.queue_refresh
-    operation = f.CaptureTests.operation
-    mixed = reminders.ReminderWorkflowTests.mixed
+    setUp = f.CaptureSupport.setUp
+    state = f.CaptureSupport.state
+    seed = f.CaptureSupport.seed
+    refresh = f.CaptureSupport.refresh
+    queue_refresh = f.CaptureSupport.queue_refresh
+    operation = f.CaptureSupport.operation
+    mixed = reminders.ReminderCaptureSupport.mixed
 
     def call(self, argv, **kwargs):
         result = invoke(self, argv, self.http, **kwargs)

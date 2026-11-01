@@ -9,90 +9,16 @@ Wire expectations below are literal independently chosen bounds and filters.
 """
 from datetime import datetime, timezone
 from io import StringIO
-import json
 import unittest
-from urllib.parse import parse_qsl, urlsplit
 
-from todo_lib.adapter.history import HistoryAdapter, HistoryError, Retrieval
-from todo_lib.adapter.transport import Transport
+from todo_lib.adapter.history import HistoryError, Retrieval
 from todo_lib.domain import Item, instant_from_wire as stamp, instant_text, instant_key
-from tests.support.http import ControlledHTTP, Response
+from tests.support.http import Response
+
+from tests.support.history import (HistorySupport, START, END, AFTER, COMPLETED, COMPLETED_QUERY, ACTIVITY_QUERY, item, event, comment, comments_query, Expected)
 
 
-START = '2026-10-20T12:00:00.123456701Z'
-END = '2026-10-20T12:00:00.123456709Z'
-AFTER = '2026-10-20T12:00:00.123456710Z'
-COMPLETED = '/tasks/completed/by_completion_date'
-COMPLETED_QUERY = [('since', '2026-10-20T12:00:00Z'),
-                   ('until', '2026-10-20T12:00:01Z'), ('limit', '200')]
-ACTIVITY_QUERY = [('date_from', '2026-10-20T12:00:00Z'),
-                  ('date_to', '2026-10-20T12:00:01Z'),
-                  ('limit', '200'),
-                  ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
-
-
-def item(identity='task', at=END, **kw):
-    raw = dict(id=identity, project_id='cat', parent_id=None, content='Title',
-               priority=4, checked=True, labels=[], due=None, added_at=None,
-               completed_at=at, is_deleted=False)
-    raw.update(kw)
-    return raw
-
-
-def event(identity=1, at=END, **kw):
-    raw = dict(id=identity, object_type='note', object_id='note',
-               event_type='updated', event_date=at, parent_item_id='step',
-               parent_project_id='cat', extra_data={'content': 'Observed old text', 'unknown': 123})
-    raw.update(kw)
-    return raw
-
-
-def comment(identity='note', **kw):
-    # No item_id: the scoped request supplies ownership.
-    raw = dict(id=identity, content='Current text', posted_at=START,
-               is_deleted=False, file_attachment=None)
-    raw.update(kw)
-    return raw
-
-
-def comments_query(owner):
-    return [('task_id', owner), ('limit', '200')]
-
-
-class Expected:
-    """Exact scalar fields and one JSON activity filter at the encoded boundary."""
-    def __init__(self, path, query):
-        self.path, self.query = path, list(query)
-
-    def check(self, request, timeout):
-        url = urlsplit(request.full_url)
-        assert url.scheme == 'https' and url.netloc == 'api.todoist.com'
-        assert url.path == '/api/v1' + self.path
-        assert request.get_method() == 'GET' and request.data is None
-        assert request.get_header('Authorization') == 'Bearer secret'
-        assert timeout == 30
-        actual = parse_qsl(url.query, keep_blank_values=True)
-        if self.path == '/activities':
-            # Independent retained parameter + x-codeSamples "Multiple event types".
-            # Compare decoded JSON, never allow repeated scalar filter values.
-            values = [v for k, v in actual if k == 'object_event_types']
-            assert len(values) == 1, 'activity filter must have exactly one value'
-            assert json.loads(values[0]) == [
-                'item:completed', 'item:uncompleted', 'note:added', 'note:updated', 'note:deleted']
-            actual = [(k, v) for k, v in actual if k != 'object_event_types']
-            expected = [(k, v) for k, v in self.query if k != 'object_event_types']
-        else:
-            expected = self.query
-        assert actual == expected, 'query drift or unsupported keys'
-
-
-class HistoryTests(unittest.TestCase):
-    def boundary(self, steps, stderr=None):
-        http = ControlledHTTP([(Expected(path, query), response if isinstance(response, Response)
-            else Response(json.dumps(response).encode())) for path, query, response in steps])
-        self.addCleanup(http.assert_done)
-        return HistoryAdapter(Transport('secret', opener=http), stderr=stderr), http
-
+class HistoryTests(HistorySupport, unittest.TestCase):
     def test_completed_cursorless_full_page_is_documented_terminal(self):
         rows = [item(str(n)) for n in range(200)]
         adapter, _ = self.boundary([(COMPLETED, COMPLETED_QUERY, {'items': rows, 'unknown': True})])

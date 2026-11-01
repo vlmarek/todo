@@ -22,11 +22,21 @@ from todo_lib.local import (StateStore, LocalError, History, empty_history,
 from todo_lib.local.codec import loads
 from todo_lib.syntax import parse, Cancelled
 from todo_lib.workflows import Synchronizer, SyncError
-from todo_lib.workflows.reads import (ReadWorkflow, execute, title_candidates,
-    select_child, select_title, choose, matches, move_destination_candidates,
-    recent_candidates, deletion_candidates, NoMatch, AmbiguityError)
-from tests.adapter.current.test_current import RESOURCES, full, delta, item, note
-from tests.adapter.history.test_history import Expected
+from todo_lib.workflows.reads import (
+    ReadWorkflow,
+    execute,
+    title_candidates,
+    select_child,
+    choose,
+    matches,
+    move_destination_candidates,
+    recent_candidates,
+    deletion_candidates,
+    NoMatch,
+    AmbiguityError,
+)
+from tests.support.current import RESOURCES, full, delta, item
+from tests.support.history import Expected
 from tests.support.http import ControlledHTTP, ExpectedRequest, Response
 
 

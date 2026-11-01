@@ -5,8 +5,7 @@ from todo_lib import domain as d
 from todo_lib.workflows.comments import (CommentError, encode_buffer, decode_buffer,
                                          ordered_comments)
 
-OLD = '2026-10-21T12:00:00.123456789012348Z'
-NEW = '2026-10-21T12:00:00.123456789012349Z'
+from tests.support.comments import OLD, NEW
 
 
 def comment(identity, body='body', timestamp=OLD):

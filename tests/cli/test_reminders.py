@@ -1,19 +1,19 @@
 """Real public CLI routing and streams with isolated state and synthetic transport."""
 import unittest
-from tests.cli.test_cli import invoke
-from tests.workflows.capture import test_capture as f
-from tests.workflows.capture.test_coexistence import Terminal
+from tests.support.cli import invoke
+from tests.support import capture as f
+from tests.support.terminal import Terminal
 from tests.support.reminders import absolute, FIXED
 from todo_lib.syntax.help import render_help
 
 
 class PublicReminders(unittest.TestCase):
-    setUp = f.CaptureTests.setUp
-    state = f.CaptureTests.state
-    seed = f.CaptureTests.seed
-    refresh = f.CaptureTests.refresh
-    queue_refresh = f.CaptureTests.queue_refresh
-    operation = f.CaptureTests.operation
+    setUp = f.CaptureSupport.setUp
+    state = f.CaptureSupport.state
+    seed = f.CaptureSupport.seed
+    refresh = f.CaptureSupport.refresh
+    queue_refresh = f.CaptureSupport.queue_refresh
+    operation = f.CaptureSupport.operation
 
     def test_noninteractive_preview_refuses_before_task_write(self):
         self.wire_reminders = [absolute('old', FIXED, item_id='parent')]
@@ -53,7 +53,7 @@ class PublicReminders(unittest.TestCase):
         self.assertTrue(all('commands' not in c for c in self.http.calls))
 
     def test_managed_failure_context_is_escaped_redacted_and_only_on_stderr(self):
-        from tests.adapter.current.test_current import delta
+        from tests.support.current import delta
         before = {name: (self.root / name).read_bytes() for name in
                   ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
         rows = [dict(i, content='Task secret\nsecond\tline') if i['id'] == 'parent' else i
@@ -75,7 +75,7 @@ class PublicReminders(unittest.TestCase):
         self.assertFalse(self.http.steps)
 
     def test_early_unrelated_reminder_failures_do_not_disclose_payloads(self):
-        from tests.adapter.current.test_current import item, project, delta
+        from tests.support.current import item, project, delta
         from copy import deepcopy
         before = {name: (self.root / name).read_bytes() for name in
                   ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
@@ -107,7 +107,7 @@ class PublicReminders(unittest.TestCase):
                 self.assertEqual({name: (self.root / name).read_bytes() for name in before}, before)
 
     def test_departed_category_cannot_authorize_fresh_failure_context(self):
-        from tests.adapter.current.test_current import item, project, delta
+        from tests.support.current import item, project, delta
         before = {name: (self.root / name).read_bytes() for name in
                   ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
         # Synthetic PersonalProjectSyncView parent/lifecycle updates and

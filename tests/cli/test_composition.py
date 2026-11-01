@@ -1,5 +1,4 @@
 """Representative public setup, moves, editor and archived lifecycle workflows."""
-from copy import deepcopy
 from io import StringIO
 import os
 from pathlib import Path
@@ -10,13 +9,13 @@ from unittest.mock import patch
 from todo_lib import cli, domain as d
 from todo_lib.adapter.transport import Transport
 from todo_lib.local import StateStore, exclusive_lock
-from tests.cli.test_cli import invoke
-from tests.workflows.init import test_init as init_fixture
-from tests.workflows.moves import test_moves as move_fixture
-from tests.workflows.comments import test_workflow as comment_fixture
-from tests.workflows.lifecycle import test_lifecycle as lifecycle_fixture
-from tests.workflows.sync import test_sync as sync_fixture
-from tests.adapter.current.test_current import full, delta, item, note, RESOURCES
+from tests.support.cli import invoke
+from tests.support import init as init_fixture
+from tests.support import moves as move_fixture
+from tests.support import comments as comment_fixture
+from tests.support import lifecycle as lifecycle_fixture
+from tests.support import sync as sync_fixture
+from tests.support.current import full, delta, item, note, RESOURCES
 from tests.support.http import ControlledHTTP, ExpectedRequest, Response
 
 
@@ -222,14 +221,14 @@ class PublicInit(unittest.TestCase):
 
 
 class PublicMoves(unittest.TestCase):
-    setUp = move_fixture.MoveTests.setUp
-    boundary = move_fixture.MoveTests.boundary
-    sync = move_fixture.MoveTests.sync
-    workflow = move_fixture.MoveTests.workflow
-    after = move_fixture.MoveTests.after
+    setUp = move_fixture.MoveSupport.setUp
+    boundary = move_fixture.MoveSupport.boundary
+    sync = move_fixture.MoveSupport.sync
+    workflow = move_fixture.MoveSupport.workflow
+    after = move_fixture.MoveSupport.after
 
     def test_cached_dated_lists_and_ambiguous_mutation_cancel_before_writes(self):
-        from tests.adapter.current.test_current import due
+        from tests.support.current import due
         from todo_lib.workflows.sync import Synchronizer
         rows = [*self.rows, item('ambiguous', content='other', due=due('2026-10-23', timezone=None))]
         transport, _ = self.boundary([self.sync('delta-token', full(projects=self.projects,
@@ -281,14 +280,13 @@ class PublicMoves(unittest.TestCase):
         self.assertNotIn('Moved', out)
 
 
-
 class PublicEditor(unittest.TestCase):
-    setUp = comment_fixture.WorkflowTests.setUp
-    refresh = comment_fixture.WorkflowTests.refresh
-    queue_refresh = comment_fixture.WorkflowTests.queue_refresh
-    editor = comment_fixture.WorkflowTests.editor
-    operation = comment_fixture.WorkflowTests.operation
-    cleaned = comment_fixture.WorkflowTests.cleaned
+    setUp = comment_fixture.CommentSupport.setUp
+    refresh = comment_fixture.CommentSupport.refresh
+    queue_refresh = comment_fixture.CommentSupport.queue_refresh
+    editor = comment_fixture.CommentSupport.editor
+    operation = comment_fixture.CommentSupport.operation
+    cleaned = comment_fixture.CommentSupport.cleaned
 
     def test_editor_add_actual_owner_then_search_and_comments(self):
         self.refresh()
@@ -310,9 +308,9 @@ class PublicEditor(unittest.TestCase):
 
 
 class PublicLifecycle(unittest.TestCase):
-    setUp = lifecycle_fixture.AdapterLifecycleTests.setUp
-    seed = lifecycle_fixture.AdapterLifecycleTests.seed
-    comments = lifecycle_fixture.AdapterLifecycleTests.comments
+    setUp = lifecycle_fixture.LifecycleSupport.setUp
+    seed = lifecycle_fixture.LifecycleSupport.seed
+    comments = lifecycle_fixture.LifecycleSupport.comments
 
     def test_archived_done_comment_then_ordinary_reopen_through_public_main(self):
         f = self.fixture

@@ -7,16 +7,16 @@ NoteSyncView.properties.content (default empty string); synthetic scope wrappers
 import unittest
 from copy import deepcopy
 from todo_lib import domain as d
-from todo_lib.adapter.current import retrieve, CurrentError
+from todo_lib.adapter.current import retrieve
 from todo_lib.adapter.commands import Gateway, Operation, due_arguments
 from todo_lib.local.codec import snapshot_data, snapshot_from, dumps, loads
-from tests.adapter.current import test_current as base
+from tests.support import current as base
 
 
 class ToleranceTests(unittest.TestCase):
-    boundary = base.CurrentTests.boundary
-    initial = base.CurrentTests.initial
-    changed = base.CurrentTests.changed
+    boundary = base.CurrentSupport.boundary
+    initial = base.CurrentSupport.initial
+    changed = base.CurrentSupport.changed
 
     def test_default_blank_and_attachment_are_unconsumed_through_delta_codec(self):
         raw = dict(id='note', item_id='task', posted_at=base.STAMP, is_deleted=False)
@@ -84,7 +84,7 @@ class ToleranceTests(unittest.TestCase):
             wire = op.command()['args']['due']
             self.assertEqual((wire['string'], wire['lang'], wire['is_recurring'], wire['timezone']),
                              ('jeden Tag', 'de', True, 'Europe/Prague'))
-        from tests.adapter.commands.test_commands import Wire
+        from tests.support.commands import Wire
         next_due = {**due, 'date': '2026-11-13T15:00:00Z'}
         wire = Wire(self, 'item_update', {'id': 'task', 'due': next_due},
                     [base.delta(items=[base.item(due=next_due)])], token='delta-token')

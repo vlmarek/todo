@@ -4,180 +4,25 @@ Pinned offline authority: api-v1.openapi.json Sync tag; completed/by_completion_
 items with omitted terminal cursor; scoped REST comments without item_id. The
 shared controlled HTTP boundary checks exact forms, filters and pagination.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import subprocess
-import sys
-import tempfile
 import unittest
 from unittest.mock import patch
 
 from todo_lib import domain as d
-from todo_lib.adapter.current import retrieve
-from todo_lib.adapter.transport import Transport
-from todo_lib.local import (StateStore, LocalError, empty_history, prepare_candidates,
-                            exclusive_lock)
+from todo_lib.local import StateStore, LocalError, exclusive_lock
 from todo_lib.local.codec import loads
 from todo_lib.workflows import Synchronizer, SyncError, SyncInterrupted
-from tests.adapter.current.test_current import (BINDING, RESOURCES, full, delta,
-                                               item, note, project)
-from tests.adapter.history.test_history import Expected
-from tests.support.http import ControlledHTTP, ExpectedRequest, Response
+from tests.support.current import RESOURCES, full, delta, item, note, project
+from tests.support.history import Expected
+from tests.support.http import ExpectedRequest, Response
 
-CREATED = '2026-10-20T12:00:00.123456789012345Z'
-DONE = '2026-10-21T12:00:00.123456789012349Z'
-COMMENT = '2026-10-21T12:00:00.123456789012348Z'
-NOW = d.instant_from_wire('2026-10-22T12:00:00.123456789012350Z')
-INITIAL = d.instant_from_wire('2026-10-20T13:00:00Z')
-CURSOR = d.instant_from_wire('2026-10-20T00:00:00Z')
-COMPLETED_QUERY = [('project_id', 'cat'), ('since', '2026-10-20T00:00:00Z'),
-                   ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]
+from tests.support.sync import (CREATED, DONE, COMMENT, NOW, INITIAL, CURSOR, COMPLETED_QUERY, open_tree, completed_b, SyncSupport)
 
 
-def open_tree(**changes):
-    return full(items=[item('A', added_at=CREATED),
-                       item('B', parent_id='A', added_at=CREATED)],
-                notes=[note('own', 'B', posted_at=CREATED)], **changes)
-
-
-def completed_b(**changes):
-    return item('B', parent_id='A', checked=True, completed_at=DONE,
-                added_at=CREATED, **changes)
-
-
-class SyncTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name) / '.todo'
-        self.root.mkdir(mode=0o700)
-        self.store = StateStore(self.root)
-        self.put('config', b'[main]\nproject=root\ndefault_sections=cat\nhidden_from_now=\n')
-        # Observe the open tree through real adapter mapping. No completed seed.
-        transport, _ = self.boundary([self.sync('*', open_tree()),
-                                     self.sync('full-token', delta())])
-        observed = retrieve(transport, BINDING)
-        with exclusive_lock('init', self.root):
-            self.store.publish_snapshot(prepare_candidates(observed.snapshot,
-                empty_history(observed.snapshot), account_display='Person',
-                waiting_label_ids=observed.waiting_label_ids, current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=INITIAL, initial_cursor=CURSOR))
-
-    def put(self, name, data):
-        path = self.root / name
-        path.write_bytes(data)
-        path.chmod(0o600)
-
-    def sync(self, token, data):
-        return (ExpectedRequest('POST', '/sync', 'secret', form={
-            'sync_token': token, 'resource_types': RESOURCES}), data)
-
-    def completed(self, rows):
-        return (Expected('/tasks/completed/by_completion_date', COMPLETED_QUERY), {'items': rows})
-
-    def comments(self, body='Surviving own comment', **changes):
-        raw = dict(id='own', content=body, posted_at=COMMENT,
-                   is_deleted=False, file_attachment=None, **changes)
-        return (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
-                {'results': [raw], 'next_cursor': None})
-
-    def boundary(self, steps):
-        http = ControlledHTTP([(request, value if isinstance(value, (Response, Exception))
-                     else Response(json.dumps(value).encode())) for request, value in steps])
-        self.addCleanup(http.assert_done)
-        return Transport('secret', opener=http, sleep=lambda _: None), http
-
-    def workflow(self, steps=(), now=NOW):
-        transport, http = self.boundary(steps)
-        return Synchronizer(transport, self.store, clock=lambda: now), http
-
-    def external(self):
-        return [self.sync('delta-token', full(items=[item('A', added_at=CREATED)])),
-                self.sync('full-token', delta()), self.completed([completed_b()]), self.comments()]
-
-    def retained(self, *, c=False):
-        steps = [self.completed([]), self.comments()]
-        if c:
-            steps.append((Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
-                          {'results': [], 'next_cursor': None}))
-        return steps
-
-    def bytes(self):
-        return {name: (self.root / name).read_bytes() for name in
-                ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
-
-    def child_process(self, mixed=False):
-        # Separate interpreter uses the public workflow/store. Any HTTP is fatal.
-        script = '''
-import json, sys
-from todo_lib.workflows import Synchronizer
-from todo_lib.local import StateStore, LocalError
-from todo_lib.domain import instant_from_wire, instant_text, instant_key
-class NoHTTP:
-    def request(self, *a, **k):
-        raise AssertionError('offline HTTP')
-w = Synchronizer(NoHTTP(), StateStore(sys.argv[1]), clock=lambda: instant_from_wire('2026-10-24T12:00:00Z'))
-try:
-    r = w.read_local()
-except LocalError as error:
-    if sys.argv[2] != 'mixed': raise
-    assert 'mixed' in str(error) or 'required history' in str(error), str(error)
-    print('refused mixed set with zero HTTP')
-else:
-    assert sys.argv[2] != 'mixed'
-    b = r.history.snapshot.items['B']
-    c = r.history.snapshot.comments['own']
-    assert b.parent_id == 'A' and b.completed
-    assert instant_text(b.added_at) == sys.argv[3]
-    assert instant_key(b.added_at) == instant_key(instant_from_wire(sys.argv[3]))
-    assert instant_text(b.completed_at) == sys.argv[4]
-    assert instant_text(c.added_at) == sys.argv[5]
-    assert c.body == 'Surviving own comment' and c.item_id == 'B'
-    assert r.warnings
-    print('coherent precise state with zero HTTP')
-'''
-        result = subprocess.run([sys.executable, '-B', '-c', script, str(self.root),
-                'mixed' if mixed else 'coherent', CREATED, DONE, COMMENT],
-                capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout
-
-    def assert_precise(self):
-        state = StateStore(self.root).load_consistent_state()
-        for s in (state.snapshot, state.history.snapshot):
-            self.assertEqual(set(s.items), {'A', 'B'})
-            b, c = s.items['B'], s.comments['own']
-            self.assertFalse(s.items['A'].completed)
-            self.assertTrue(b.completed)
-            self.assertEqual(b.parent_id, 'A')
-            for value, expected in ((b.added_at, CREATED), (b.completed_at, DONE),
-                                    (c.added_at, COMMENT)):
-                self.assertEqual(d.instant_text(value), expected)
-                self.assertEqual(d.instant_key(value), d.instant_key(d.instant_from_wire(expected)))
-            self.assertEqual(c.body, 'Surviving own comment')
-        return state
-
-    def reminder_hydration(self, final, *, resolved=True):
-        # Synthetic Sync NotificationSyncView due shapes from pinned upstream
-        # api-v1.openapi.json. C is absent from current and not yet scope-resolved.
-        from tests.support.reminders import absolute
-        first = absolute('historical', item_id='C')
-        conflicting = absolute('historical', {'date': '2025-02-12T10:00:00',
-            'lang': 'en', 'timezone': 'Europe/Madrid'}, item_id='C')
-        steps = [self.sync('delta-token', delta(items=[item('entrant')],
-                    reminders=[first, conflicting])),
-                 self.sync('*', full(items=[item('A', added_at=CREATED), item('entrant')],
-                                      reminders=final)),
-                 self.sync('full-token', delta()),
-                 self.completed([completed_b()] + ([item('C', checked=True,
-                    completed_at=DONE, added_at=CREATED)] if resolved else [])),
-                 self.comments()]
-        if resolved:
-            steps.append((Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
-                          {'results': [], 'next_cursor': None}))
-        return steps
-
+class SyncTests(SyncSupport, unittest.TestCase):
     def test_authoritative_reminder_replacement_before_history_owner_resolution(self):
         from tests.support.reminders import absolute, MINIMAL
         replacement = absolute('historical', item_id='C')
@@ -686,7 +531,7 @@ else:
             self.assertEqual(s.comments['own'].body, 'Now belongs to parent')
 
     def check_retained_attention_timezone_change(self, due_value, expected, *, clear_cache):
-        from tests.adapter.current.test_current import due
+        from tests.support.current import due
 
         raw_due = due(due_value, timezone=None)
         # Observe open B with due metadata, then establish completion remotely.
@@ -777,7 +622,7 @@ else:
         self.child_process(mixed=True)
 
     def test_external_recurring_completion_and_undo_preserve_current_null(self):
-        from tests.adapter.current.test_current import due
+        from tests.support.current import due
         recurrence = due('2026-10-25', timezone=None, is_recurring=True)
         # The object stays open; completion is an occurrence, with historical
         # nonnull creation that must not overwrite authoritative current null.
@@ -807,7 +652,7 @@ else:
                     self.assertEqual(observed.undone, undone)
 
     def test_activity_only_recurring_reloads_and_each_undo_is_applied_once(self):
-        from tests.adapter.current.test_current import due
+        from tests.support.current import due
         recurrence = due('2026-10-25', timezone=None, is_recurring=True)
         recurring = item('B', parent_id='A', due=recurrence, added_at=None)
         times = ['2026-10-21T18:11:14.719113Z', '2026-10-21T18:11:14.719114Z']
@@ -844,7 +689,7 @@ else:
                     self.assertEqual(len(d.recent_reopen_candidates(snapshot, CURSOR, NOW)), 0 if count else 1)
 
     def test_activity_only_recurring_required_read_failure_preserves_files(self):
-        from tests.adapter.current.test_current import due
+        from tests.support.current import due
         recurring = item('B', parent_id='A', due=due(is_recurring=True))
         query = [('object_type', 'item'), ('object_id', 'B'),
             ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
@@ -924,14 +769,14 @@ class MutationReuseTests(unittest.TestCase):
     Shapes/queries follow the pinned Sync, completed, activities and comments
     contracts cited above. No response is computed from a production mapper.
     """
-    setUp = SyncTests.setUp
-    put = SyncTests.put
-    sync = SyncTests.sync
-    boundary = SyncTests.boundary
-    bytes = SyncTests.bytes
+    setUp = SyncSupport.setUp
+    put = SyncSupport.put
+    sync = SyncSupport.sync
+    boundary = SyncSupport.boundary
+    bytes = SyncSupport.bytes
 
     def recurring(self):
-        from tests.adapter.current.test_current import due
+        from tests.support.current import due
         return item('R', content='Deferred recurring work', due=due('2026-10-25', timezone=None,
                     string='every day', is_recurring=True))
 
@@ -976,7 +821,7 @@ class MutationReuseTests(unittest.TestCase):
     def compose(self, *, invalid=False, archived_completion=False):
         from todo_lib.adapter.commands import Gateway
         from todo_lib.workflows.capture import CaptureWorkflow
-        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        from tests.support.lifecycle import CommandRequest
         from todo_lib.presentation import OriginalStreams
         from io import StringIO
         saved = self.establish_pending()
@@ -1057,7 +902,7 @@ class MutationReuseTests(unittest.TestCase):
         from todo_lib.adapter.commands import Gateway
         from todo_lib.presentation import OriginalStreams
         from todo_lib.workflows.moves import MoveWorkflow
-        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        from tests.support.lifecycle import CommandRequest
         from tests.support.reminders import absolute
         ignored = absolute('ignored-reminder', item_id='never-managed', type='location',
                            due={'private': 'unused'}, minute_offset={'private': 'unused'})
@@ -1147,7 +992,7 @@ class MutationReuseTests(unittest.TestCase):
         from todo_lib.adapter.commands import Gateway
         from todo_lib.presentation import OriginalStreams
         from todo_lib.workflows.comments import CommentWorkflow, Change
-        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        from tests.support.lifecycle import CommandRequest
         updated = note('own', 'B', content='Actual updated text', posted_at=COMMENT)
         blank = note('blank', 'B', posted_at=None)
         blank.pop('content')  # documented NoteSyncView default; retain identity
@@ -1183,7 +1028,7 @@ class MutationReuseTests(unittest.TestCase):
         from todo_lib.adapter.commands import Gateway
         from todo_lib.presentation import OriginalStreams
         from todo_lib.workflows.comments import CommentWorkflow, Change
-        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        from tests.support.lifecycle import CommandRequest
         saved = self.establish_pending(second=True)
         before = self.bytes()
         op = CommandRequest(self, 'note_add', {'item_id': 'X', 'content': 'New own text'}, target='R',
@@ -1223,7 +1068,7 @@ class MutationReuseTests(unittest.TestCase):
         from todo_lib.adapter.commands import Gateway
         from todo_lib.presentation import OriginalStreams
         from todo_lib.workflows.capture import CaptureWorkflow
-        from tests.workflows.lifecycle.test_lifecycle import CommandRequest
+        from tests.support.lifecycle import CommandRequest
         self.establish_pending()
         saved = self.store.load_consistent_state()
         op = CommandRequest(self, 'item_update', {'id': 'B', 'content': 'Renamed'})

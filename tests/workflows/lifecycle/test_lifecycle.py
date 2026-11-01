@@ -5,18 +5,14 @@ reject wrong requests. Domain fakes isolate order and failure attribution only.
 """
 from contextlib import nullcontext
 from dataclasses import replace
-import io
-import json
 import os
 from pathlib import Path
-from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, Result, Outcome
-from todo_lib.adapter.current import retrieve
-from todo_lib.local import empty_history, prepare_candidates, exclusive_lock, LocalError, StateStore
+from todo_lib import domain as d
+from todo_lib.adapter.commands import Outcome
+from todo_lib.local import LocalError, StateStore
 from todo_lib.local.codec import loads
 from todo_lib.local.config import Configuration
 from todo_lib.syntax import parse
@@ -25,75 +21,22 @@ from todo_lib.workflows.reads import NoMatch, AmbiguityError
 from todo_lib.syntax.input import InputError
 from todo_lib.workflows.lifecycle import LifecycleWorkflow
 from todo_lib.workflows.sync import Synchronizer, SyncError
-from tests.adapter.commands.test_commands import before
-from tests.adapter.current.test_current import item, note, full, delta, due, BINDING
-from tests.workflows.sync import test_sync as fixtures
+from tests.support.commands import before
+from tests.support.current import item, note, full, delta, due
+from tests.support import sync as fixtures
 
-stamp = d.instant_from_wire
-CURSOR = stamp('2026-10-22T12:00:00.123456781Z')
-AT = stamp('2026-10-22T12:00:00.123456782Z')
-END = stamp('2026-10-22T12:00:00.123456783Z')
-LATER = stamp('2026-10-22T12:00:00.123456784Z')
-
-
-class TTY(io.StringIO):
-    def isatty(self):
-        return True
-
-
-def streams(answer='yes\n', tty=True):
-    stream = TTY if tty else io.StringIO
-    return p.OriginalStreams(stream(answer), stream(), io.StringIO())
-
-
-def recurring(identity='R', parent=None, labels=()):
-    return d.Item(identity, 'cat', identity, parent_id=parent,
-        labels=frozenset(labels), attention=d.resolve_remote_due(
-            due('2026-10-25', timezone=None, string='every day', is_recurring=True), 'UTC'))
-
-
-class FakeSync:
-    def __init__(self, snapshot, after=()):
-        self.store = SimpleNamespace(root=Path('/unused'))
-        self.transport = None
-        self.snapshot = snapshot
-        self.after = iter(after)
-        self.calls = []
-
-    def value(self):
-        return SimpleNamespace(snapshot=self.snapshot, now=END,
-            state=SimpleNamespace(cursor=CURSOR, sync_token='token',
-                current_snapshot=None, current_reminder_ids=None, waiting_label_ids=None))
-
-    def read_local(self):
-        self.calls.append(('local', {}))
-        return self.value()
-
-    def refresh_locked(self, **kwargs):
-        self.calls.append(('refresh', kwargs))
-        return self.value()
-
-    def reconcile_accepted_locked(self, result=None):
-        self.calls.append(('accepted', {}))
-        value = next(self.after, self.snapshot)
-        if isinstance(value, Exception):
-            raise value
-        self.snapshot = value
-        return self.value()
-
-
-class FakeGateway:
-    def __init__(self, outcomes=()):
-        self.outcomes = iter(outcomes)
-        self.calls = []
-
-    def execute(self, op, **kwargs):
-        self.calls.append((op, kwargs))
-        value = next(self.outcomes, Outcome.ACCEPTED)
-        if isinstance(value, Result):
-            return replace(value, operation=op)
-        return Result(value, op, actual=(d.Comment('created', op.args['item_id'], op.args['content'])
-                                        if op.type == 'note_add' and value == Outcome.ACCEPTED else None))
+from tests.support.lifecycle import (
+    CURSOR,
+    AT,
+    END,
+    LATER,
+    streams,
+    recurring,
+    FakeSync,
+    FakeGateway,
+    CommandRequest,
+    LifecycleSupport,
+)
 
 
 class LifecycleTests(unittest.TestCase):
@@ -101,10 +44,7 @@ class LifecycleTests(unittest.TestCase):
         self.lock = patch('todo_lib.workflows.lifecycle.exclusive_lock', return_value=nullcontext())
         self.lock.start()
         self.addCleanup(self.lock.stop)
-        self.history = patch('todo_lib.workflows.lifecycle._recent_snapshot',
-            side_effect=AssertionError('ordinary lifecycle selection must use saved evidence'))
-        self.history.start()
-        self.addCleanup(self.history.stop)
+
 
     def workflow(self, snapshot, *, outcomes=(), after=(), answer='yes\n', tty=True, hidden=()):
         sync, gateway = FakeSync(snapshot, after), FakeGateway(outcomes)
@@ -130,6 +70,8 @@ class LifecycleTests(unittest.TestCase):
             {'item_id': root.id, 'content': 'Done: first body'},
             {'item_id': root.id, 'content': 'Done: second body'}])
         self.assertEqual(len([c for c in sync.calls if c[0] == 'accepted']), 7)
+        self.assertEqual(sync.calls[0][0], 'local')
+        self.assertFalse(any(kind == 'refresh' for kind, _ in sync.calls))
 
     def test_known_and_null_time_ties_use_stable_ids(self):
         s = before(d.Item('P', 'cat', 'Parent'),
@@ -355,96 +297,7 @@ class LifecycleTests(unittest.TestCase):
             self.assertFalse(gateway.calls)
 
 
-class CommandRequest:
-    """Dynamic UUID only; semantic request and response state are independent."""
-    def __init__(self, case, kind, args, status='ok', target=None, *, token='delta-token', resources=None):
-        from tests.support.http import Response
-        self.case, self.kind, self.args = case, kind, args
-        self.status, self.target = status, target
-        self.token, self.resources = token, resources
-        self.response = Response()
-        self.commands = []
-
-    def check(self, request, timeout):
-        from urllib.parse import parse_qs
-        from uuid import UUID
-        from tests.support.http import ExpectedRequest
-        wire = parse_qs(request.data.decode())
-        if self.token is None:
-            self.case.assertEqual(set(wire), {'commands'})
-        else:
-            self.case.assertEqual(set(wire), {'commands', 'sync_token', 'resource_types'})
-            self.case.assertEqual(wire['sync_token'], [self.token])
-            self.case.assertEqual(wire['resource_types'], [fixtures.RESOURCES])
-        commands = json.loads(wire['commands'][0])
-        self.case.assertEqual(len(commands), 1)
-        op = commands[0]
-        self.case.assertEqual(op['type'], self.kind)
-        self.case.assertEqual(op['args'], self.args)
-        self.case.assertEqual(str(UUID(op['uuid'])), op['uuid'])
-        self.case.assertEqual(set(op), {'type', 'uuid', 'args'} | ({'temp_id'} if self.kind.endswith('_add') else set()))
-        ExpectedRequest('POST', '/sync', 'secret', form={k: v[0] for k, v in wire.items()}).check(request, timeout)
-        self.commands.append(op)
-        response = {} if self.status is None else {'sync_status': {op['uuid']: self.status}}
-        if self.target:
-            self.case.assertEqual(str(UUID(op['temp_id'])), op['temp_id'])
-            response['temp_id_mapping'] = {op['temp_id']: self.target}
-        if self.resources is not None:
-            response.update(self.resources)
-        self.response.write(json.dumps(response).encode())
-        self.response.seek(0)
-
-    def step(self):
-        return self, self.response
-
-
-class AdapterLifecycleTests(unittest.TestCase):
-    def setUp(self):
-        self.fixture = fixtures.SyncTests('runTest')
-        self.fixture.setUp()
-        self.addCleanup(self.fixture.doCleanups)
-        self.store = self.fixture.store
-        self.out = streams()
-
-    def seed(self, raw, cursor=fixtures.CURSOR):
-        transport, _ = self.fixture.boundary([self.fixture.sync('*', raw),
-                                             self.fixture.sync('full-token', delta())])
-        observed = retrieve(transport, BINDING)
-        with exclusive_lock('setup', self.store.root):
-            self.store.publish_snapshot(prepare_candidates(observed.snapshot,
-                empty_history(observed.snapshot), account_display='Person',
-                waiting_label_ids=observed.waiting_label_ids, current_snapshot=observed.snapshot, sync_token=observed.sync_token, synced_at=fixtures.INITIAL))
-            self.store.write_cursor(cursor)
-
-    def establish(self, steps, *, now=fixtures.NOW, recent=False):
-        """Explicit fixture refresh, finished before the command boundary exists."""
-        sync, http = self.fixture.workflow(steps, now=now)
-        current = sync.refresh()
-        if recent:
-            from todo_lib.workflows.lifecycle import _recent_snapshot
-            from todo_lib.local import load_config
-            with exclusive_lock('retained fixture evidence', self.store.root):
-                _recent_snapshot(sync, current, load_config(self.store.root).hidden_from_now)
-        http.assert_done()
-
-    def workflow(self, steps, *, now=fixtures.NOW, setup=(), recent=False):
-        if setup:
-            self.establish(setup, now=now, recent=recent)
-        sync, http = self.fixture.workflow(steps, now=now)
-        return LifecycleWorkflow(sync, gateway=Gateway(sync.transport, clock=lambda: now), streams=self.out), http
-
-    def comments(self, owner, records):
-        from tests.adapter.history.test_history import Expected
-        return Expected('/comments', [('task_id', owner), ('limit', '200')]), {'results': records, 'next_cursor': None}
-
-    def activity(self, identity='B', records=()):
-        from tests.adapter.history.test_history import Expected
-        query = [('object_type', 'item'), ('object_id', identity),
-            ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
-            ('limit', '200'),
-            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
-        return Expected('/activities', query), {'results': list(records), 'next_cursor': None}
-
+class AdapterLifecycleTests(LifecycleSupport, unittest.TestCase):
     def test_archived_disappearance_done_comments_sequential_partial_failure(self):
         f = self.fixture
         complete = CommandRequest(self, 'item_complete', {'id': 'B'})
@@ -521,8 +374,8 @@ class AdapterLifecycleTests(unittest.TestCase):
         self.assertTrue(state.snapshot.items['D'].completed)
         self.assertEqual(d.instant_text(state.snapshot.comments['own'].added_at), fixtures.COMMENT)
 
-    def test_real_recent_discovery_uses_exact_cursor_end_and_direct_deletion(self):
-        from tests.adapter.history.test_history import Expected
+    def test_saved_recent_evidence_uses_exact_cursor_end_and_direct_deletion(self):
+        from tests.support.history import Expected
         f = self.fixture
         self.store.write_cursor(CURSOR)
         rows = [item(k, checked=True, completed_at=d.instant_text(t), added_at=None) for k, t in
@@ -576,7 +429,7 @@ class AdapterLifecycleTests(unittest.TestCase):
             notes=[note('own', 'B', posted_at=fixtures.CREATED)]))
         return recurrence
 
-    def test_cancelled_deletion_retains_bounded_discovery_for_offline_consumers(self):
+    def test_cancelled_deletion_preserves_saved_evidence_for_offline_consumers(self):
         f = self.fixture
         archived = item('C', parent_id='A', checked=True, completed_at=fixtures.DONE,
                         added_at=fixtures.CREATED)

@@ -5,16 +5,16 @@ GET /comments -> PaginatedList_NoteSyncView_; NoteSyncView.content default ''.
 Other rows are synthetic fault isolation, not recorded provider traffic.
 """
 import unittest
-from todo_lib import domain as d
 from todo_lib.adapter.history import HistoryError, Retrieval
-from tests.adapter.history import test_history as base
+from tests.support import history as base
+from tests.adapter.history import test_history as history_cases
 
 
 class ToleranceTests(unittest.TestCase):
-    boundary = base.HistoryTests.boundary
+    boundary = base.HistorySupport.boundary
 
-    test_required_cursors_are_not_completed_exception = base.HistoryTests.test_required_cursors_are_not_completed_exception
-    test_missing_or_malformed_page_records_never_become_empty_history = base.HistoryTests.test_missing_or_malformed_page_records_never_become_empty_history
+    test_required_cursors_are_not_completed_exception = history_cases.HistoryTests.test_required_cursors_are_not_completed_exception
+    test_missing_or_malformed_page_records_never_become_empty_history = history_cases.HistoryTests.test_missing_or_malformed_page_records_never_become_empty_history
 
     def test_scoped_default_blank_deleted_and_ignored_metadata(self):
         raw = dict(id='blank', posted_at=base.START, is_deleted=False)

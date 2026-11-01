@@ -10,28 +10,19 @@ from dataclasses import replace
 from todo_lib import domain as d, presentation as p
 from todo_lib.syntax import parse
 from todo_lib.workflows.scheduling import propose
-from tests.workflows.capture import test_capture as f
-from tests.workflows.capture.test_coexistence import Terminal
-from tests.support.reminders import absolute, FLOATING, FIXED
+from tests.support import capture as f
+from tests.support.reminders import absolute, FIXED
+from tests.support.capture_reminders import ReminderCaptureSupport
 
 
-class ReminderWorkflowTests(unittest.TestCase):
-    setUp = f.CaptureTests.setUp
-    state = f.CaptureTests.state
-    seed = f.CaptureTests.seed
-    refresh = f.CaptureTests.refresh
-    queue_refresh = f.CaptureTests.queue_refresh
-    operation = f.CaptureTests.operation
-    run_request = f.CaptureTests.run_request
-
-    def mixed(self):
-        self.wire_items[0]['due'] = f.due('2026-10-30T10:00:00Z')
-        self.wire_reminders = [f.reminder('relative', 'parent', minute_offset=30),
-                               absolute('absolute', FLOATING, item_id='parent')]
-        self.seed()
-
-    def terminal(self, answer='y\n'):
-        self.workflow.streams = p.OriginalStreams(Terminal(answer), Terminal(), StringIO())
+class ReminderWorkflowTests(ReminderCaptureSupport, unittest.TestCase):
+    setUp = f.CaptureSupport.setUp
+    state = f.CaptureSupport.state
+    seed = f.CaptureSupport.seed
+    refresh = f.CaptureSupport.refresh
+    queue_refresh = f.CaptureSupport.queue_refresh
+    operation = f.CaptureSupport.operation
+    run_request = f.CaptureSupport.run_request
 
     def test_cancel_blank_eof_noninteractive_no_task_or_reminder_write(self):
         self.mixed()

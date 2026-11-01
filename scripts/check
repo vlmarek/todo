@@ -54,13 +54,7 @@ try:
                 yield from cases(entry)
             else:
                 yield entry
-    # Imported shared TestCase fixtures can appear in several discovery modules.
-    # Execute each actual test identity once.
-    unique = {}
-    for case in cases(suite):
-        unique.setdefault(case.id(), case)
-    suite = unittest.TestSuite(unique.values())
-    ids = list(unique)
+    ids = [case.id() for case in cases(suite)]
     for package in required:
         if not any(name.startswith('tests.' + package + '.') for name in ids):
             fail('no tests discovered in required package: ' + package)

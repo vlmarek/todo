@@ -8,18 +8,18 @@ import unittest
 from io import StringIO
 from todo_lib import domain as d, presentation as p
 from todo_lib.syntax import parse
-from tests.workflows.capture import test_capture as f
-from tests.workflows.capture.test_coexistence import Terminal
+from tests.support import capture as f
+from tests.support.terminal import Terminal
 from tests.support.reminders import absolute
 
 
 class NamedTimezoneWorkflowTests(unittest.TestCase):
-    setUp = f.CaptureTests.setUp
-    state = f.CaptureTests.state
-    seed = f.CaptureTests.seed
-    queue_refresh = f.CaptureTests.queue_refresh
-    operation = f.CaptureTests.operation
-    run_request = f.CaptureTests.run_request
+    setUp = f.CaptureSupport.setUp
+    state = f.CaptureSupport.state
+    seed = f.CaptureSupport.seed
+    queue_refresh = f.CaptureSupport.queue_refresh
+    operation = f.CaptureSupport.operation
+    run_request = f.CaptureSupport.run_request
 
     def test_independent_zones_omission_and_saved_roundtrip(self):
         self.account_zone = 'Europe/Prague'
@@ -190,10 +190,10 @@ class NamedTimezoneWorkflowTests(unittest.TestCase):
                 self.assertEqual(value, (scalar,) if key == 'reminder-at' else scalar)
 
     def test_absolute_named_recurrence_at_adapter_across_dst(self):
-        from tests.adapter.commands import test_commands as a
+        from tests.support import commands as a
         for date in ['2026-10-26T13:00:00Z', '2026-11-02T14:00:00Z']:
             returned = f.due(date, timezone='America/New_York', string='every Monday at 9', is_recurring=True)
-            gateway, _ = a.CommandsTests.gateway(self, 'reminder_add', {'item_id': 'task', 'type': 'absolute',
+            gateway, _ = a.CommandSupport.gateway(self, 'reminder_add', {'item_id': 'task', 'type': 'absolute',
                 'due': {'string': 'every Monday at 9', 'timezone': 'America/New_York', 'lang': 'en'}},
                 read=[f.delta(reminders=[absolute('new', returned, item_id='task')])])
             result = gateway.create_reminder('task', due=d.parse_attention('every Monday at 9 America/New_York',

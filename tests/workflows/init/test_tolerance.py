@@ -4,18 +4,17 @@ Synthetic fixtures follow pinned api-v1.openapi.json PersonalProjectSyncView,
 WorkspaceProjectSyncView/is_shared, NoteSyncView.content/default and posted_at.
 """
 import unittest
-from todo_lib import domain as d
 from todo_lib.workflows.init import InitError
-from tests.workflows.init import test_init as base
-from tests.adapter.current.test_current import full, item, note, project
+from tests.support import init as base
+from tests.support.current import full, note, project
 
 
 class ToleranceTests(unittest.TestCase):
-    setUp = base.InitTests.setUp
-    put = base.InitTests.put
-    run_init = base.InitTests.run_init
-    initialize_existing = base.InitTests.initialize_existing
-    bytes = base.InitTests.bytes
+    setUp = base.InitSupport.setUp
+    put = base.InitSupport.put
+    run_init = base.InitSupport.run_init
+    initialize_existing = base.InitSupport.initialize_existing
+    bytes = base.InitSupport.bytes
 
     def test_unrelated_project_label_and_retained_default_note(self):
         initial = full(labels=[base.LABEL], notes=[note()])

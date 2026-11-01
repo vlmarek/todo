@@ -7,24 +7,22 @@ import unittest
 from copy import deepcopy
 from io import StringIO
 from todo_lib import domain as d, presentation as p
-from todo_lib.syntax import parse, Cancelled
+from todo_lib.syntax import Cancelled
 from todo_lib.workflows.reads import choose, title_candidates, AmbiguityError
-from tests.workflows.capture import test_capture as fixtures
+from tests.support import capture as fixtures
 
 
-class Terminal(StringIO):
-    def isatty(self):
-        return True
+from tests.support.terminal import Terminal
 
 
 class CoexistenceTests(unittest.TestCase):
-    setUp = fixtures.CaptureTests.setUp
-    state = fixtures.CaptureTests.state
-    seed = fixtures.CaptureTests.seed
-    refresh = fixtures.CaptureTests.refresh
-    queue_refresh = fixtures.CaptureTests.queue_refresh
-    operation = fixtures.CaptureTests.operation
-    run_request = fixtures.CaptureTests.run_request
+    setUp = fixtures.CaptureSupport.setUp
+    state = fixtures.CaptureSupport.state
+    seed = fixtures.CaptureSupport.seed
+    refresh = fixtures.CaptureSupport.refresh
+    queue_refresh = fixtures.CaptureSupport.queue_refresh
+    operation = fixtures.CaptureSupport.operation
+    run_request = fixtures.CaptureSupport.run_request
 
     def duplicates(self):
         self.wire_items[1]['content'] = 'Imported'
@@ -118,7 +116,7 @@ class CoexistenceTests(unittest.TestCase):
 
     def test_adapter_crlf_blank_comment_and_forbidden_controls(self):
         raw = fixtures.item('parent', content='A\r\nB\tC', description=' \r\n\t')
-        from tests.adapter.current.test_current import note
+        from tests.support.current import note
         self.http.read(self.state(items=[raw], notes=[note(item_id='parent', content='\r\n\t')]))
         self.http.read(fixtures.delta())
         actual = fixtures.retrieve(self.http, d.Binding('u', 'root', frozenset({'cat'})))

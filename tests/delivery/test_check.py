@@ -41,7 +41,11 @@ class CheckTests(unittest.TestCase):
 
     def test_complete_discovery_runs_each_once(self):
         path = self.root / 'tests/cli/test_mini.py'
-        path.write_text(path.read_text() + 'from tests.domain.test_mini import Mini as ImportedFixture\n')
+        support = self.root / 'tests/support'
+        support.mkdir()
+        (support / '__init__.py').touch()
+        (support / 'fixture.py').write_text('class Fixture:\n def prepare(self): pass\n')
+        path.write_text(path.read_text() + 'from tests.support.fixture import Fixture\n')
         result = self.run_check()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('discovered 20 offline tests', result.stdout)

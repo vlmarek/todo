@@ -3,13 +3,11 @@
 No CLI server flags or alternate runtime implementations. Existing focused suites
 supply the detailed grammar, calendar/DST, reconciliation and finalization cases.
 """
-from contextlib import ExitStack
 from io import StringIO
 import json
 import os
 from pathlib import Path
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -18,33 +16,16 @@ from unittest.mock import patch
 
 from todo_lib import cli, domain as d
 from todo_lib.local import StateStore, exclusive_lock
-from todo_lib.workflows.sync import Synchronizer
-from todo_lib.workflows.report import Reporter
 from todo_lib.syntax.help import SYNOPSES, ALIASES
-from tests.workflows.capture import test_capture as capture
-from tests.workflows.sync import test_sync as sync_fixture
-from tests.workflows.report import test_report as report
-from tests.adapter.current.test_current import item, note, full, delta
+from tests.support import capture as capture
+from tests.support import sync as sync_fixture
+from tests.support import report as report
+from tests.support.current import item, note, full, delta
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def invoke(case, argv, transport=None, now=capture.NOW, output=None, error=None, input=None, environ=None):
-    out = output if output is not None else StringIO()
-    err = error if error is not None else StringIO()
-    with ExitStack() as stack:
-        stack.enter_context(patch.object(sys, 'stdin', input if input is not None else StringIO()))
-        stack.enter_context(patch.object(sys, 'stdout', out))
-        stack.enter_context(patch.object(sys, 'stderr', err))
-        stack.enter_context(patch.dict(os.environ, {'TODOIST_TOKEN': 'secret', 'TERM': 'dumb', **(environ or {})}))
-        stack.enter_context(patch.object(cli, 'StateStore', return_value=case.store))
-        factory = stack.enter_context(patch.object(cli, 'Transport', return_value=transport))
-        stack.enter_context(patch.object(cli, 'Synchronizer', side_effect=lambda wire, store:
-            Synchronizer(wire, store, clock=lambda: now)))
-        stack.enter_context(patch.object(cli, 'Reporter', side_effect=lambda wire, store, **kw:
-            Reporter(wire, store, clock=lambda: now, **kw)))
-        status = cli.main(argv)
-    return status, out.getvalue(), err.getvalue(), factory
+from tests.support.cli import invoke
 
 
 class RoutingTests(unittest.TestCase):
@@ -113,12 +94,12 @@ class RoutingTests(unittest.TestCase):
 
 
 class PublicCapture(unittest.TestCase):
-    setUp = capture.CaptureTests.setUp
-    state = capture.CaptureTests.state
-    seed = capture.CaptureTests.seed
-    refresh = capture.CaptureTests.refresh
-    queue_refresh = capture.CaptureTests.queue_refresh
-    operation = capture.CaptureTests.operation
+    setUp = capture.CaptureSupport.setUp
+    state = capture.CaptureSupport.state
+    seed = capture.CaptureSupport.seed
+    refresh = capture.CaptureSupport.refresh
+    queue_refresh = capture.CaptureSupport.queue_refresh
+    operation = capture.CaptureSupport.operation
 
     def call(self, argv, **kw):
         result = invoke(self, argv, self.http, **kw)
@@ -315,11 +296,11 @@ class PublicCapture(unittest.TestCase):
 
 
 class PublicReports(unittest.TestCase):
-    setUp = sync_fixture.SyncTests.setUp
-    put = sync_fixture.SyncTests.put
-    sync = sync_fixture.SyncTests.sync
-    boundary = sync_fixture.SyncTests.boundary
-    requests = report.Reports.requests
+    setUp = sync_fixture.SyncSupport.setUp
+    put = sync_fixture.SyncSupport.put
+    sync = sync_fixture.SyncSupport.sync
+    boundary = sync_fixture.SyncSupport.boundary
+    requests = report.ReportSupport.requests
 
     def test_detail_order_and_final_exact_cursor_reload_with_actual_http(self):
         self.store.write_cursor(d.instant_from_wire(report.START))

@@ -2,13 +2,13 @@ import unittest
 from dataclasses import replace
 from todo_lib import domain as d
 from todo_lib.adapter.commands import Operation, Outcome, due_arguments
-from tests.adapter.commands import test_commands as base
-from tests.adapter.current.test_current import delta
+from tests.support import commands as base
+from tests.support.current import delta
 from tests.support.reminders import absolute, MINIMAL, FIXED
 
 
 class ReminderGatewayTests(unittest.TestCase):
-    gateway = base.CommandsTests.gateway
+    gateway = base.CommandSupport.gateway
 
     def test_absolute_serialization_independent_and_parser_result(self):
         for schedule in (MINIMAL, FIXED, {'string': 'every Monday at 9', 'lang': 'en'}):
@@ -178,7 +178,7 @@ class ReminderGatewayTests(unittest.TestCase):
                 self.assertTrue(result.partial)
 
     def test_raw_item_parser_request_still_checks_explicit_named_zone(self):
-        from tests.adapter.current.test_current import item
+        from tests.support.current import item
         g, _ = self.gateway('item_update', {'id': 'task', 'due': {
             'string': 'next Monday at 9', 'timezone': 'America/New_York', 'lang': 'en'}},
             read=[delta(items=[item('task', due={**base.due('2026-11-02T14:00:00Z'), 'timezone': 'Europe/Prague'})])])

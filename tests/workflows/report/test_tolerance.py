@@ -5,25 +5,25 @@ synthetic lifecycle/scope wrappers. No live preservation claim.
 """
 import unittest
 from unittest.mock import patch
-from todo_lib import domain as d
 from todo_lib import presentation as p
 from todo_lib.workflows.sync import Synchronizer
 from todo_lib.workflows.comments import CommentWorkflow
-from tests.workflows.report import test_report as base
-from tests.adapter.current.test_current import full, delta, item
+from tests.support import report as base
+from tests.workflows.report import test_report as report_cases
+from tests.support.current import full, delta, item
 
 
 class ToleranceTests(unittest.TestCase):
-    setUp = base.Reports.setUp
-    put = base.Reports.put
-    sync = base.Reports.sync
-    boundary = base.Reports.boundary
-    streams = base.Reports.streams
-    requests = base.Reports.requests
-    run_report = base.Reports.run_report
+    setUp = base.ReportSupport.setUp
+    put = base.ReportSupport.put
+    sync = base.ReportSupport.sync
+    boundary = base.ReportSupport.boundary
+    streams = base.ReportSupport.streams
+    requests = base.ReportSupport.requests
+    run_report = base.ReportSupport.run_report
 
-    test_unresolved_archived_owner_and_parent_fail_without_output = base.Reports.test_unresolved_archived_owner_and_parent_fail_without_output
-    test_unknown_activity_owner_cannot_be_assumed_unrelated = base.Reports.test_unknown_activity_owner_cannot_be_assumed_unrelated
+    test_unresolved_archived_owner_and_parent_fail_without_output = report_cases.Reports.test_unresolved_archived_owner_and_parent_fail_without_output
+    test_unknown_activity_owner_cannot_be_assumed_unrelated = report_cases.Reports.test_unknown_activity_owner_cannot_be_assumed_unrelated
 
     def test_refresh_reload_unchanged_editor_qualifying_blank_report(self):
         blank = dict(id='own', item_id='B', posted_at=base.CREATED, is_deleted=False)

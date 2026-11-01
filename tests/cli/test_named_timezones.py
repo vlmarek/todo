@@ -1,6 +1,6 @@
 """Public request/response conformance, not live abbreviation or delivery proof.
 
-Strict UUID/argument/read fixtures reuse CaptureTests.Boundary. Provider shapes:
+Strict UUID/argument/read fixtures reuse tests.support.capture.Boundary. Provider shapes:
 retained docs/design/external/todoist/upstream/api-v1.openapi.json, Due dates,
 Sync Tasks Add/Update and Reminders Add/NotificationSyncView.
 """
@@ -8,19 +8,19 @@ import json
 import unittest
 from todo_lib.adapter.transport import Transport
 from tests.support.http import ControlledHTTP, ExpectedRequest, Response
-from tests.workflows.lifecycle.test_lifecycle import CommandRequest
-from tests.cli.test_cli import invoke
-from tests.workflows.capture import test_capture as f
+from tests.support.lifecycle import CommandRequest
+from tests.support.cli import invoke
+from tests.support import capture as f
 from tests.support.reminders import absolute
 from tests.presentation.test_named_timezones import NY, TOKYO
 
 
 class PublicNamedTimezones(unittest.TestCase):
-    setUp = f.CaptureTests.setUp
-    state = f.CaptureTests.state
-    seed = f.CaptureTests.seed
-    queue_refresh = f.CaptureTests.queue_refresh
-    operation = f.CaptureTests.operation
+    setUp = f.CaptureSupport.setUp
+    state = f.CaptureSupport.state
+    seed = f.CaptureSupport.seed
+    queue_refresh = f.CaptureSupport.queue_refresh
+    operation = f.CaptureSupport.operation
 
     def call(self, argv):
         status, out, err, _ = invoke(self, argv, self.http)

@@ -11,16 +11,12 @@ from dataclasses import dataclass, replace
 from todo_lib import domain as d, presentation as p
 from todo_lib.adapter.commands import Gateway, Operation
 from todo_lib.adapter.current import Current
-from todo_lib.adapter.history import HistoryAdapter
 from todo_lib.adapter.transport import HTTPFailure
-from todo_lib.local import (History, LocalError, exclusive_lock, load_config,
-                            merge_history, prepare_candidates)
-from todo_lib.local.safety import read_bytes
+from todo_lib.local import LocalError, exclusive_lock, load_config
 from todo_lib.syntax import parse
 from todo_lib.syntax.input import prompt, Cancelled, InputError
 from .reads import choose, matches, title_candidates, recent_candidates, deletion_candidates
 from .sync import SyncError, SyncInterrupted
-from .completion import reconcile_completions
 
 
 @dataclass(frozen=True)
@@ -54,86 +50,6 @@ def _preview(snapshot, root, included):
     return '\n'.join('  ' * (depths[i.id] - offset) + d.scalar_title(i.title) +
                      (' [completed]' if i.completed else '')
                      for i in d.subtree(snapshot, root.id) if i.id in included)
-
-
-def _recent_snapshot(synchronizer, result, hidden_names):
-    """Discover bounded archived owners even when no known item disappeared.
-
-    Current owners always win over historical object fields. Unknown ancestry is
-    an explicit evidence failure, never inferred from an active GET 404.
-    """
-    s = result.snapshot
-    adapter = HistoryAdapter(synchronizer.transport, timezone=s.account.timezone)
-    items, occurrences, latest = dict(s.items), dict(s.occurrences), {}
-    records = []
-    for category in sorted(s.categories):
-        for record in adapter.completed(result.state.cursor, result.now,
-                                        {'project_id': category}).records:
-            at = record.occurrence.completed_at
-            if not (d.instant_key(result.state.cursor) < d.instant_key(at) <= d.instant_key(result.now)):
-                continue
-            if record.item.category_id != category:
-                continue
-            records.append(record)
-            old = latest.get(record.item.id)
-            if old is None or d.instant_key(at) > d.instant_key(old.occurrence.completed_at):
-                latest[record.item.id] = record
-    for identity, record in latest.items():
-        if record.deleted:
-            continue
-        if identity not in items and record.item.completed and not record.item.recurring:
-            items[identity] = record.item
-    occurrences = reconcile_completions(items, records, (), occurrences.values())
-    snapshot = d.validate(replace(s, items=items, occurrences=occurrences), hidden_names)
-    if snapshot != s:
-        # These observations are needed even if selection is cancelled or a
-        # different owner is deleted. Reconciliation reloads the store, so a
-        # transient selection snapshot alone cannot protect the discoveries.
-        comments = dict(snapshot.comments)
-        for identity in sorted(items.keys() - s.items.keys()):
-            for comment in adapter.comments(identity).records:
-                if comment.item_id != identity or (comment.id in comments
-                        and comments[comment.id].item_id != identity):
-                    raise d.DomainError('incompatible historical comment ownership')
-                comments[comment.id] = comment
-        snapshot = d.validate(replace(snapshot, comments=comments), hidden_names)
-        history = merge_history(result.history,
-            History(snapshot, {identity: result.now for identity in latest if identity in items}))
-        candidates = prepare_candidates(snapshot, replace(history, snapshot=snapshot),
-            account_display=result.state.binding.account_display,
-            sync_token=result.state.sync_token, synced_at=result.state.synced_at,
-            current_snapshot=result.state.current_snapshot,
-            waiting_label_ids=result.state.waiting_label_ids, current_reminder_ids=result.state.current_reminder_ids,
-            hidden_names=hidden_names)
-        _publish_discoveries(synchronizer.store, candidates)
-    return snapshot
-
-
-def _publish_discoveries(store, candidates):
-    """Publish before mutation, with the same per-file failure facts as refresh."""
-    paths = [store.root / name for name in ('cache.json', 'history.json', 'binding.json')]
-    before = [read_bytes(path) for path in paths]
-    try:
-        store.publish_snapshot(candidates)
-    except (LocalError, OSError, KeyboardInterrupt) as error:
-        try:
-            started = before != [read_bytes(path) for path in paths]
-        except (LocalError, OSError):
-            started = True  # Unknown bytes cannot prove preservation.
-        available, permitted = False, False
-        try:
-            store.load_consistent_state(require_cache=False)
-            permitted = True
-            store.load_consistent_state()
-            available = True
-        except (LocalError, OSError):
-            pass
-        failure = SyncError('bounded discovery publication', error,
-            publication_started=started, saved_state_available=available,
-            refresh_permitted=permitted)
-        if isinstance(error, KeyboardInterrupt):
-            raise SyncInterrupted(failure) from None
-        raise failure from error
 
 
 def _recurring_preflight(snapshot, item, forward, hidden_names):

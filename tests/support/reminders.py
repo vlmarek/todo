@@ -12,7 +12,7 @@ from copy import deepcopy
 import json
 from todo_lib.adapter.current import retrieve
 from todo_lib.adapter.transport import Transport
-from tests.adapter.current.test_current import BINDING, RESOURCES, full, delta, item, due
+from tests.support.current import BINDING, RESOURCES, full, delta, item, due
 from tests.support.http import ControlledHTTP, ExpectedRequest, Response
 
 MINIMAL = {'date': '2025-02-12T09:00:00', 'lang': 'en', 'timezone': 'Europe/Madrid'}

@@ -2,7 +2,7 @@ import unittest
 from todo_lib import domain as d
 from todo_lib.adapter.current import retrieve
 from tests.support.reminders import observed, boundary, response, absolute, MINIMAL, FLOATING
-from tests.adapter.current.test_current import delta
+from tests.support.current import delta
 
 
 class ReminderMappingTests(unittest.TestCase):
@@ -30,7 +30,7 @@ class ReminderMappingTests(unittest.TestCase):
         raw['reminders'] += [absolute(minute_offset='unused')]
         observed(self, raw)
         raw['reminders'][-1]['due']['date'] = '2025-02-12T10:00:00'
-        from tests.adapter.current.test_current import BINDING
+        from tests.support.current import BINDING
         with self.assertRaisesRegex(d.DomainError, 'contradictory'):
             retrieve(boundary(self, [('*', raw)]), BINDING)
         raw = response()
@@ -54,7 +54,7 @@ class ReminderMappingTests(unittest.TestCase):
             self.assertFalse(mapped.due.recurring)
 
     def test_absolute_duplicate_defaults_keep_consumed_conflicts_strict(self):
-        from tests.adapter.current.test_current import BINDING
+        from tests.support.current import BINDING
         minimal = {'date': '2026-10-30T09:00:00', 'lang': 'en'}
         for changes in ({'timezone': 'Europe/Madrid'}, {'is_recurring': True},
                         {'is_recurring': None}, {'is_recurring': 0},
@@ -72,7 +72,7 @@ class ReminderMappingTests(unittest.TestCase):
             raw['reminders'] = [absolute(type='unsupported', **changes)]
             with self.subTest(changes=changes), self.assertRaises(d.DomainError) as caught:
                 if 'id' in changes:
-                    from tests.adapter.current.test_current import BINDING
+                    from tests.support.current import BINDING
                     retrieve(boundary(self, [('*', raw)]), BINDING)
                 else:
                     observed(self, raw)

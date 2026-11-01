@@ -8,19 +8,19 @@ from todo_lib import domain as d
 from todo_lib import presentation as p
 from todo_lib.syntax import InputError
 from todo_lib.workflows.comments import encode_buffer, decode_buffer
-from tests.workflows.comments import test_workflow as base
-from tests.adapter.current.test_current import note
+from tests.support import comments as base
+from tests.support.current import note
 
 
 class ToleranceTests(unittest.TestCase):
-    setUp = base.WorkflowTests.setUp
-    queue_refresh = base.WorkflowTests.queue_refresh
-    refresh = base.WorkflowTests.refresh
-    owner_comments = base.WorkflowTests.owner_comments
-    editor = base.WorkflowTests.editor
-    save = base.WorkflowTests.save
-    edit = base.WorkflowTests.edit
-    operation = base.WorkflowTests.operation
+    setUp = base.CommentSupport.setUp
+    queue_refresh = base.CommentSupport.queue_refresh
+    refresh = base.CommentSupport.refresh
+    owner_comments = base.CommentSupport.owner_comments
+    editor = base.CommentSupport.editor
+    save = base.CommentSupport.save
+    edit = base.CommentSupport.edit
+    operation = base.CommentSupport.operation
 
     def test_blank_unchanged_crlf_then_fill_same_id_omits_attachment(self):
         self.notes = [note('blank', 'C', content=' \t\r\n', posted_at=base.OLD,
