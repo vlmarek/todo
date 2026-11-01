@@ -31,6 +31,14 @@ class History:
 def validate_history(history):
     try:
         d.validate(history.snapshot)
+        return _validate_history_fields(history)
+    except d.DomainError as error:
+        raise LocalError(str(error)) from None
+
+
+def _validate_history_fields(history):
+    """Validate history metadata after its snapshot has already been checked."""
+    try:
         if type(history.complete) is not bool:
             raise LocalError('history.complete must be boolean')
         for key, when in history.observations.items():

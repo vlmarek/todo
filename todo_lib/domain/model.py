@@ -501,9 +501,12 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = (), *, cached_own
             raise DomainError('category names must be unique case-insensitively')
         category_names.add(key)
     hierarchy = Hierarchy(snapshot)
-    for item in snapshot.items.values():
-        incoming_text(item.title, title=True)
-        incoming_text(item.description, description=True)
+    items = {}
+    for key, item in snapshot.items.items():
+        title = incoming_text(item.title, title=True)
+        description = incoming_text(item.description, description=True)
+        items[key] = (replace(item, title=title, description=description)
+                      if (title, description) != (item.title, item.description) else item)
         if type(item.priority) is not int or item.priority not in (1, 2, 3, 4):
             raise DomainError('item.priority must be P1 through P4')
         if type(item.completed) is not bool:
@@ -522,10 +525,12 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = (), *, cached_own
             raise DomainError('recurring occurrence completion must leave the object open')
         if item.attention is not None:
             _validate_attention(item.attention, snapshot.account.timezone)
-    for comment in snapshot.comments.values():
+    comments = {}
+    for key, comment in snapshot.comments.items():
         if comment.item_id not in snapshot.items:
             raise DomainError('comment.item_id outside managed items')
-        incoming_text(comment.body)
+        body = incoming_text(comment.body)
+        comments[key] = replace(comment, body=body) if body != comment.body else comment
         if comment.added_at is not None:
             _timestamp(comment.added_at, 'comment.added_at')
     offsets: dict[str, list[Reminder]] = {}
@@ -567,10 +572,6 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = (), *, cached_own
         if type(occurrence.recurring) is not bool or type(occurrence.undone) is not bool:
             raise DomainError('occurrence lifecycle flags must be booleans')
     _validate_hiding(snapshot, hierarchy)
-    items = {k: replace(i, title=incoming_text(i.title, title=True),
-                        description=incoming_text(i.description, description=True))
-             for k, i in snapshot.items.items()}
-    comments = {k: replace(c, body=incoming_text(c.body)) for k, c in snapshot.comments.items()}
     if items != snapshot.items or comments != snapshot.comments:
         return replace(snapshot, items=items, comments=comments)
     return snapshot

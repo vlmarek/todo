@@ -67,6 +67,11 @@ def snapshot_data(snapshot):
         d.validate(snapshot)
     except d.DomainError as error:
         raise LocalError(str(error)) from None
+    return _snapshot_data(snapshot)
+
+
+def _snapshot_data(snapshot):
+    """Serialize a model already checked within this persistence operation."""
     def record(entries):
         return {k: instant(v) if isinstance(v, (d.ExactInstant, datetime)) else v
                 for k, v in entries}

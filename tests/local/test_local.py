@@ -525,6 +525,21 @@ with exclusive_lock('refresh', root):
         with self.assertRaises(LocalError):
             validate_candidates(replace(good, cache=dumps(data)))
 
+    def test_invalid_late_candidate_and_mutable_bytes_fail_before_first_write(self):
+        good = self.candidates()
+        history = loads(good.history)
+        history['observations']['child'] = 'not a timestamp'
+        variants = [replace(good, **{name: b'invalid'})
+                    for name in ('binding', 'cache', 'history', 'cursor')]
+        variants.extend((replace(good, history=dumps(history)),
+                         replace(good, history=bytearray(good.history))))
+        for candidate in variants:
+            with self.subTest(candidate=candidate), patch('todo_lib.local.store.atomic_write') as write:
+                with self.assertRaises(LocalError):
+                    self.store.publish_snapshot(candidate)
+                write.assert_not_called()
+                self.assertEqual(list(self.root.iterdir()), [])
+
     def test_interrupted_init_preserves_authority_on_rerun(self):
         candidate = self.candidates()
         real_replace = os.replace

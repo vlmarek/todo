@@ -26,8 +26,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import uuid
 from todo_lib import domain as d
-from .codec import dumps, loads, snapshot_data, snapshot_from, instant, parse_instant
-from .history import History, Coverage, validate_history
+from .codec import dumps, loads, _snapshot_data, snapshot_from, instant, parse_instant
+from .history import History, Coverage, validate_history, _validate_history_fields
 from .safety import LocalError, check_paths, read_bytes, atomic_write, regular
 
 
@@ -167,7 +167,7 @@ def _history(content, binding):
         snapshot = snapshot_from(raw['snapshot'], binding.last_synced_account_timezone)
         _snapshot_matches(snapshot, binding)
         observations = {k: parse_instant(v) if v is not None else None for k, v in raw['observations'].items()}
-        return validate_history(History(snapshot, observations,
+        return _validate_history_fields(History(snapshot, observations,
             tuple(Coverage(parse_instant(c['start']), parse_instant(c['end'])) for c in raw['coverage']), raw['complete']))
     except (ValueError, TypeError, KeyError, AttributeError):
         raise LocalError('invalid required history.json; preserve bytes and restore consistent state') from None
@@ -205,18 +205,21 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
     """
     try:
         d.validate(snapshot, hidden_names)
-        if current_snapshot is not None:
+        if current_snapshot is not None and current_snapshot is not snapshot:
             d.validate(current_snapshot, hidden_names)
     except d.DomainError as error:
         raise LocalError(str(error)) from None
-    validate_history(history)
+    if history.snapshot is snapshot or history.snapshot is current_snapshot:
+        _validate_history_fields(history)
+    else:
+        validate_history(history)
     binding = Binding(snapshot.account.id, account_display, snapshot.root.id,
         snapshot.root.name, {k: v.name for k, v in snapshot.categories.items()},
         snapshot.account.timezone, publication or uuid.uuid4().hex)
     _snapshot_matches(history.snapshot, binding)
     assoc = _association(binding)
     b = dumps(_binding_data(binding))
-    cache_data = dict(schema=1, association=assoc, snapshot=snapshot_data(snapshot),
+    cache_data = dict(schema=1, association=assoc, snapshot=_snapshot_data(snapshot),
                       sync_token=sync_token, synced_at=instant(synced_at))
     if current_snapshot is not None:
         _snapshot_matches(current_snapshot, binding)
@@ -239,7 +242,7 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
     if waiting_label_ids is not None:
         cache_data['waiting_label_ids'] = sorted(waiting_label_ids)
     cache = dumps(cache_data)
-    h = dumps(dict(schema=1, association=assoc, snapshot=snapshot_data(history.snapshot),
+    h = dumps(dict(schema=1, association=assoc, snapshot=_snapshot_data(history.snapshot),
         observations=history.observations, coverage=[dict(start=c.start, end=c.end) for c in history.coverage], complete=history.complete))
     cursor = None
     if initial_cursor is not None:
@@ -249,13 +252,29 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
     return candidate
 
 
-def validate_candidates(candidates):
+def _decode_candidates(candidates):
+    # Freeze and check the full externally supplied byte set before publication.
+    for content in (candidates.binding, candidates.cache, candidates.history):
+        if not isinstance(content, bytes):
+            raise LocalError('snapshot candidates must contain immutable bytes')
+    if candidates.cursor is not None and not isinstance(candidates.cursor, bytes):
+        raise LocalError('snapshot candidates must contain immutable bytes')
     binding = _binding(candidates.binding)
     history = _history(candidates.history, binding)
     _cache(candidates.cache, binding, history.snapshot)
-    if candidates.cursor is not None:
-        _cursor(candidates.cursor)
+    cursor = _cursor(candidates.cursor) if candidates.cursor is not None else None
+    return binding, cursor
+
+
+def validate_candidates(candidates):
+    _decode_candidates(candidates)
     return candidates
+
+
+def _unchanged_bytes(content, expected):
+    """Atomic writer gate for the immutable bytes checked as a complete set."""
+    if content != expected:
+        raise LocalError('validated publication bytes changed')
 
 
 class StateStore:
@@ -299,8 +318,8 @@ class StateStore:
     def publish_snapshot(self, candidates):
         """Caller holds the lock. Revalidate before any write; binding is last."""
         check_paths(self.root)
-        validate_candidates(candidates)
-        binding = _binding(candidates.binding)
+        candidates = replace(candidates)
+        binding, candidate_cursor = _decode_candidates(candidates)
         if regular(self.root / 'binding.json', missing=True) is not None:
             old = self.load_consistent_state(require_cache=False)
             if (old.binding.account_id, old.binding.root_id) != (binding.account_id, binding.root_id):
@@ -327,19 +346,20 @@ class StateStore:
             cursor_path = self.root / 'report-cursor'
             if regular(cursor_path, missing=True) is not None:
                 old_cursor = read_bytes(cursor_path)
-                _cursor(old_cursor)
-                if candidates.cursor is not None and _cursor(candidates.cursor) != _cursor(old_cursor):
+                saved_cursor = _cursor(old_cursor)
+                if candidate_cursor is not None and candidate_cursor != saved_cursor:
                     raise LocalError('pending initialization cursor must be preserved')
             elif candidates.cursor is None:
                 raise LocalError('initial publication requires a report cursor')
-        for name, data, validator in (
-            ('cache.json', candidates.cache, lambda c: _cache(c, binding, _history(candidates.history, binding).snapshot)),
-            ('history.json', candidates.history, lambda c: _history(c, binding)),
-            ('report-cursor', candidates.cursor, _cursor),
-            ('binding.json', candidates.binding, _binding),
+        for name, data in (
+            ('cache.json', candidates.cache),
+            ('history.json', candidates.history),
+            ('report-cursor', candidates.cursor),
+            ('binding.json', candidates.binding),
         ):
             if data is not None:
-                atomic_write(self.root / name, data, validator)
+                atomic_write(self.root / name, data,
+                             lambda content, expected=data: _unchanged_bytes(content, expected))
 
     def write_cursor(self, aware_utc):
         """Explicit setter repairs readable corrupt/missing content, never unsafe paths.
@@ -366,7 +386,7 @@ class StateStore:
         validate_history(history)
         _snapshot_matches(history.snapshot, current)
         data = dumps(dict(schema=1, association=_association(current),
-            snapshot=snapshot_data(history.snapshot), observations=history.observations,
+            snapshot=_snapshot_data(history.snapshot), observations=history.observations,
             coverage=[dict(start=c.start, end=c.end) for c in history.coverage], complete=history.complete))
         atomic_write(self.root / 'history.json', data, lambda c: _history(c, current))
 
