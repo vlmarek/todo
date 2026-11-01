@@ -56,18 +56,19 @@ class AmbiguityError(SelectionError):
         super().__init__('multiple items match ' + query_text(query), document)
 
 
-def _candidate_key(snapshot, item):
+def _candidate_key(snapshot, item, hierarchy):
     return (snapshot.categories[item.category_id].name.lower(),
-            tuple(a.title.lower() for a in d.ancestors(snapshot, item.id)),
+            tuple(a.title.lower() for a in hierarchy.ancestors(item.id)),
             item.title.lower(), item.id)
 
 
 def title_candidates(snapshot, query, *, target='item', parent_id=None):
     """Open titles only. parent_id restricts to immediate children by stable ID."""
+    hierarchy = d.Hierarchy(snapshot)
     return tuple(sorted((item for item in snapshot.items.values()
         if not item.completed and (target == 'item' or item.role == target)
         and (parent_id is None or item.parent_id == parent_id)
-        and matches(item.title, query)), key=lambda i: _candidate_key(snapshot, i)))
+        and matches(item.title, query)), key=lambda i: _candidate_key(snapshot, i, hierarchy)))
 
 
 def move_destination_candidates(snapshot, query, *, kind='positional'):

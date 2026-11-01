@@ -56,8 +56,12 @@ def actual_due(value, zone, *, schedule_zone=False):
     return text
 
 
-def ancestor_path(snapshot, item):
-    return ' > '.join(scalar_title(i.title) for i in ancestors(snapshot, item.id))
+def ancestor_path(snapshot, item, *, hierarchy=None, include_item=False):
+    path = (hierarchy.ancestors(item.id) if hierarchy is not None
+            else ancestors(snapshot, item.id))
+    if include_item:
+        path = (*path, item)
+    return ' > '.join(scalar_title(i.title) for i in path)
 
 
 def owner_title(snapshot, item, *, deep_only=False):

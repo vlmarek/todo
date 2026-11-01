@@ -15,7 +15,7 @@ from .time import (
 )
 from .model import (
     Account, Capabilities, Binding, Project, Category, Item, Comment, Reminder,
-    Occurrence, Snapshot, Visibility, Urgency, LifecycleCandidate,
+    Occurrence, Snapshot, Visibility, Urgency, LifecycleCandidate, Hierarchy, now_sort_key,
     validate, hierarchy_depths, ancestors, root_task, ordered_siblings, subtree,
     subtree_depths, validate_sibling_uniqueness, lookup_category, bind_root,
     enroll_categories, effective_priority, creation_priority, effective_attention,
@@ -32,7 +32,7 @@ __all__ = (
     'attention_order', 'same_attention', 'reconciles_attention', 'retain_recurrence',
     'Account', 'Capabilities', 'Binding', 'Project', 'Category', 'Item', 'Comment',
     'Reminder', 'Occurrence', 'Snapshot', 'Visibility', 'Urgency',
-    'LifecycleCandidate', 'validate', 'hierarchy_depths', 'ancestors', 'root_task',
+    'LifecycleCandidate', 'Hierarchy', 'now_sort_key', 'validate', 'hierarchy_depths', 'ancestors', 'root_task',
     'ordered_siblings', 'subtree', 'subtree_depths', 'validate_sibling_uniqueness',
     'lookup_category', 'bind_root', 'enroll_categories', 'effective_priority',
     'creation_priority', 'effective_attention', 'visibility', 'validate_hiding',

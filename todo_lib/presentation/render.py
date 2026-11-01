@@ -1,7 +1,7 @@
 """Complete pure documents; no transport, cursor decisions or terminal I/O."""
 from todo_lib.domain import scalar_title, item_description
 from dataclasses import dataclass
-from todo_lib.domain import (ancestors, ordered_siblings, instant_key, instant_datetime,
+from todo_lib.domain import (ancestors, ordered_siblings, instant_key, instant_datetime, Hierarchy, now_sort_key,
                              account_timezone, urgency, Urgency, now_queue, visibility,
                              attention_order, subtree)
 from .formatting import (Color, edge, multiline, absolute, compact, owner_title,
@@ -43,10 +43,10 @@ def render_now(snapshot, now, *, items=None, hidden_names=(), all_items=False, c
     if items is None:
         items = (i for i in snapshot.items.values() if not i.completed) if all_items else now_queue(snapshot, now, hidden_names)
     rows = [i for i in items if category_id is None or i.category_id == category_id]
-    rows.sort(key=lambda i: (urgency(i, now, zone), i.priority,
-                            attention_order(i.attention, zone) if i.attention else 0, i.title.lower(), i.id))
+    rows.sort(key=lambda i: now_sort_key(i, now, zone))
     if not rows:
         return document('No actionable items.')
+    hierarchy = Hierarchy(snapshot)
     local = instant_datetime(now).astimezone(account_timezone(zone))
     header_day = absolute(now, zone).split(',')[0]
     counts = {section: sum(urgency(i, now, zone) == section for i in rows) for section in Urgency}
@@ -68,15 +68,15 @@ def render_now(snapshot, now, *, items=None, hidden_names=(), all_items=False, c
             if reason is not None:
                 text += multiline(reason, ' (', '    ') + ')'
             if item.parent_id is not None:
-                text += color.context(' — ' + ancestor_path(snapshot, item))
+                text += color.context(' — ' + ancestor_path(snapshot, item, hierarchy=hierarchy))
             lines.append(text)
         sections.append('\n'.join(lines))
     return document('\n\n'.join(sections), convention_warnings(snapshot, rows))
 
 
-def _waiting_section(snapshot, item, now):
+def _waiting_section(snapshot, item, now, hierarchy):
     zone = snapshot.account.timezone
-    policies = [item] if item.waiting and item.attention is not None else [a for a in ancestors(snapshot, item.id) if a.waiting and a.attention is not None]
+    policies = [item] if item.waiting and item.attention is not None else [a for a in hierarchy.ancestors(item.id) if a.waiting and a.attention is not None]
     inactive = item.waiting and item.attention is None
     if not policies:
         return 'Waiting: inactive (no attention date)' if inactive else 'Waiting: none'
@@ -84,7 +84,7 @@ def _waiting_section(snapshot, item, now):
     for policy in policies:
         reason, age = waiting_reason(policy, now, zone)
         own = policy.id == item.id
-        context = ' > '.join(scalar_title(a.title) for a in (*ancestors(snapshot, policy.id), policy))
+        context = ancestor_path(snapshot, policy, hierarchy=hierarchy, include_item=True)
         if reason is None:
             if len(policies) == 1:
                 return 'Waiting: enabled' if own else ('Waiting: inactive (no attention date)\n' if inactive else '') + 'Waiting: inherited from ' + context
@@ -118,15 +118,16 @@ def _due_date(attention, reminders, now, zone, color):
 
 def render_detail(snapshot, item, now, *, color=Color()):
     item = _item(snapshot, item)
+    hierarchy = Hierarchy(snapshot)
     zone = snapshot.account.timezone
-    title = scalar_title(item.title) + (color.context(' — ' + ancestor_path(snapshot, item)) if item.parent_id is not None else '')
-    sections = [f'{color.priority(item.priority)}  {snapshot.categories[item.category_id].name}  {title}\nDue: ' + time_block(item.attention, _reminders(snapshot, item), now, zone, color, detail=True, schedule_zone=True), _waiting_section(snapshot, item, now)]
+    title = scalar_title(item.title) + (color.context(' — ' + ancestor_path(snapshot, item, hierarchy=hierarchy)) if item.parent_id is not None else '')
+    sections = [f'{color.priority(item.priority)}  {snapshot.categories[item.category_id].name}  {title}\nDue: ' + time_block(item.attention, _reminders(snapshot, item), now, zone, color, detail=True, schedule_zone=True), _waiting_section(snapshot, item, now, hierarchy)]
     ordinary, _ = item_description(item)
     if edge(ordinary):
         sections.append('Description\n' + multiline(ordinary, '  ', '  '))
     steps = []
     def visit(parent, depth):
-        for child in ordered_siblings(snapshot, item.category_id, parent.id):
+        for child in hierarchy.siblings(item.category_id, parent.id):
             indent = '  ' * depth
             field = _item_date(snapshot, child, now, color)
             steps.append(f'{indent}- [{"x" if child.completed else " "}] P{child.priority} {scalar_title(child.title)}' + (' — ' + field if field else ''))
@@ -138,7 +139,7 @@ def render_detail(snapshot, item, now, *, color=Color()):
     sections.append('Steps\n' + '\n'.join(steps) if steps else 'Steps: none')
     comments = _comments(snapshot, item)
     sections.append('Comments\n' + '\n'.join(comments) if comments else 'Comments: none')
-    return document('\n\n'.join(sections), '\n'.join(filter(None, ('todo: completed steps use retained history; coverage may be incomplete', convention_warnings(snapshot, (*ancestors(snapshot, item.id), *subtree(snapshot, item.id)))))))
+    return document('\n\n'.join(sections), '\n'.join(filter(None, ('todo: completed steps use retained history; coverage may be incomplete', convention_warnings(snapshot, (*hierarchy.ancestors(item.id), *hierarchy.subtree(item.id)))))))
 
 
 def render_categories(snapshot):
@@ -147,9 +148,10 @@ def render_categories(snapshot):
 
 def _population(snapshot, items):
     selected = {i.id: i for i in items}
+    hierarchy = Hierarchy(snapshot)
     contexts = {}
     for item in selected.values():
-        for ancestor in ancestors(snapshot, item.id):
+        for ancestor in hierarchy.ancestors(item.id):
             if ancestor.id not in selected:
                 contexts[ancestor.id] = ancestor
     return selected, {**contexts, **selected}
@@ -157,9 +159,10 @@ def _population(snapshot, items):
 
 def render_waiting(snapshot, now, *, items=None, hidden_names=()):
     if items is None:
+        hierarchy = Hierarchy(snapshot)
         items = [i for i in snapshot.items.values() if not i.completed and
-                 visibility(snapshot, i.id, now, hidden_names).own_hidden and
-                 not visibility(snapshot, i.id, now, hidden_names).category_hidden]
+                 (state := hierarchy.visibility(i.id, now, hidden_names)).own_hidden and
+                 not state.category_hidden]
     selected, population = _population(snapshot, items)
     if not selected:
         return document('No waiting items.')
@@ -240,6 +243,7 @@ def render_search(snapshot, items, now, *, all_items=False, earliest_completion=
 
 
 def render_ambiguity(snapshot, query, candidates, now, *, interactive=True, color=Color()):
+    hierarchy = Hierarchy(snapshot)
     lines = [f'Multiple items match "{scalar_title(query)}":']
     for n, candidate in enumerate(candidates, 1):
         if not hasattr(candidate, 'title'):
@@ -248,7 +252,7 @@ def render_ambiguity(snapshot, query, candidates, now, *, interactive=True, colo
         field = _item_date(snapshot, candidate, now, color, candidate=True)
         text = f'  {n}. {candidate.role}: {scalar_title(candidate.title)}' + ('  ' + field if field else '')
         if candidate.parent_id is not None:
-            text += color.context(' — ' + ancestor_path(snapshot, candidate))
+            text += color.context(' — ' + ancestor_path(snapshot, candidate, hierarchy=hierarchy))
         text += ' — ' + snapshot.categories[candidate.category_id].name
         lines.append(text)
     if interactive:

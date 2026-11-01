@@ -216,13 +216,7 @@ def hierarchy_depths(snapshot: Snapshot) -> dict[str, int]:
 
 def ancestors(snapshot: Snapshot, item_id: str) -> tuple[Item, ...]:
     """Root-to-immediate-parent path, excluding the selected item."""
-    hierarchy_depths(snapshot)
-    path = []
-    current = snapshot.items[item_id].parent_id
-    while current is not None:
-        path.append(snapshot.items[current])
-        current = snapshot.items[current].parent_id
-    return tuple(reversed(path))
+    return Hierarchy(snapshot).ancestors(item_id)
 
 
 def root_task(snapshot: Snapshot, item_id: str) -> Item:
@@ -243,23 +237,55 @@ def ordered_siblings(snapshot: Snapshot, category_id: str, parent_id: str | None
 
 def subtree(snapshot: Snapshot, item_id: str) -> tuple[Item, ...]:
     """Selected root plus every descendant in deterministic preorder."""
-    hierarchy_depths(snapshot)
-    children: dict[str, list[Item]] = {}
-    for item in snapshot.items.values():
-        if item.parent_id is not None:
-            children.setdefault(item.parent_id, []).append(item)
-    result, pending = [], [snapshot.items[item_id]]
-    while pending:
-        item = pending.pop()
-        result.append(item)
-        pending.extend(reversed(sorted(children.get(item.id, []), key=_sibling_key)))
-    return tuple(result)
+    return Hierarchy(snapshot).subtree(item_id)
+
+
+class Hierarchy:
+    """Validated traversal context for one operation, never a persistent cache.
+
+    Capture the item records so a caller's mutable snapshot dictionaries cannot
+    silently change the graph behind this index. Build a new context after edits.
+    """
+    def __init__(self, snapshot):
+        self.items = dict(snapshot.items)
+        self.snapshot = replace(snapshot, items=self.items)
+        self.depths = hierarchy_depths(self.snapshot)
+        children = {}
+        for item in self.items.values():
+            children.setdefault((item.category_id, item.parent_id), []).append(item)
+        self.children = children
+        self._ordered = {}
+
+    def ancestors(self, item_id):
+        path = []
+        current = self.items[item_id].parent_id
+        while current is not None:
+            path.append(self.items[current])
+            current = self.items[current].parent_id
+        return tuple(reversed(path))
+
+    def siblings(self, category_id, parent_id=None):
+        key = (category_id, parent_id)
+        if key not in self._ordered:
+            self._ordered[key] = tuple(sorted(self.children.get(key, ()), key=_sibling_key))
+        return self._ordered[key]
+
+    def visibility(self, item_id, now, hidden_names=()):
+        return _visibility(self.snapshot, item_id, now, hidden_names, self)
+
+    def subtree(self, item_id):
+        result, pending = [], [self.items[item_id]]
+        while pending:
+            item = pending.pop()
+            result.append(item)
+            pending.extend(reversed(self.siblings(item.category_id, item.id)))
+        return tuple(result)
 
 
 def subtree_depths(snapshot: Snapshot, item_id: str) -> dict[str, int]:
     """Absolute depths for the complete selected known subtree."""
-    depths = hierarchy_depths(snapshot)
-    return {i.id: depths[i.id] for i in subtree(snapshot, item_id)}
+    hierarchy = Hierarchy(snapshot)
+    return {i.id: hierarchy.depths[i.id] for i in hierarchy.subtree(item_id)}
 
 
 def validate_sibling_uniqueness(items: Iterable[Item], before: Iterable[Item] = ()) -> None:
@@ -352,24 +378,32 @@ class Visibility:
 
 def visibility(snapshot: Snapshot, item_id: str, now: datetime, hidden_names: Iterable[str] = ()) -> Visibility:
     """Waiting suppresses until the start of its attention day, never its time."""
+    return _visibility(snapshot, item_id, now, hidden_names, Hierarchy(snapshot))
+
+
+def _visibility(snapshot, item_id, now, hidden_names, hierarchy):
     today = require_aware(now, 'now').astimezone(account_timezone(snapshot.account.timezone)).date()
     item = snapshot.items[item_id]
     def hidden(i):
         if not i.waiting or i.attention is None:
             return False
         return today < i.attention.day(snapshot.account.timezone)
-    return Visibility(hidden(item), any(hidden(a) for a in ancestors(snapshot, item_id)),
+    return Visibility(hidden(item), any(hidden(a) for a in hierarchy.ancestors(item_id)),
                       snapshot.categories[item.category_id].name in hidden_names, item.completed)
 
 
 def validate_hiding(snapshot: Snapshot, hidden_names: Iterable[str] = ()) -> None:
+    _validate_hiding(snapshot, Hierarchy(snapshot))
+
+
+def _validate_hiding(snapshot, hierarchy):
     zone = snapshot.account.timezone
     for item in snapshot.items.values():
         if item.completed:
             continue
         if item.attention is not None:
             day = item.attention.day(zone)
-            for parent in ancestors(snapshot, item.id):
+            for parent in hierarchy.ancestors(item.id):
                 if parent.waiting and parent.attention is not None and day < parent.attention.day(zone):
                     raise DomainError('descendant attention day precedes waiting ancestor day')
 
@@ -440,7 +474,7 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = (), *, cached_own
         if key in category_names:
             raise DomainError('category names must be unique case-insensitively')
         category_names.add(key)
-    hierarchy_depths(snapshot)
+    hierarchy = Hierarchy(snapshot)
     for item in snapshot.items.values():
         incoming_text(item.title, title=True)
         incoming_text(item.description, description=True)
@@ -506,7 +540,7 @@ def validate(snapshot: Snapshot, hidden_names: Iterable[str] = (), *, cached_own
         _timestamp(occurrence.completed_at, 'occurrence.completed_at')
         if type(occurrence.recurring) is not bool or type(occurrence.undone) is not bool:
             raise DomainError('occurrence lifecycle flags must be booleans')
-    validate_hiding(snapshot, hidden_names)
+    _validate_hiding(snapshot, hierarchy)
     items = {k: replace(i, title=incoming_text(i.title, title=True),
                         description=incoming_text(i.description, description=True))
              for k, i in snapshot.items.items()}
@@ -571,16 +605,23 @@ def urgency(item: Item, now: datetime, account_zone: str) -> Urgency:
 def now_queue(snapshot: Snapshot, now: datetime, hidden_names: Iterable[str] = ()) -> tuple[Item, ...]:
     """Independent task/step rows by section, own priority, own due, title and ID."""
     hidden_names = tuple(hidden_names)
-    zone = snapshot.account.timezone
-    def key(i):
-        return (urgency(i, now, zone), i.priority, attention_order(i.attention, zone) if i.attention else 0, i.title.lower(), i.id)
-    return tuple(sorted((i for i in snapshot.items.values() if visibility(snapshot, i.id, now, hidden_names).actionable), key=key))
+    hierarchy = Hierarchy(snapshot)
+    return tuple(sorted((i for i in snapshot.items.values()
+        if _visibility(snapshot, i.id, now, hidden_names, hierarchy).actionable),
+        key=lambda i: now_sort_key(i, now, snapshot.account.timezone)))
+
+
+def now_sort_key(item, now, zone):
+    return (urgency(item, now, zone), item.priority,
+            attention_order(item.attention, zone) if item.attention else 0,
+            item.title.lower(), item.id)
 
 
 def validate_move_depth(snapshot: Snapshot, item_id: str, parent_id: str | None) -> None:
     """Known subtree preflight, including cycle prevention and resulting depth."""
-    depths = hierarchy_depths(snapshot)
-    branch = subtree(snapshot, item_id)
+    hierarchy = Hierarchy(snapshot)
+    depths = hierarchy.depths
+    branch = hierarchy.subtree(item_id)
     if parent_id in {i.id for i in branch}:
         raise DomainError('move would create a cycle')
     base = 0 if parent_id is None else depths[parent_id] + 1
