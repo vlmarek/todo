@@ -64,8 +64,8 @@ def ancestor_path(snapshot, item, *, hierarchy=None, include_item=False):
     return ' > '.join(scalar_title(i.title) for i in path)
 
 
-def owner_title(snapshot, item, *, deep_only=False):
-    path = ancestors(snapshot, item.id)
+def owner_title(snapshot, item, *, deep_only=False, hierarchy=None):
+    path = hierarchy.ancestors(item.id) if hierarchy is not None else ancestors(snapshot, item.id)
     return scalar_title(item.title) + (' — ' + ' > '.join(scalar_title(i.title) for i in path) if path and (not deep_only or len(path) > 1) else '')
 
 
@@ -189,6 +189,12 @@ def time_block(value, reminders, now, zone, color=Color(), *, detail=False, sche
     return color.paint(text, 'red' if overdue else 'blue')
 
 
-def convention_warnings(snapshot, items):
-    return '\n'.join('todo: ' + owner_title(snapshot, item) + ': ' + issue
-                     for item in items if (issue := convention_diagnostic(item)))
+def convention_warnings(snapshot, items, *, hierarchy=None):
+    warnings = []
+    for item in items:
+        if issue := convention_diagnostic(item):
+            if hierarchy is None:
+                from todo_lib.domain import Hierarchy
+                hierarchy = Hierarchy(snapshot)
+            warnings.append('todo: ' + owner_title(snapshot, item, hierarchy=hierarchy) + ': ' + issue)
+    return '\n'.join(warnings)

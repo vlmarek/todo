@@ -7,7 +7,7 @@ No lifecycle operation, rollback, retry, or report-cursor update occurs here.
 from dataclasses import dataclass, replace
 
 from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, Outcome, MutationInterrupted
+from todo_lib.adapter.commands import Gateway, Outcome, MutationInterrupted, UnsubmittedOperation
 from todo_lib.adapter.current import Current, retrieve
 from todo_lib.adapter.history import HistoryAdapter
 from todo_lib.adapter.transport import HTTPFailure
@@ -145,6 +145,8 @@ class MoveWorkflow:
             try:
                 operation = self.gateway.move(source.id, before=before, **(
                     {'parent_id': parent_id} if parent_id is not None else {'project_id': category}))
+            except UnsubmittedOperation as error:
+                raise MoveError(context + ': ' + str(error), remote_outcome='unattempted') from error
             except KeyboardInterrupt as error:
                 partial = error.result if isinstance(error, MutationInterrupted) else None
                 outcome = (partial.outcome.value if partial.attempted else 'unattempted') if partial else 'unknown'
@@ -197,12 +199,13 @@ class MoveWorkflow:
             # category. Retained completed descendants omitted by bounded history
             # keep their own fields; any newly returned fields remain authoritative.
             retained = dict(candidate.items)
-            for item in d.subtree(candidate, source.id):
+            hierarchy = d.Hierarchy(candidate)
+            for item in hierarchy.subtree(source.id):
                 if item.id in current.snapshot.items:
                     continue
                 # Omitted completed context inherits from its closest returned
                 # ancestor. That ancestor may have been reparented remotely.
-                ancestor = next((a for a in reversed(d.ancestors(candidate, item.id))
+                ancestor = next((a for a in reversed(hierarchy.ancestors(item.id))
                                  if a.id in current.snapshot.items), None)
                 if ancestor is not None:
                     retained[item.id] = replace(item,

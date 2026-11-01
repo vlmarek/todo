@@ -15,7 +15,7 @@ import termios
 
 from todo_lib import domain as d
 from todo_lib import presentation as p
-from todo_lib.adapter.commands import Gateway, Operation, Outcome, MutationInterrupted
+from todo_lib.adapter.commands import Gateway, Operation, Outcome, MutationInterrupted, UnsubmittedOperation
 from todo_lib.adapter.current import Current
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import LocalError, command_argv, exclusive_lock, load_config
@@ -261,7 +261,8 @@ class CommentWorkflow:
                     raise
                 operations.append(remote)
                 accepted = remote.outcome == Outcome.ACCEPTED
-                state = 'Accepted' if accepted else 'Unknown' if remote.outcome == Outcome.UNKNOWN else 'Failed'
+                state = ('Not attempted' if not remote.attempted else 'Accepted' if accepted
+                         else 'Unknown' if remote.outcome == Outcome.UNKNOWN else 'Failed')
                 reason = '; '.join(remote.issues) or None
                 if accepted:
                     if remote.after is not None and owner.id in remote.after.snapshot.items:
@@ -295,6 +296,8 @@ class CommentWorkflow:
             except (LocalError, d.DomainError, HTTPFailure, OSError) as error:
                 status = 1
                 reason = str(error)
+                if isinstance(error, UnsubmittedOperation):
+                    state = 'Not attempted'
                 if isinstance(error, SyncError):
                     local_failure = error
                     diagnostics.append(str(error))

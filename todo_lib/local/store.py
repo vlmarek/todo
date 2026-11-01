@@ -209,7 +209,7 @@ def prepare_candidates(snapshot, history, *, account_display, sync_token, synced
             d.validate(current_snapshot, hidden_names)
     except d.DomainError as error:
         raise LocalError(str(error)) from None
-    if history.snapshot is snapshot or history.snapshot is current_snapshot:
+    if history.snapshot is snapshot or (current_snapshot is not None and history.snapshot is current_snapshot):
         _validate_history_fields(history)
     else:
         validate_history(history)

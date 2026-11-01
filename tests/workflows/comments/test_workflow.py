@@ -36,6 +36,15 @@ class WorkflowTests(CommentSupport, unittest.TestCase):
         # Complete current notes already prove this active owner's actual state.
         # Required owner pagination is retained by the archived-owner probes.
 
+    def test_gateway_refusal_reports_current_and_later_comments_unattempted(self):
+        from todo_lib.adapter.commands import UnsubmittedOperation
+        with patch.object(self.workflow.gateway, 'execute',
+                          side_effect=UnsubmittedOperation('pre-dispatch refusal')) as execute:
+            result = self.workflow.execute(['add', 'comment', 'Leaf', '--comment', 'first body', 'later body'])
+        self.assertEqual(result.status, 1)
+        self.assertEqual([o.status for o in result.outcomes], ['Not attempted', 'Not attempted'])
+        self.assertEqual(execute.call_count, 1)
+
     def test_unchanged_and_removed_starter_exact_timestamps_and_own_identity(self):
         for removed in (False, True):
             with self.subTest(removed=removed):

@@ -72,7 +72,7 @@ def render_now(snapshot, now, *, items=None, hidden_names=(), all_items=False, c
                 text += color.context(' — ' + ancestor_path(snapshot, item, hierarchy=hierarchy))
             lines.append(text)
         sections.append('\n'.join(lines))
-    return document('\n\n'.join(sections), convention_warnings(snapshot, rows))
+    return document('\n\n'.join(sections), convention_warnings(snapshot, rows, hierarchy=hierarchy))
 
 
 def _waiting_section(snapshot, item, now, hierarchy):

@@ -9,7 +9,7 @@ record every accepted/rejected/unknown/unattempted operation, including local fa
 from dataclasses import dataclass, replace
 
 from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, Operation, MutationInterrupted
+from todo_lib.adapter.commands import Gateway, Operation, MutationInterrupted, UnsubmittedOperation
 from todo_lib.adapter.current import Current
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import LocalError, exclusive_lock, load_config
@@ -45,11 +45,12 @@ class LifecycleResult:
 
 
 def _preview(snapshot, root, included):
-    depths = d.subtree_depths(snapshot, root.id)
+    hierarchy = d.Hierarchy(snapshot)
+    depths = hierarchy.depths
     offset = depths[root.id]
     return '\n'.join('  ' * (depths[i.id] - offset) + d.scalar_title(i.title) +
                      (' [completed]' if i.completed else '')
-                     for i in d.subtree(snapshot, root.id) if i.id in included)
+                     for i in hierarchy.subtree(root.id) if i.id in included)
 
 
 def _recurring_preflight(snapshot, item, forward, hidden_names):
@@ -96,6 +97,7 @@ class LifecycleWorkflow:
             state = self.synchronizer.read_local()
             snapshot, now, cursor = state.snapshot, state.now, state.state.cursor
             d.validate(snapshot, settings.hidden_from_now)
+            hierarchy = d.Hierarchy(snapshot)
             candidates = (title_candidates(snapshot, request.selector, target=request.target) if command == 'done'
                 else recent_candidates(snapshot, request.selector, cursor, now, target=request.target) if command == 'reopen'
                 else deletion_candidates(snapshot, request.selector, cursor, now, target=request.target))
@@ -105,18 +107,18 @@ class LifecycleWorkflow:
                 parents = (title_candidates(snapshot, request.parent) if command == 'done' else
                     tuple(sorted((i for i in snapshot.items.values() if matches(i.title, request.parent)),
                         key=lambda i: (snapshot.categories[i.category_id].name.lower(),
-                            tuple(a.title.lower() for a in d.ancestors(snapshot, i.id)),
+                            tuple(a.title.lower() for a in hierarchy.ancestors(i.id)),
                             i.title.lower(), i.id))))
                 parent = choose(snapshot, request.parent, parents, now, streams=self.streams, color=color)
                 candidates = tuple(c for c in candidates if snapshot.items[
                     c.item_id if isinstance(c, d.LifecycleCandidate) else c.id].parent_id == parent.id)
             candidate = choose(snapshot, request.selector, candidates, now, streams=self.streams, color=color)
             root = snapshot.items[candidate.item_id] if isinstance(candidate, d.LifecycleCandidate) else candidate
-            tree = d.subtree(snapshot, root.id)
+            tree = hierarchy.subtree(root.id)
             if command == 'done':
                 recurring = [i for i in tree[1:] if i.recurring and not i.completed]
                 if recurring:
-                    context = {a.id for i in recurring for a in (*d.ancestors(snapshot, i.id), i)}
+                    context = {a.id for i in recurring for a in (*hierarchy.ancestors(i.id), i)}
                     text = _preview(snapshot, root, context)
                     self._show(text)
                     raise d.DomainError('Recurring descendants block completion:\n' + text +
@@ -147,7 +149,7 @@ class LifecycleWorkflow:
                 eligible = {c.item_id for c in d.completed_deletion_candidates(snapshot, cursor, now)}
                 included = {root.id} | {i.id for i in tree if not i.completed or i.id in eligible}
                 # Include ancestor context for every shown bounded descendant.
-                included.update(a.id for i in tree if i.id in included for a in d.ancestors(snapshot, i.id))
+                included.update(a.id for i in tree if i.id in included for a in hierarchy.ancestors(i.id))
                 self._show('Delete scope:\n' + _preview(snapshot, root, included))
                 self.streams.stderr.write('Older completed descendants are outside this bounded preview '
                     'and may also be cascade-deleted by Todoist.\n')
@@ -169,7 +171,9 @@ class LifecycleWorkflow:
     def _run(self, operations, snapshot, state, now, deliver):
         outcomes, receipts, failure, status = [], [], None, 0
         selected_owners = dict(snapshot.items)
-        identities = {i.id: i.role + ': ' + p.owner_title(snapshot, i) for i in snapshot.items.values()}
+        hierarchy = d.Hierarchy(snapshot)
+        identities = {i.id: i.role + ': ' + p.owner_title(snapshot, i, hierarchy=hierarchy)
+                      for i in snapshot.items.values()}
         for index, operation in enumerate(operations):
             result = None
             try:
@@ -220,6 +224,8 @@ class LifecycleWorkflow:
                     if isinstance(error, MutationInterrupted):
                         result = error.result
                         outcome = result.outcome.value if result.attempted else 'unattempted'
+                    elif isinstance(error, UnsubmittedOperation):
+                        outcome = 'unattempted'
                     else:
                         outcome = 'unknown'
                     outcomes.append(LifecycleOperation(operation, outcome, result))

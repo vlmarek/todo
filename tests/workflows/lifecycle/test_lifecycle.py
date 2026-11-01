@@ -52,6 +52,18 @@ class LifecycleTests(unittest.TestCase):
         workflow = LifecycleWorkflow(sync, gateway=gateway, settings=Configuration('root', ('cat',), hidden), streams=out)
         return workflow, sync, gateway, out
 
+    def test_gateway_refusal_keeps_whole_sequence_unattempted(self):
+        from todo_lib.adapter.commands import UnsubmittedOperation
+        snapshot = before(d.Item('root-task', 'cat', 'Root'),
+                          d.Item('child', 'cat', 'Child', 'root-task')).snapshot
+        workflow, sync, gateway, out = self.workflow(snapshot)
+        with patch.object(gateway, 'execute', side_effect=UnsubmittedOperation('pre-dispatch refusal')) as execute:
+            result = workflow.execute(['done', 'Root', '--comment', 'progress'])
+        self.assertEqual(result.status, 1)
+        self.assertEqual([o.outcome for o in result.operations], ['unattempted'] * 3)
+        self.assertEqual(sync.calls, [('local', {})])
+        self.assertEqual(execute.call_count, 1)
+
     def test_exact_nested_preview_postorder_and_root_only_comments(self):
         root = d.Item('root-task', 'cat', 'Root')
         z = d.Item('z', 'cat', 'Newest', root.id, added_at=LATER)

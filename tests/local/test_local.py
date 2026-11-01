@@ -540,6 +540,12 @@ with exclusive_lock('refresh', root):
                 write.assert_not_called()
                 self.assertEqual(list(self.root.iterdir()), [])
 
+    def test_missing_history_model_is_a_local_error_before_publication(self):
+        self.history = replace(self.history, snapshot=None)
+        with self.assertRaises(LocalError):
+            self.candidates()
+        self.assertEqual(list(self.root.iterdir()), [])
+
     def test_interrupted_init_preserves_authority_on_rerun(self):
         candidate = self.candidates()
         real_replace = os.replace

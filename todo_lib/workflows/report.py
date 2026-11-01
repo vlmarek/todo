@@ -64,9 +64,10 @@ def _select(snapshot, completed, activities, start, end, hidden_names, *, now=No
         if comment is not None and comment.item_id == event.owner_id:
             progress.append(ReportEvent(comment.item_id, event.event_date, 'comment',
                                         comment.body, event.id))
+    hierarchy = d.Hierarchy(snapshot)
     hidden = [i for i in snapshot.items.values() if not i.completed
               and snapshot.categories[i.category_id].name not in hidden_names
-              and d.visibility(snapshot, i.id, d.instant_datetime(now if now is not None else end), hidden_names).own_hidden]
+              and hierarchy.visibility(i.id, d.instant_datetime(now if now is not None else end), hidden_names).own_hidden]
     return finished, progress, hidden
 
 
@@ -314,10 +315,11 @@ class Reporter:
             # Keep their necessary context in disposable cache as well as pending
             # history: final cleanup may prune the latter after cursor publication.
             cache_ids = set(items)
+            hierarchy = d.Hierarchy(pending.snapshot)
             for identity, reminder in pending.snapshot.reminders.items():
                 if current.reminder_ids is not None and identity in current.reminder_ids:
                     cache_ids.add(reminder.item_id)
-                    cache_ids.update(i.id for i in d.ancestors(pending.snapshot, reminder.item_id))
+                    cache_ids.update(i.id for i in hierarchy.ancestors(reminder.item_id))
             cached = replace(pending.snapshot,
                 items={k: i for k, i in pending.snapshot.items.items() if k in cache_ids},
                 **{name: {k: value for k, value in getattr(pending.snapshot, name).items()

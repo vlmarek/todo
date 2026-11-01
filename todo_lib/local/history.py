@@ -109,12 +109,13 @@ def prune_history(history, finalized_cursor, *, output_finalized=False, saved_cu
     if not output_finalized or saved_cursor is None or d.instant_key(saved_cursor) < d.instant_key(finalized_cursor):
         raise LocalError('history cleanup requires finalized output and published cursor')
     s = history.snapshot
+    hierarchy = d.Hierarchy(s)
     keep = {k for k, when in history.observations.items() if when is None or d.instant_key(when) > d.instant_key(finalized_cursor)}
     keep |= {i.id for i in s.items.values() if i.completed_at is not None and d.instant_key(i.completed_at) > d.instant_key(finalized_cursor)}
     keep |= {o.item_id for o in s.occurrences.values() if d.instant_key(o.completed_at) > d.instant_key(finalized_cursor)}
     keep |= {c.item_id for c in s.comments.values() if c.added_at is None or d.instant_key(c.added_at) > d.instant_key(finalized_cursor)}
     for key in tuple(keep):
-        keep.update(i.id for i in d.ancestors(s, key))
+        keep.update(i.id for i in hierarchy.ancestors(key))
     items = {k: v for k, v in s.items.items() if k in keep}
     # Ancestor own comments remain context for newer descendant activity.
     result = replace(s, items=items,

@@ -541,6 +541,8 @@ def attention_prediction(value, account_zone):
             and value.zone is None and value.raw_due is None):
         return replace(value, zone=account_timezone(account_zone).key)
     return value
+
+
 def offset_unit(minutes):
     """Largest exact reminder offset unit; zero retains the scalar minute form."""
     if minutes == 0:

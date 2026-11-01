@@ -26,7 +26,8 @@ class TraversalReuse(unittest.TestCase):
     def test_large_queue_and_selection_do_not_revalidate_per_row(self):
         now = datetime(2026, 10, 23, tzinfo=timezone.utc)
         s = snapshot([d.Item('root', 'c', 'Root')] +
-                     [d.Item(str(n), 'c', 'Step', 'root') for n in range(1000)])
+                     [d.Item(str(n), 'c', 'Step', 'root', labels=frozenset({'waiting'}))
+                      for n in range(1000)])
         for operation in (lambda: d.now_queue(s, now),
                           lambda: title_candidates(s, ('Step',)),
                           lambda: p.render_now(s, now),

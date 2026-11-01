@@ -18,7 +18,7 @@ import sys
 
 from todo_lib import domain as d
 from todo_lib.adapter import current
-from todo_lib.adapter.commands import Gateway, Operation, Outcome, MutationInterrupted
+from todo_lib.adapter.commands import Gateway, Operation, Outcome, MutationInterrupted, UnsubmittedOperation
 from todo_lib.adapter.transport import Transport, HTTPFailure
 from todo_lib.local import (StateStore, LocalError, ConfigState, History,
     check_paths, create_directory, wizard_mode_repairs, repair_wizard_modes,
@@ -544,6 +544,9 @@ class Initializer:
                     provisions[index] = Provision(kind, name, 'unknown')
                     try:
                         result = Gateway(transport).execute(operation)
+                    except UnsubmittedOperation:
+                        provisions[index] = Provision(kind, name, 'unattempted')
+                        raise
                     except MutationInterrupted as error:
                         partial = error.result
                         outcome = partial.outcome.value if partial.attempted else 'unattempted'
