@@ -84,7 +84,8 @@ class GrammarTests(unittest.TestCase):
         self.assertEqual(r.groups[0].arguments, ('--due=tomorrow', '--title'))
         self.assertEqual(r.groups[0].literal_indices, (0, 1))
         for command in ('task', 'step', 'search', 'reopen', 'delete', 'hide', 'unhide'):
-            r = parse([command, '--literal', '--help', '--literal', '--color=never'])
+            r = parse([command, '--literal', '--help', '--literal', '--color=never']
+                      + (['--at', 'tomorrow'] if command == 'hide' else []))
             self.assertEqual(r.selector, ('--help', '--color=never'))
             self.assertEqual(r.selector_literals, (0, 1))
         r = parse(['--literal', '--refresh', 'more'])
@@ -187,7 +188,7 @@ class GrammarTests(unittest.TestCase):
             (['--color=never', 'unclose', '--literal'], 'reopen', 'todo reopen "Release plan"'),
             (['task', '--undone', '--literal'], 'reopen', 'todo reopen "Release plan"'),
             (['step', '--due=tomorrow', 'parent', 'child', '--literal'], 'schedule',
-             'todo schedule "Release plan" --at tomorrow --hide --reason "no time"'),
+             'todo schedule "Release plan" tomorrow 10:00 --hide --reason "no time"'),
             (['task', '--move', 'Work', 'Release', '--literal'], 'move', 'todo move "Write tests" ""'),
             (['comments', 'Release', '--comment', 'Reviewed', '--literal'], 'comment',
              'todo comment "Release plan" --comment Reviewed'),
@@ -243,11 +244,11 @@ class GrammarTests(unittest.TestCase):
             'done': 'todo done "Release plan" --comment Reviewed',
             'reopen': 'todo reopen "Release plan"',
             'delete': 'todo delete "Release plan"',
-            'schedule': 'todo schedule "Release plan" --at tomorrow --hide --reason "no time"',
-            'hide': 'todo hide "Release plan" --at tomorrow --reason "no time"',
+            'schedule': 'todo schedule "Release plan" tomorrow 10:00 --hide --reason "no time"',
+            'hide': 'todo hide "Release plan" next week --reason "no time"',
             'unhide': 'todo unhide "Release plan"',
             'priority': 'todo priority "Release plan" P1',
-            'rename': 'todo rename "Release plan" --to New plan',
+            'rename': 'todo rename "Release plan" New plan',
             'move': 'todo move "Write tests" ""',
             'report': 'todo report --since "2 days ago"',
             'init': 'todo init',
@@ -272,6 +273,99 @@ class GrammarTests(unittest.TestCase):
                         parse_boundary(request.option('since'),
                                        datetime(2026, 10, 26, 12, tzinfo=timezone.utc), 'UTC'),
                         datetime(2026, 10, 24, 12, tzinfo=timezone.utc))
+
+
+
+class PositionalValueTests(unittest.TestCase):
+    def test_joined_values_options_and_aliases(self):
+        for command in ('rename', 'schedule', 'due', 'wait', 'hide'):
+            for tail in (['next', 'week'], ['next', 'week', '10:00'], ['next', 'week', 'at', '10:00']):
+                with self.subTest(command=command, tail=tail):
+                    r = parse([command, 'A', *tail])
+                    self.assertEqual(r.selector, ('A',))
+                    self.assertEqual(r.destination if command == 'rename' else (r.option('at'),),
+                                     (' '.join(tail),))
+        for command in ('schedule', 'due', 'wait', 'hide'):
+            for argv in (
+                [command, '--reason= later ', 'Release plan', 'next', '--color=never', 'week', 'at', '10:00'],
+                [command, 'Release plan', 'next', 'week', '--reason', ' later ', 'at', '10:00', '--color', 'never']):
+                if command != 'hide':
+                    argv += ['--hide']
+                with self.subTest(argv=argv):
+                    r = parse(argv)
+                    self.assertEqual(r.selector, ('Release plan',))
+                    self.assertEqual(r.option('at'), 'next week at 10:00')
+                    self.assertEqual(r.option('reason'), ' later ')
+        for argv in (['rename', '--color=never', 'A', 'New', 'task', 'title', 'today'],
+                     ['rename', 'A', 'New', '--color', 'never', 'task', 'title', 'today']):
+            r = parse(argv)
+            self.assertEqual(r.selector, ('A',))
+            self.assertEqual(r.destination, ('New task title today',))
+            self.assertEqual(r.destination_kind, 'name')
+        r = parse(['rename', '--literal', '--help', 'New name', '--literal', '--to', 'end'])
+        self.assertEqual(r.selector, ('--help',))
+        self.assertEqual(r.selector_literals, (0,))
+        self.assertEqual(r.destination, ('New name --to end',))
+        self.assertEqual(r.destination_literals, (0,))
+        r = parse(['schedule', '--literal', '--help', ' next week ', '--literal', '--due=never'])
+        self.assertEqual(r.selector_literals, (0,))
+        self.assertEqual(r.option('at'), ' next week  --due=never')
+        self.assertIsNone(parse(['wait', 'A', 'tomorrow']).option('hide'))
+        self.assertEqual(parse(['rename', 'A', ' New ', '', 'title']).destination, (' New   title',))
+        self.assertEqual(parse(['schedule', 'A', ' next ', '', 'week']).option('at'), ' next   week')
+
+    def test_explicit_boundaries_keep_terms_and_scalar_arity(self):
+        for command in ('schedule', 'due', 'wait', 'hide'):
+            r = parse([command, '--due=tomorrow 10:00', '--literal', 'clear', 'nightly python', 'extra'])
+            self.assertEqual(r.selector, ('clear', 'nightly python', 'extra'))
+            self.assertEqual(r.selector_literals, (0,))
+            self.assertEqual(r.option('at'), 'tomorrow 10:00')
+            self.assertIsNone(r.option('clear'))
+        r = parse(['rename', 'nightly', 'python', '--to', 'New name', 'tail'])
+        self.assertEqual(r.selector, ('nightly', 'python'))
+        self.assertEqual(r.destination, ('New name tail',))
+        r = parse(['schedule', 'A', '--at', 'tomorrow', '10:00'])
+        self.assertEqual(r.selector, ('A', '10:00'))
+        self.assertEqual(r.option('at'), 'tomorrow')
+
+    def test_sole_clear_and_reminder_boundaries(self):
+        self.assertTrue(parse(['schedule', 'A', 'clear']).option('clear'))
+        for tail, value in ((['B', 'clear'], 'B clear'), (['--literal', 'clear'], 'clear'),
+                            (['clear '], 'clear '), (['B clear'], 'B clear')):
+            r = parse(['schedule', 'A', *tail])
+            self.assertEqual(r.selector, ('A',))
+            self.assertEqual(r.option('at'), value)
+            self.assertIsNone(r.option('clear'))
+        for marker in (['--reminder', '10m'], ['--reminder-at', 'keep'],
+                       ['--reminder', 'keep', '--reminder-at', 'Friday 09:00'], ['--reminder', 'clear']):
+            r = parse(['schedule', 'A', 'tomorrow 10:00', *marker])
+            self.assertEqual(r.selector, ('A',))
+            self.assertEqual(r.option('at'), 'tomorrow 10:00')
+            self.assertIsNone(r.option('clear'))
+            r = parse(['schedule', 'A', *marker])
+            self.assertIsNone(r.option('at'))
+            self.assertEqual(r.selector, ('A',))
+        r = parse(['schedule', '--reminder-at', 'keep', 'A', 'B', '--reminder=10m'])
+        self.assertEqual(r.option('at'), 'B')
+        self.assertEqual(r.reminder_markers, (('reminder-at', 'keep'), ('reminder', '10m')))
+        self.assertIsNone(parse(['hide', 'A']).option('at'))
+
+    def test_invalid_inputs_are_usage_errors(self):
+        for argv in (
+            ['rename', 'A'], ['rename', '', 'Name'], ['rename', 'A', 'Bad\nname'],
+            ['rename', 'A', '--to'], ['rename', 'A', '--to=Name'],
+            ['rename', 'A', '--to', 'B', '--to', 'C'],
+            ['schedule', 'A'], ['schedule', 'A', 'none'], ['schedule', 'A', '--at'],
+            ['schedule', 'A', 'tomorrow', '--at='],
+            ['schedule', 'A', '--at=tomorrow', '--due=next week'],
+            ['hide', 'A', '--at=tomorrow', '--schedule=next week'],
+            *[['schedule', 'A', 'clear', *suffix] for suffix in (
+                ['--hide'], ['--reason='], ['--reminder=clear'], ['--reminder-at=keep'])]):
+            with self.subTest(argv=argv), self.assertRaises(UsageError) as raised:
+                parse(argv)
+            self.assertEqual(raised.exception.status, 2)
+            self.assertIn('Usage: todo ', str(raised.exception))
+            self.assertIn('Example: todo ', str(raised.exception))
 
 
 if __name__ == '__main__':

@@ -1779,3 +1779,154 @@ All 766 offline tests passed, followed by unchanged copied-runtime/PATH probes,
 real GNU less PTY checks and Git-status/artifact checks. `git diff --check` passed.
 Pre-existing generated Python bytecode was removed before the verification run.
 No live account, provider requests or credentials were used.
+
+### T39 — revision 20 positional rename, scheduling and hiding (2026-11-01)
+
+Subject: runner worktree HEAD `d2db19c5f1724ce33f8d56daf8f985ccc2c0ceb5`
+plus the uncommitted T39 deliverables bound below. The supplied baseline includes
+the authorized manual work and routine-notice removals. Historical entries and
+the frozen ledger are unchanged. This entry records worker observations, not an
+independent review or runner acceptance.
+
+Implemented REQ-CLI-039/040 and REQ-VERIFY-038 by assigning canonical positional
+boundaries after existing lossless option extraction. Rename normalizes to the
+existing `name` destination; schedule/due/wait/hide normalize to existing `at` and
+`clear` fields. Joined values preserve argument contents, including internal
+empty arguments; explicit marker/scalar forms retain their prior arities and
+selector phrase/term boundaries. Sole unescaped full clear is exclusive of
+reminder/hiding/reason changes. Noun-action adjacency remains unchanged.
+
+Traced parser output through CaptureWorkflow.execute/_plan and scheduling
+propose/validate_proposals, including cached selection, actual-state reconciliation
+and reminder order. No workflow/API/storage/provider change was necessary. Read
+retained provider-contract navigation and the pinned OpenAPI Sync description's
+item_update/reminder evidence; outgoing requests retain the existing content/due,
+UUID and reminder mappings. Synthetic boundaries continue to reject incorrect
+requests rather than deriving expected state from outgoing data.
+
+Migrated the hide literal-selector assertion to an explicit date form, preserving
+both literal indices and independent terms. Updated exact help examples. Existing
+syntax/reminder/capture/public/cached fixtures needed no structural change. The
+cached timed-owner/reminder test now supplies joined positional attention while
+retaining its exact gateway, accepted-outcome and actual saved-state assertions.
+The existing copied mutation phase now invokes `rename A Alpha`, retaining all
+strict transport and subsequent Alpha fixture expectations.
+
+Final focused command (exit 0, 125 tests, `/tmp/t39-focused-final.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser tests.syntax.test_reminders tests.cli.test_cli tests.cli.test_reminders tests.workflows.capture.test_capture tests.workflows.capture.test_reminders tests.workflows.test_cached_selection -v > /tmp/t39-focused-final.log 2>&1
+```
+
+Distinguishing cases cover two/three/four-word tails and aliases, option placement,
+literal and quoted selectors/values, scalar contents/arity, explicit independent
+terms, reminder-only/mixed/keep/clear, sole clear versus `A B clear`, explicit-date
+selector clear, literal clear and incompatible clear. Public CLI tests exercise
+actual task and nested-step rename/timed-attention/hide requests with cached IDs,
+post-operation state and receipts. Invalid date and literal-clear domain failures
+remain status 1 with zero HTTP and unchanged persisted bytes, without selector
+fallback. Help and usage errors run with StateStore and Transport forbidden;
+status 2, concrete examples, retained explicit alternatives and unchanged now's
+single-category synopsis/rejections are asserted. Existing noun-action,
+creation/comment, mutation, history and failure assertions remain in the suites.
+
+Directed scheduling dependencies (exit 0, 19 tests,
+`/tmp/t39-scheduling-dependencies.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.capture.test_named_timezones tests.workflows.capture.test_coexistence -v > /tmp/t39-scheduling-dependencies.log 2>&1
+```
+
+Selected because the joined attention scalar feeds the existing zone, recurrence
+and reason/description preservation consumers; these are directed dependency
+checks, not an additional broad suite.
+
+Delivery harness regressions (exit 0, 3 tests, `/tmp/t39-delivery.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.delivery.final.test_verify -v > /tmp/t39-delivery.log 2>&1
+```
+
+Copied installation/PATH directed probe, exact command (exit 0; output:
+`copied: init passed (separate process, zero network)` and
+`copied: mutation passed (separate process, zero network)`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY'
+import importlib.util
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+root = Path.cwd()
+spec = importlib.util.spec_from_file_location('verify_clean', root / 'scripts/verify_clean.py')
+verify = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(verify)
+with tempfile.TemporaryDirectory(prefix='t39-copy-') as temp:
+    base = Path(temp)
+    home, install, outside = (base / n for n in ('home', 'bin', 'outside'))
+    for path in (home, install, outside):
+        path.mkdir(mode=0o700)
+    shutil.copy2(root / 'todo', install / 'todo')
+    shutil.copytree(root / 'todo_lib', install / 'todo_lib')
+    probe = outside / 'copy_probe.py'
+    shutil.copy2(root / 'tests/delivery/final/copy_probe.py', probe)
+    env = verify.environment(home, install, outside)
+    subprocess.run(['todo', 'help', 'rename'], cwd=outside, env=env,
+                   stdout=subprocess.PIPE, check=True)
+    for phase in ('init', 'mutation'):
+        subprocess.run(['python3.11', '-I', '-B', str(probe), str(install), phase],
+                       cwd=outside, env=env, check=True, timeout=10)
+    for source in [root / 'todo', *(root / 'todo_lib').rglob('*')]:
+        if source.is_file():
+            assert source.read_bytes() == (install / source.relative_to(root)).read_bytes()
+    for area in (root, install, outside):
+        verify.artifacts(area)
+PY
+```
+
+This uses the unchanged harness environment/isolation and synthetic transport,
+separate interpreters, a runtime copy without tests, unchanged runtime bytes,
+PATH help and forbidden-artifact checks. It does not execute the other copied
+phases or real-less probe. The unchanged runner final-delivery gate owns one
+complete offline suite plus all distinct copied/PATH/real-less probes on the
+integrated subject. No additional broad worker check was run. No live account,
+network/provider call or independent-review claim is made.
+
+Feedback history: the first syntax check found the expected old hide literal
+multi-term assumption; it was migrated to the retained explicit form. A new
+zero-request public test initially counted fixture seeding calls; corrected it
+to assert no additional calls after seeding. Subsequent focused runs passed,
+including the final subject above. `git diff --check` passed.
+
+Content binding (SHA-256; excludes this appended evidence file):
+
+```text
+fa7b4b2a38f2154595bd9d6998af35b51b283ed753d13f2993dc6a107989ed9c  README.md
+588a4032997a3dea5664b3b380cd009e844bdd593aaed59e7bdbd5c15f88824c  docs/user/smoke.md
+9f241db7f4d000ad82e218548a69bae0f6cbbb8ac40a2b9299143df6084bdbb3  tests/cli/test_cli.py
+c39133760e41e5a6699759b10b24a40c1b7ffaa0522d17d7b68e26fdaf7e9dff  tests/delivery/final/copy_probe.py
+9664b3d49335d9677e971752c4ab72750b021e489d5d8f4086c93ac380a993eb  tests/syntax/test_parser.py
+6079f7ff067cc691e4657e98c739e170170a0f727a718cc7ec75a97167b7bf48  tests/workflows/test_cached_selection.py
+e4e00e6415f790ef4a88837e4065f38a7ebe04bd91ec1726cab593c08a4d11bd  todo_lib/syntax/API.md
+852d8d5a42976fd3b146a277d20186ada8a7d81bcdbdf912ebd0c0ff83e72b5f  todo_lib/syntax/help.py
+a1b69347dac82470b15834f7bbfa30a6843c97f99ad035d1925e3e7e4ad8e3b6  todo_lib/syntax/parser.py
+```
+
+Earlier feedback commands on intermediate T39 edits (not certifications of the
+final content binding):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser tests.syntax.test_reminders -q > /tmp/t39-syntax.log 2>&1
+# Exit 1: 17 tests, one old hide literal-selector expectation failed.
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser tests.syntax.test_reminders tests.cli.test_cli tests.cli.test_reminders tests.workflows.capture.test_capture tests.workflows.capture.test_reminders tests.workflows.test_cached_selection -v > /tmp/t39-focused-1.log 2>&1
+# Exit 0: 122 tests after the explicit-form migration and initial new cases.
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.cli.test_cli -q > /tmp/t39-public.log 2>&1
+# Exit 1: 20 tests, one new test counted seed calls; production dispatch passed.
+```
+
+The final focused command was also used during refinement (125 tests each,
+exit 0); its final captured result after all parser/public-test edits is the
+125-test result recorded above. Delivery and copied checks used the final
+runtime/probe bytes; subsequent edits added test assertions, moved unittest's
+main guard after the new class, and appended this evidence only.

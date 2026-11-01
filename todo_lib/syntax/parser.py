@@ -325,6 +325,12 @@ def parse(argv):
         nonempty(seq, label)
         return ' '.join(_values(seq))
 
+    def value_tail(seq, label):
+        # Value words form one scalar; validate emptiness after joining.
+        value = ' '.join(_values(seq))
+        nonempty([Word(value)], label)
+        return value
+
     if alias_operands is not None:
         if len(alias_operands) == 2:
             parent, selector = alias_operands[:1], alias_operands[1:]
@@ -382,9 +388,12 @@ def parse(argv):
             destination = [Word(action_value, action_literal)]
             destination_kind = 'positional' if command == 'move' else 'name'
         elif command == 'rename':
-            selector = positional
-            if len(marked) != 1: fail('rename requires --to NEW_NAME')
-            destination = [Word(joined(marked[0][1], 'new name'), any(w.literal for w in marked[0][1]))]
+            if marked:
+                selector, name = positional, marked[0][1]
+            else:
+                selector, name = positional[:1], positional[1:]
+            value = joined(name, 'new name') if marked else value_tail(name, 'new name')
+            destination = [Word(value, any(w.literal for w in name))]
             destination_kind = 'name'
         elif marked:
             selector = positional
@@ -420,19 +429,28 @@ def parse(argv):
             value = action_value
         store('priority', value)
         nonempty(selector)
-    elif command == 'schedule':
-        if alias_operands is None: selector = positional
+    elif command in ('schedule', 'hide'):
+        if alias_operands is None:
+            if 'at' in options:
+                selector = positional
+            else:
+                selector, attention = positional[:1], positional[1:]
+                if (command == 'schedule' and len(attention) == 1
+                        and attention[0].value == 'clear' and not attention[0].literal):
+                    if any(k in options for k in ('hide', 'reason', 'reminder', 'reminder-at')):
+                        fail('full scheduling clear cannot combine with hiding, reason or reminders')
+                    store('clear', True)
+                elif attention:
+                    store('at', value_tail(attention, 'attention value'))
         elif wait_alias:
             store('reason', joined(positional, 'waiting reason'))
-        elif positional: fail('unexpected scheduling operands', _values(positional))
-        if not any(key in options for key in ('at', 'reminder', 'reminder-at')) and selector and selector[-1].value == 'clear' and not selector[-1].literal:
-            selector = selector[:-1]
-            store('clear', True)
-        if not any(key in options for key in ('at', 'reminder', 'reminder-at', 'clear')):
-            fail('schedule requires --at VALUE, --reminder VALUE, --reminder-at VALUE, or clear')
+        elif positional:
+            fail('unexpected scheduling operands', _values(positional))
+        if command == 'schedule' and not any(key in options for key in ('at', 'reminder', 'reminder-at', 'clear')):
+            fail('schedule requires WHEN, --at VALUE, --reminder VALUE, --reminder-at VALUE, or clear')
         if wait_alias and 'at' not in options: fail('waiting requires --at VALUE')
         nonempty(selector)
-    elif command in ('task', 'step', 'lookup', 'search', 'reopen', 'delete', 'hide', 'unhide'):
+    elif command in ('task', 'step', 'lookup', 'search', 'reopen', 'delete', 'unhide'):
         if alias_operands is None: selector = positional
         elif positional: fail('unexpected operands', _values(positional))
         nonempty(selector)

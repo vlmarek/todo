@@ -35,6 +35,44 @@ Offline release verification is `./scripts/verify-clean`: one complete
 checks, and entry/end Git status and artifact checks. It uses temporary local state,
 synthetic tokens and controlled transport only. It never runs the live smoke.
 
+Rename, schedule (also `due` and `wait`) and hide use the first remaining
+argument as the selector and join every following value argument with one space:
+
+```sh
+todo rename jklu New task title
+todo schedule jklu tomorrow 10:00 --reminder 10m
+todo hide 'Release plan' next week --reason 'no time'
+```
+
+Options may precede, interrupt or follow operands; their scalar values never
+become operands. A quoted selector is one contiguous phrase. For independent
+selector terms, retain the explicit boundary and quote each multiword scalar:
+
+```sh
+todo rename nightly python --to New task title
+todo schedule nightly python --at 'tomorrow 10:00' --reminder 10m
+todo hide nightly python --at tomorrow
+```
+
+Reminders do not change shorthand parsing. `schedule 'Release plan' --reminder
+10m` changes only reminders; `schedule jklu tomorrow --reminder clear` changes
+attention and clears only reminders. `schedule 'Release plan' clear` removes
+attention, recurrence, reminders and own hiding/reason only when `clear` is the
+sole unescaped value argument. It cannot combine with reminders, hiding or reason
+changes. `schedule A B clear` requests attention `B clear` for selector `A`.
+`--literal clear` prevents full clear; with an explicit date, positional `clear`
+is a selector term. Use `--literal --to` for a literal rename value.
+
+The compatibility cost: old unmarked multi-term schedule/hide commands now use
+the extra arguments as attention. `schedule nightly python --reminder 10m`
+selects `nightly` and requests attention `python`; a rejected date never retries
+another selector split. Use explicit date options for independent selector terms,
+or quote a contiguous phrase for reminder-only/full-clear selection. `hide
+SELECTOR` reuses existing future attention, recurrence and reminders; schedule
+without a date needs a reminder operation or full clear. `--hide` requires supplied
+attention; canonical `wait` does not imply hiding. Noun actions still take adjacent
+scalars, for example `todo task --due 'tomorrow 10:00' 'Release plan'`.
+
 Reminders use a complete desired set. Repeat and mix `--reminder OFFSET` (before
 an exact task due, with `0m` meaning at due) and `--reminder-at WHEN` (an independent
 exact schedule, including on undated tasks). Both accept `--option=VALUE` and

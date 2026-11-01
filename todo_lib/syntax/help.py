@@ -14,10 +14,10 @@ SYNOPSES = {
     'comment': 'comment [--refresh|--edit] SELECTOR | comment SELECTOR... --comment TEXT...',
     'done': 'done SELECTOR [TEXT...] | done SELECTOR... --comment TEXT...',
     'reopen': 'reopen SELECTOR...', 'delete': 'delete [--yes] SELECTOR...',
-    'schedule': 'schedule SELECTOR... [--at WHEN] [--hide] [--reason VALUE] [--reminder OFFSET|keep]... [--reminder-at WHEN|keep]... | schedule SELECTOR... --reminder clear | schedule SELECTOR... clear',
-    'hide': 'hide SELECTOR... [--at WHEN] [--reason VALUE]',
+    'schedule': 'schedule SELECTOR WHEN... [--hide] [--reason VALUE] [--reminder OFFSET|keep]... [--reminder-at WHEN|keep]... | schedule SELECTOR [--reminder OFFSET|keep|clear] [--reminder-at WHEN|keep]... | schedule SELECTOR clear | schedule SELECTOR... --at WHEN',
+    'hide': 'hide SELECTOR [WHEN...] [--reason VALUE] | hide SELECTOR... --at WHEN [--reason VALUE]',
     'unhide': 'unhide SELECTOR...', 'priority': 'priority SELECTOR... P',
-    'rename': 'rename SELECTOR... --to NEW_NAME...',
+    'rename': 'rename SELECTOR NEW_NAME... | rename SELECTOR... --to NEW_NAME...',
     'move': "move SELECTOR TARGET... | move SELECTOR '' | move SELECTOR... --task [PARENT...] [--category NAME...]",
     'report': 'report [--final | --since TIMESTAMP --until TIMESTAMP | --show-cursor | --set-cursor TIMESTAMP [--yes]]',
     'init': 'init',
@@ -34,11 +34,11 @@ EXAMPLES = {
     'search': 'todo search "release notes"',
     'lookup': 'todo "Release plan"',
     'add': 'todo add task Work "Write code" "Write tests"',
-    'schedule': 'todo schedule "Release plan" --at tomorrow --hide --reason "no time"',
-    'hide': 'todo hide "Release plan" --at tomorrow --reason "no time"',
+    'schedule': 'todo schedule "Release plan" tomorrow 10:00 --hide --reason "no time"',
+    'hide': 'todo hide "Release plan" next week --reason "no time"',
     'unhide': 'todo unhide "Release plan"',
     'move': 'todo move "Write tests" ""',
-    'rename': 'todo rename "Release plan" --to New plan',
+    'rename': 'todo rename "Release plan" New plan',
     'done': 'todo done "Release plan" --comment Reviewed',
     'reopen': 'todo reopen "Release plan"',
     'delete': 'todo delete "Release plan"',
@@ -62,7 +62,7 @@ DESCRIPTIONS = {
     'done': 'Complete selected work; descendants complete before parents. Accepted work is never rolled back.',
     'reopen': 'Reopen recently completed work. Accepts no comment creation; recurring undo affects an occurrence.',
     'delete': 'Delete selected work after confirmation; --yes bypasses only this confirmation. Deletion is destructive. Previews describe saved data; use todo --refresh now for a more current preview.',
-    'schedule': 'Set attention, hiding or reminders. Use clear to remove scheduling; relative reminders require timed attention; absolute reminders are independent.',
+    'schedule': 'Set attention, hiding or reminders. Use SELECTOR clear as the sole value to remove scheduling; relative reminders require timed attention; absolute reminders are independent.',
     'hide': 'Hide until a future attention day, with an optional reason. Inherited hiding applies to steps.',
     'unhide': 'Remove own hiding while preserving attention and reminders; parent hiding may still apply.',
     'priority': 'Set task or step priority P1 through P4. A new step copies its immediate parent priority once; later priority changes are independent.',
@@ -145,6 +145,31 @@ def render_help(command=None):
             result += f'Alias example: todo {command} --{action} {value} {selectors}\n'
         if command == 'task':
             result += 'Add steps to a task or step parent: todo task --step "Release plan" "Write summary".\n'
+    if command in ('rename', 'schedule', 'hide'):
+        result += ('Shorthand: the first remaining argument is the whole selector; all remaining value arguments join with one space. '
+                   'Options are extracted before assigning operands, wherever placed. A quoted selector such as "Release plan" '
+                   'is one contiguous phrase; separate selector terms match independently in explicit forms. '
+                   'Values join even when an argument already contains spaces; creation/comment splitting does not apply.\n')
+        if command == 'rename':
+            result += ('Example: todo rename jklu New task title. Explicit multi-term alternative: '
+                       'todo rename nightly python --to New task title.\n')
+        else:
+            result += ('Examples: todo schedule jklu tomorrow 10:00 --reminder 10m; '
+                       'todo hide "Release plan" next week --reason "no time". '
+                       'Explicit multi-term alternatives: todo schedule nightly python --at "tomorrow 10:00" --reminder 10m; '
+                       'todo hide nightly python --at tomorrow. --at/--due/--schedule consume exactly one scalar argument. '
+                       'Reminders never change the shorthand boundary. Former unmarked multi-term schedule/hide selectors now supply '
+                       'a value: schedule nightly python --reminder 10m selects nightly and requests attention python. '
+                       'Invalid dates fail without trying another selector split. Quote a phrase for reminder-only selection. '
+                       'hide SELECTOR without a date preserves existing future attention, recurrence and reminders. '
+                       'Schedule aliases due and wait share this grammar; wait does not imply hiding.\n')
+    if command == 'schedule':
+        result += ('Reminder-only: todo schedule "Release plan" --reminder 10m; supplied --hide requires supplied attention. '
+                   'Full clear: todo schedule "Release plan" clear. Only one sole unescaped value argument clear triggers it; '
+                   'schedule A B clear selects A with attention B clear. It cannot combine with reminders, hiding or reason changes. '
+                   'schedule A tomorrow --reminder clear changes attention and clears only reminders. '
+                   'With --at tomorrow, positional clear is a selector term. --literal clear prevents full clear; '
+                   '--literal --to permits a literal rename value.\n')
     if command in ('schedule', 'hide', 'add'):
         result += ('Scalar values support --option=VALUE and --option VALUE. Quote multiword dates, category names and reasons. '
                    '--hide is boolean; --hide --reason "no time" sets a reason and --reason= removes only the reason.\n')

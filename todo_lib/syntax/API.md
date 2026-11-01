@@ -37,6 +37,32 @@ A command request exposes:
   explicit literal insertions in their respective phrase tuples. Text groups
   retain their own literal positions. Scalars retain the escaped value itself.
 
+Canonical `rename SELECTOR NEW_NAME...` takes the first remaining positional
+argument as the complete selector and joins the rest with U+0020 into the single
+`name` destination. `rename TERMS... --to NEW_NAME...` retains independent selector
+terms/phrases. `schedule` (including `due`/`wait`) and `hide` likewise normalize
+joined positional attention into `options['at']`; creation splitting never applies.
+A quoted selector remains one contiguous phrase. Supported options are extracted
+wherever allowed before positional assignment; their scalar contents and literal
+identity are preserved. `--at`/`--due`/`--schedule` select explicit mode: all
+remaining unmarked arguments are selector terms/phrases and the date consumes
+exactly one scalar argument, quoted when multiword. Noun-action adjacency is unchanged.
+
+Reminder markers preserve order and never select explicit mode. One selector with
+reminders but no date remains reminder-only. A positional date plus `--reminder
+clear` clears only reminders. Full `clear=True` requires exactly one unescaped
+shorthand value argument `clear`; `schedule A B clear` sets `at='B clear'` for
+selector `('A',)`. Literal clear is attention text, and explicit-date positional
+clear is a selector term. Full clear with reminders/hiding/reason is a usage error.
+Without a date, hide reuses existing future attention/recurrence/reminders; schedule
+needs reminders or full clear. Supplied `--hide` requires supplied attention.
+Canonical wait does not independently hide. Old bare multi-term schedule/hide
+selectors now supply attention; consumers must never retry a different split based
+on saved matches or date resolution. Domain/date failures retain operational status.
+Use explicit date options for independent terms, or quote one phrase for reminder-only
+or full-clear selection. `--literal ARG` prevents option/control interpretation,
+for example `schedule A --literal clear` or `rename A --literal --to`.
+
 `render_help(command=None)` is independent of state. `HelpRequest.command` is
 canonical, or `None` for top-level help. T16 can extend help content and public
 wiring without changing the parser or depending on configuration.

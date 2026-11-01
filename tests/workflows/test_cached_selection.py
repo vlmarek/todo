@@ -96,7 +96,7 @@ class CachedSelectionTests(unittest.TestCase):
                     reminder('new-reminder', 'parent', minute_offset=60)])
                 wf, http = self.workflow([update.step(), *self.after(state),
                                          add_reminder.step(), *self.after(final)])
-                result = wf.execute(['schedule', 'Parent', '--at', '2026-10-23T10:00:00Z',
+                result = wf.execute(['schedule', 'Parent', 'tomorrow', '10:00',
                                      '--reminder', '1h'])
                 self.assertEqual(result.status, 0, result.document.stderr)
                 self.assertEqual([o.outcome for o in result.outcomes], ['accepted', 'accepted'])
