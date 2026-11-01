@@ -108,6 +108,13 @@ class Comment:
     added_at: ExactInstant | datetime | None = None
 
 
+def comment_order_key(comment):
+    """Known creation oldest first, then unknown times, with stable-ID ties."""
+    return (comment.added_at is None,
+            instant_key(comment.added_at) if comment.added_at is not None else 0,
+            comment.id)
+
+
 @dataclass(frozen=True)
 class Reminder:
     id: str

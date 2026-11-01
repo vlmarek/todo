@@ -63,8 +63,8 @@ class _CommentObserved(_Observed):
 
 def ordered_comments(comments):
     """Known times oldest first, then unknown times, with stable-ID ties."""
-    return tuple(sorted(comments, key=lambda c: (
-        c.added_at is None, d.instant_key(c.added_at) if c.added_at is not None else 0, c.id)))
+    from todo_lib.domain.model import comment_order_key
+    return tuple(sorted(comments, key=comment_order_key))
 
 
 _EXISTING = re.compile(r'\[id: ([^\s\[\]]+) posted: ([^\[\]\r\n]+)\]')

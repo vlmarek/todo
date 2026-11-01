@@ -123,9 +123,9 @@ class Color:
 def reminder_text(minutes):
     if minutes == 0:
         return 'at due'
-    for divisor, unit in ((10080, 'w'), (1440, 'd'), (60, 'h'), (1, 'm')):
-        if minutes % divisor == 0:
-            return f'{minutes // divisor}{unit} before'
+    from todo_lib.domain.time import offset_unit
+    amount, unit = offset_unit(minutes)
+    return f'{amount}{unit} before'
 
 
 def reminders_text(reminders, zone, *, schedule_zone=False):

@@ -2,7 +2,7 @@
 from todo_lib.domain import scalar_title
 from dataclasses import dataclass
 from todo_lib.domain import ancestors
-from .formatting import actual_due, compact, multiline, owner_title, edge
+from .formatting import actual_due, compact, multiline, owner_title, edge, ancestor_path
 from .render import document
 
 
@@ -50,7 +50,7 @@ def render_move(before_snapshot, before, after_snapshot, after):
         if item.parent_id is None:
             return None
         parent = snapshot.items[item.parent_id]
-        return ' > '.join(scalar_title(a.title) for a in (*ancestors(snapshot, parent.id), parent))
+        return ancestor_path(snapshot, parent, include_item=True)
     # Display paths and names are context, not identity: different parents can
     # render identically, and the same parent can be renamed between snapshots.
     changes = []

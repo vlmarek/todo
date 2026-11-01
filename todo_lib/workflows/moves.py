@@ -78,7 +78,8 @@ class MoveReceiptError(MoveError):
         self.publication_completed = True
         self.saved_state_available = True
         self.refresh_permitted = True
-        path = ' > '.join(d.scalar_title(i.title) for i in (*d.ancestors(snapshot, selected.id), selected))
+        from todo_lib.presentation.formatting import ancestor_path
+        path = ancestor_path(snapshot, selected, include_item=True)
         super().__init__(f'{phase} failed: {cause}. Remote operation outcome: accepted '
             f'for {selected.role} {path} in {snapshot.categories[selected.category_id].name}; '
             'local snapshot publication completed. Do not replay the mutation. '
@@ -225,7 +226,8 @@ class MoveWorkflow:
 
     @staticmethod
     def _item_context(snapshot, item):
-        path = ' > '.join(d.scalar_title(i.title) for i in (*d.ancestors(snapshot, item.id), item))
+        from todo_lib.presentation.formatting import ancestor_path
+        path = ancestor_path(snapshot, item, include_item=True)
         return f'{item.role} {path} in {snapshot.categories[item.category_id].name}'
 
     def _publish(self, operation, result, original, candidate, source, settings):

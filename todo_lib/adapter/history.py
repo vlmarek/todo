@@ -30,7 +30,7 @@ from todo_lib.domain import (
     instant_key, instant_text, resolve_remote_due, incoming_text,
 )
 from .transport import HTTPFailure, Replay
-from .current import _due
+from .current import _due, _task_scalars
 
 
 class HistoryError(DomainError):
@@ -239,24 +239,13 @@ class HistoryAdapter:
                 return CompletedRecord(item, Occurrence(identity, item.id, completed_at, False), True)
             added_at = _required(raw, 'added_at')
             added_at = None if added_at is None else instant_from_wire(added_at)
-            title = _required(raw, 'content')
-            title = incoming_text(title, title=True)
-            description = raw.get('description')
-            description = '' if description is None else description
-            description = incoming_text(description, description=True)
-            priority = _required(raw, 'priority')
-            if type(priority) is not int or priority not in (1, 2, 3, 4):
-                raise HistoryError('item.priority must be 1 through 4')
-            labels = _required(raw, 'labels')
-            if not isinstance(labels, list) or any(not isinstance(x, str) or not x for x in labels):
-                raise HistoryError('item.labels must contain label names')
+            scalars = _task_scalars(raw, self.timezone)
             for field in ('checked', 'is_deleted'):
                 if type(_required(raw, field)) is not bool:
                     raise HistoryError('item.' + field + ' must be boolean')
-            _due(_required(raw, 'due'))
-            item = Item(raw['id'], raw['project_id'], title, parent, description,
-                5 - priority, resolve_remote_due(_required(raw, 'due'), self.timezone),
-                frozenset(labels), added_at, raw['checked'], completed_at)
+            item = Item(raw['id'], raw['project_id'], parent_id=parent,
+                added_at=added_at, completed=raw['checked'], completed_at=completed_at,
+                **scalars)
             # checked=false is documented for recurring completion records.
             identity = item.id + '@' + str(instant_key(completed_at))
             return CompletedRecord(item, Occurrence(identity, item.id,

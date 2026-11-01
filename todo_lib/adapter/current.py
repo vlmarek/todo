@@ -154,6 +154,16 @@ def _project(raw):
 def _item(raw, zone):
     _bool(_required(raw, 'is_deleted'), 'item.is_deleted')
     completed = _bool(_required(raw, 'checked'), 'item.checked')
+    scalars = _task_scalars(raw, zone)
+    return Item(raw['id'], raw['project_id'], scalars['title'],
+                _parent(_required(raw, 'parent_id'), 'item.parent_id'),
+                scalars['description'], scalars['priority'], scalars['attention'],
+                scalars['labels'], _timestamp(raw, 'added_at'), completed,
+                _timestamp(raw, 'completed_at'))
+
+
+def _task_scalars(raw, zone):
+    """Shared consumed task fields, after endpoint-specific relevance checks."""
     priority = _required(raw, 'priority')
     if type(priority) is not int or priority not in (1, 2, 3, 4):
         raise CurrentError('item.priority must be 1 through 4')
@@ -169,11 +179,8 @@ def _item(raw, zone):
     description = incoming_text(description, description=True)
     due = _required(raw, 'due')
     _due(due)
-    return Item(raw['id'], raw['project_id'], title,
-                _parent(_required(raw, 'parent_id'), 'item.parent_id'),
-                description, 5 - priority, resolve_remote_due(due, zone),
-                frozenset(labels), _timestamp(raw, 'added_at'), completed,
-                _timestamp(raw, 'completed_at'))
+    return dict(title=title, description=description, priority=5 - priority,
+                attention=resolve_remote_due(due, zone), labels=frozenset(labels))
 
 
 def _due(due):

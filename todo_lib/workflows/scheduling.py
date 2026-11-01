@@ -13,13 +13,8 @@ def offsets(snapshot, item_id):
 
 
 def offset_text(values):
-    def scalar(minutes):
-        if minutes == 0:
-            return '0m'
-        for divisor, unit in ((10080, 'w'), (1440, 'd'), (60, 'h'), (1, 'm')):
-            if minutes % divisor == 0:
-                return f'{minutes // divisor}{unit}'
-    return ', '.join(scalar(n) for n in values) or None
+    from todo_lib.domain.time import offset_unit
+    return ', '.join(f'{amount}{unit}' for amount, unit in map(offset_unit, values)) or None
 
 
 def equivalent(left, right, zone):
