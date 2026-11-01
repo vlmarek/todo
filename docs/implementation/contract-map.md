@@ -1,12 +1,12 @@
 # Prepared ownership and evidence
 
-Design revision 19 adds never-known reminder-owner tolerance and useful managed
-reminder failures. T38 owns implementation, shared consumer/fixture adaptation and
-integrated acceptance. All 156 earlier planned requirements are satisfied; all 37
-accepted assignments remain unchanged. Four revision-16 notice-removal requirements
-remain deferred under their separate instruction. No manual coverage or final
-completion is claimed. Observations append to
-`docs/implementation/acceptance-evidence.md`.
+Design revision 20 adds positional rename/scheduling/hiding and their help. T39
+owns the cohesive syntax increment, coupled adaptations and observed acceptance.
+All 159 earlier planned requirements are satisfied and all 38 accepted assignments
+remain unchanged. Four routine-notice requirements retain explicit coverage
+deferrals: their code/evidence is already delivered at 12426b92, but no native full
+manual-delivery record exists. Preserve that code without redundant implementation;
+no manual coverage or final product completion is claimed.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -48,6 +48,15 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t08-focused
+  REQ-CACHE-011:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t05-focused
+    - t06-focused
+    - t02-focused
+    - t08-focused
+    - t15-focused
   REQ-CLI-012:
     stage_status: satisfied
     primary_owner: null
@@ -118,6 +127,24 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t24-focused
+  REQ-CLI-038:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t31-focused
+    - final-delivery
+  REQ-CLI-039:
+    stage_status: active
+    primary_owner: T39
+    planned_evidence:
+    - t39-focused
+    - final-delivery
+  REQ-CLI-040:
+    stage_status: active
+    primary_owner: T39
+    planned_evidence:
+    - t39-focused
+    - final-delivery
   REQ-COMMENT-006:
     stage_status: satisfied
     primary_owner: null
@@ -314,6 +341,18 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t12-focused
+  REQ-MUT-006:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t31-focused
+    - final-delivery
+  REQ-MUT-007:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t31-focused
+    - final-delivery
   REQ-NET-001:
     stage_status: satisfied
     primary_owner: null
@@ -365,6 +404,45 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t24-focused
+  REQ-OUT-023:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t09-focused
+    - t10-focused
+    - t31-focused
+    - final-delivery
+  REQ-OUT-024:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t09-focused
+    - t10-focused
+    - t31-focused
+    - final-delivery
+  REQ-OUT-025:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t35-focused
+  REQ-OUT-026:
+    stage_status: deferred
+    primary_owner: null
+    planned_evidence: []
+  REQ-OUT-027:
+    stage_status: deferred
+    primary_owner: null
+    planned_evidence: []
+  REQ-OUT-028:
+    stage_status: deferred
+    primary_owner: null
+    planned_evidence: []
+  REQ-OUT-029:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t38-focused
+    - final-delivery
   REQ-PLAT-001:
     stage_status: satisfied
     primary_owner: null
@@ -431,6 +509,33 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t15-focused
+  REQ-REPORT-016:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t05-focused
+    - t06-focused
+    - t02-focused
+    - t08-focused
+    - t15-focused
+  REQ-REPORT-017:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t15-focused
+    - t08-focused
+    - t18-focused
+    - t06-focused
+    - t02-focused
+  REQ-REPORT-018:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t15-focused
+    - t08-focused
+    - t18-focused
+    - t06-focused
+    - t02-focused
   REQ-SCHED-005:
     stage_status: satisfied
     primary_owner: null
@@ -471,6 +576,16 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t24-focused
+  REQ-SCHED-017:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t34-focused
+  REQ-SCHED-018:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t34-focused
   REQ-SEC-004:
     stage_status: satisfied
     primary_owner: null
@@ -547,6 +662,57 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t23-focused
+    - final-delivery
+  REQ-SYNC-032:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t06-focused
+    - t12-focused
+    - final-delivery
+  REQ-SYNC-033:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t06-focused
+    - t12-focused
+    - final-delivery
+  REQ-SYNC-034:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t05-focused
+    - t06-focused
+    - t02-focused
+    - t08-focused
+    - t15-focused
+  REQ-SYNC-035:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t31-focused
+    - final-delivery
+  REQ-SYNC-036:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t36-focused
+  REQ-SYNC-037:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t36-focused
+  REQ-SYNC-038:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t37-focused
+    - final-delivery
+  REQ-SYNC-039:
+    stage_status: satisfied
+    primary_owner: null
+    planned_evidence:
+    - t38-focused
     - final-delivery
   REQ-TIME-001:
     stage_status: satisfied
@@ -669,20 +835,6 @@ requirements:
     planned_evidence:
     - t25-focused
     - final-delivery
-  REQ-SYNC-032:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t06-focused
-    - t12-focused
-    - final-delivery
-  REQ-SYNC-033:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t06-focused
-    - t12-focused
-    - final-delivery
   REQ-VERIFY-028:
     stage_status: satisfied
     primary_owner: null
@@ -690,57 +842,12 @@ requirements:
     - t06-focused
     - t12-focused
     - final-delivery
-  REQ-REPORT-016:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t05-focused
-    - t06-focused
-    - t02-focused
-    - t08-focused
-    - t15-focused
-  REQ-SYNC-034:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t05-focused
-    - t06-focused
-    - t02-focused
-    - t08-focused
-    - t15-focused
-  REQ-CACHE-011:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t05-focused
-    - t06-focused
-    - t02-focused
-    - t08-focused
-    - t15-focused
   REQ-VERIFY-029:
     stage_status: satisfied
     primary_owner: null
     planned_evidence:
     - t15-focused
     - t25-focused
-  REQ-REPORT-017:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t15-focused
-    - t08-focused
-    - t18-focused
-    - t06-focused
-    - t02-focused
-  REQ-REPORT-018:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t15-focused
-    - t08-focused
-    - t18-focused
-    - t06-focused
-    - t02-focused
   REQ-VERIFY-030:
     stage_status: satisfied
     primary_owner: null
@@ -748,50 +855,10 @@ requirements:
     - t15-focused
     - t18-focused
     - t25-focused
-  REQ-CLI-038:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t31-focused
-    - final-delivery
-  REQ-SYNC-035:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t31-focused
-    - final-delivery
-  REQ-MUT-006:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t31-focused
-    - final-delivery
-  REQ-MUT-007:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t31-focused
-    - final-delivery
   REQ-VERIFY-031:
     stage_status: satisfied
     primary_owner: null
     planned_evidence:
-    - t31-focused
-    - final-delivery
-  REQ-OUT-023:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t09-focused
-    - t10-focused
-    - t31-focused
-    - final-delivery
-  REQ-OUT-024:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t09-focused
-    - t10-focused
     - t31-focused
     - final-delivery
   REQ-VERIFY-032:
@@ -802,85 +869,36 @@ requirements:
     - t10-focused
     - t31-focused
     - final-delivery
-  REQ-SCHED-017:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t34-focused
-  REQ-SCHED-018:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t34-focused
-  REQ-OUT-025:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t35-focused
   REQ-VERIFY-033:
     stage_status: satisfied
     primary_owner: null
     planned_evidence:
     - t35-focused
-  REQ-SYNC-036:
-    stage_status: satisfied
+  REQ-VERIFY-034:
+    stage_status: deferred
     primary_owner: null
-    planned_evidence:
-    - t36-focused
-  REQ-SYNC-037:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t36-focused
+    planned_evidence: []
   REQ-VERIFY-035:
     stage_status: satisfied
     primary_owner: null
     planned_evidence:
     - t36-focused
-  REQ-OUT-026:
-    stage_status: deferred
-    primary_owner: null
-    planned_evidence: []
-  REQ-OUT-027:
-    stage_status: deferred
-    primary_owner: null
-    planned_evidence: []
-  REQ-OUT-028:
-    stage_status: deferred
-    primary_owner: null
-    planned_evidence: []
-  REQ-VERIFY-034:
-    stage_status: deferred
-    primary_owner: null
-    planned_evidence: []
-  REQ-SYNC-038:
-    stage_status: satisfied
-    primary_owner: null
-    planned_evidence:
-    - t37-focused
-    - final-delivery
   REQ-VERIFY-036:
     stage_status: satisfied
     primary_owner: null
     planned_evidence:
     - t37-focused
     - final-delivery
-  REQ-SYNC-039:
-    stage_status: active
-    primary_owner: T38
-    planned_evidence:
-    - t38-focused
-    - final-delivery
-  REQ-OUT-029:
-    stage_status: active
-    primary_owner: T38
-    planned_evidence:
-    - t38-focused
-    - final-delivery
   REQ-VERIFY-037:
-    stage_status: active
-    primary_owner: T38
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t38-focused
+    - final-delivery
+  REQ-VERIFY-038:
+    stage_status: active
+    primary_owner: T39
+    planned_evidence:
+    - t39-focused
     - final-delivery
 ```

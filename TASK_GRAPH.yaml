@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-018
-predecessor_revision_id: TODO3-PLAN-017
+revision_id: TODO3-PLAN-019
+predecessor_revision_id: TODO3-PLAN-018
 contract_sources:
+- docs/design/command-shorthands.md
 - docs/design/reminder-ownership.md
 - docs/design/mutation-response-reuse.md
 - docs/design/external/todoist/combined-response-notes.md
@@ -864,6 +865,15 @@ checks:
     tests.workflows.report.test_tolerance tests.cli.test_reminders tests.local.test_reminders -v
   prerequisite_task_refs:
   - T38
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t39-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser
+    tests.syntax.test_reminders tests.cli.test_cli tests.cli.test_reminders tests.workflows.capture.test_capture
+    tests.workflows.capture.test_reminders tests.workflows.test_cached_selection -v
+  prerequisite_task_refs:
+  - T39
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -7809,6 +7819,222 @@ tasks:
   - Append current-subject evidence/limits to docs/implementation/acceptance-evidence.md; preserve historical
     bytes and migrate affected fixtures before unchanged final-delivery (one complete offline suite plus
     distinct copied/PATH/real-less probes).
+- id: T39
+  title: Add consistent positional rename, scheduling and hiding
+  origin_stage_ref: command-shorthands
+  observable_outcome: Open tasks and steps accept first-argument rename/schedule/due/wait/hide
+    shorthands, preserve explicit multi-term forms and existing mutation behavior, and receive
+    accurate state-independent help and errors.
+  dependencies:
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Extend the existing lossless parser and state-independent help while preserving its
+      request fields and all unaffected grammars.
+  - task_ref: T24
+    kind: interface
+    interface_ref: complete-reminder-scheduling
+    reason: Reuse complete-set reminder preservation, keep/clear and replacement consent rather
+      than implementing another scheduling path.
+  - task_ref: T31
+    kind: interface
+    interface_ref: cached-task-step-workflows
+    reason: Preserve saved selection, stable target identity, cached preflight and actual post-operation
+      reconciliation.
+  - task_ref: T34
+    kind: interface
+    interface_ref: named-zone-scheduling
+    reason: Feed the joined positional attention value through the same per-value zone and recurrence
+      behavior.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Adapt public dispatch/help and usage evidence before any configuration or state access.
+  - task_ref: T17
+    kind: repository_state
+    interface_ref: null
+    reason: Adapt the existing copied acceptance harness and append observed evidence for the
+      coherent increment.
+  goal: 'Implement Accepted Design revision 20 in docs/design/command-shorthands.md on the runner-provided
+    baseline containing authorized manual work through 12426b92fdcd0d12fdd46c8770e8c404845e8524.
+    Preserve all T01-T38 accepted effective assignments, the existing simplifications and the
+    delivered routine-notice removals. Do not repeat that work or restore removed notices. Historical
+    requirement definitions apply except the explicit narrow successor precedence in revision
+    20.
+
+
+    Use todo_lib/syntax/parser.py parse, Word/_words/_parts, segments and existing option extraction.
+    Preserve CommandRequest fields: selector tuples/literal indices, rename destination_kind=name
+    and joined destination, scheduling options at/clear and ordered reminder_markers. Supported
+    scalar/boolean options are extracted wherever allowed before assigning remaining positional
+    words; scalar contents and literal identity cannot become operands. Keep noun-action alias_operands/action_value/wait_alias
+    paths and their adjacent scalar/task-or-parent-step operands unchanged.
+
+
+    For canonical rename without --to, first remaining positional argument is the whole selector
+    and every remaining argument joins with one U+0020 into one validated name. --to selects the
+    existing explicit selector-term/phrase boundary; retain marker assignment/duplicate/arity/literal
+    rules. For canonical schedule/due/wait and hide with no explicit at/due/schedule option, use
+    one selector argument then the complete joined attention tail; never use creation_values for
+    these values. With an explicit attention scalar option, every unmarked argument is a selector
+    term/phrase, preserving existing position/equals/duplicate rules. Reminders never switch shorthand
+    back into multi-term selection. Canonical wait remains schedule, without implicit hiding.
+    A quoted multiword selector is a contiguous phrase, not independent terms.
+
+
+    Recognize full schedule clear only when the entire shorthand value tail is exactly one unescaped
+    clear argument. schedule A B clear is selector A and attention B clear; explicit-date positional
+    clear stays a selector term. Reject full clear combined with requested attention, reminders
+    or hiding/reason changes as usage errors before loading state. schedule A tomorrow --reminder
+    clear changes attention and clears only reminders; literal clear does not trigger full clear.
+    schedule A with reminder operations remains reminder-only; otherwise missing date fails. hide
+    A without date reuses existing future attention/recurrence/reminders. --hide still requires
+    supplied attention, now either positional or explicit. Keep reason omission/replacement/empty-removal
+    behavior and every applicable no-op, capability, exact-time, hierarchy, recurrence and confirmation
+    rule.
+
+
+    Reuse workflows/capture.py CaptureWorkflow.execute/_plan and workflows/scheduling.py propose/validate_proposals;
+    normalize into existing request fields so both spellings share one implementation and stable
+    IDs. Assess directly coupled callers/fakes/fixtures; make only demonstrated necessary adaptations.
+    Domain/date rejections must retain operational classification, never retry a different selector/value
+    split based on data or parse success. Keep cached-task selection and post-operation actual-state
+    evidence, ordered stopping, outcome/publication/history protections and receipts. No expanded
+    date grammar, provider calls, fallback, marker, storage migration or recovery layer.
+
+
+    Update syntax/help.py SYNOPSES, EXAMPLES and render_help plus applicable README/docs/user
+    examples and syntax/API.md. Teach shorthand first, retained explicit multi-term alternatives,
+    joined values, quoted selector phrases, reminder-only/combined forms, sole-value full clear,
+    literal escaping and compatibility cost of old unmarked multi-term scheduling/hiding. Keep
+    noun-action scalar examples, destructive constraints, creation/comment grouping, now synopsis/single-category
+    behavior and unrelated command shapes unchanged. Syntax errors still name command/problem,
+    valid usage/example and status 2 before state access; state-independent help works without
+    configuration/network.
+
+
+    Own necessary migration of existing expectations before shared gates. In tests/syntax/test_parser.py
+    assess literal_survives_all_extraction, rename mandatory-marker assertions and schedule/hide
+    multi-term assumptions; preserve those guarantees through retained explicit forms where appropriate.
+    Assess tests/syntax/test_reminders.py, tests/cli/test_cli.py and test_reminders.py, capture/reminder/cached-selection
+    fixtures and tests/delivery/final/copy_probe.py rather than weakening old assertions indiscriminately.
+    Keep all still-required independent-term versus phrase matching and noun-action behavior.
+    Add proportionate distinguishing evidence to existing suites: three/four-operand joins and
+    aliases; options before/between/after operands; quoted and literal selectors/values; explicit
+    multi-term and scalar arity; reminder-only/mixed/keep/clear boundaries; A B clear versus sole
+    clear, explicit-date clear, literal clear and incompatible clear; missing/invalid/duplicate
+    inputs before state; no state-dependent split or fallback; actual rename/timed attention/hide
+    through public task/step dispatch with existing mutation validation and result handling. Reuse
+    existing strong domain/reminder/history/failure evidence where sufficient instead of multiplying
+    every spelling at every layer.
+
+
+    Keep public help/errors offline and demonstrate the retained explicit alternative and unchanged
+    now/category behavior. Add one representative shorthand scenario to the unchanged copied-installation/PATH
+    harness if current probes do not establish installed shorthand dispatch, using existing isolation
+    and strict synthetic transport. Update affected copied fixtures before final-delivery. Run
+    focused/directed feedback; the unchanged runner final-delivery executes the complete offline
+    suite once plus distinct copied/PATH/real-less probes on the integrated subject. Append exact
+    observed subjects, commands, outcomes and limitations to docs/implementation/acceptance-evidence.md;
+    preserve historical evidence and the frozen ledger. No live account or independent-review
+    claim.'
+  failure_domain: Lossless operand boundaries and their public help/dispatch compatibility for
+    the three changed commands.
+  verification_rationale: Parser, help and coupled existing tests form one usable syntax increment
+    on the existing request/workflow APIs. One fresh context can implement and verify this bounded
+    change; a separate audit task would duplicate its acceptance work. Focused syntax/CLI/capture
+    checks distinguish wrong-target and clear/reminder boundaries; the existing shared final-delivery
+    covers the complete offline application and independent copied runtime once.
+  correction_instructions: Apply only revision-20 successors. Preserve accepted packets and user
+    manual work; do not restore routine notices, make all commands use this grammar, change now/category
+    filtering, bypass domain/mutation validation, reinterpret reminder options as selector boundaries,
+    retry failed dates with another split or weaken existing checks. Report any genuine additional
+    product/plan change.
+  requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
+  constraint_refs:
+  - REQ-CLI-012
+  - REQ-CLI-024
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-MUT-001
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-SYNC-026
+  - REQ-SYNC-035
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  exclusion_refs:
+  - OUT-TEST-001
+  - OUT-SELECT-001
+  - OUT-USABILITY-001
+  - OUT-OPS-003
+  component_refs:
+  - syntax
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - command-grammar
+  - complete-reminder-scheduling
+  - cached-task-step-workflows
+  - named-zone-scheduling
+  - public-cli
+  expected_paths:
+  - todo_lib/syntax/**
+  - todo_lib/workflows/capture.py
+  - todo_lib/workflows/scheduling.py
+  - todo_lib/cli.py
+  - tests/syntax/**
+  - tests/workflows/capture/**
+  - tests/workflows/test_cached_selection.py
+  - tests/cli/**
+  - tests/delivery/**
+  - README.md
+  - docs/user/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - todo_lib/adapter/**
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/presentation/**
+  - scripts/**
+  check_refs:
+  - t39-focused
+  required_evidence:
+  - t39-focused
+  - Distinguishing lossless operand, scalar/literal, reminder-only/combined and sole-value/full-clear
+    cases with state-independent usage/help; preserve all unchanged grammar/matching and domain
+    validation.
+  - Representative real public task/step dispatch with stable cached selection and original mutation
+    outcomes; copied shorthand probe in existing harness when needed.
+  - Append truthful current-subject evidence and limits; unchanged final-delivery provides one
+    complete offline suite and distinct copied/PATH/real-less probes.
 stages:
 - id: release-1
   final_project: false
@@ -7928,6 +8154,9 @@ stages:
   - REQ-VERIFY-025
   satisfied_requirement_refs: []
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-023
@@ -8101,6 +8330,9 @@ stages:
   - REQ-INIT-009
   - REQ-VERIFY-025
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-023
@@ -8284,6 +8516,9 @@ stages:
   - REQ-INIT-010
   - REQ-VERIFY-026
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-023
@@ -8457,6 +8692,9 @@ stages:
   - REQ-OUT-022
   - REQ-VERIFY-027
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-023
@@ -8631,6 +8869,9 @@ stages:
   - REQ-SYNC-033
   - REQ-VERIFY-028
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-023
@@ -8804,6 +9045,9 @@ stages:
   - REQ-CACHE-011
   - REQ-VERIFY-029
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-023
@@ -8979,6 +9223,9 @@ stages:
   - REQ-REPORT-018
   - REQ-VERIFY-030
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-023
@@ -9153,6 +9400,9 @@ stages:
   - REQ-VERIFY-030
   - REQ-VERIFY-031
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-SCHED-017
@@ -9327,6 +9577,9 @@ stages:
   - REQ-VERIFY-031
   - REQ-VERIFY-032
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-026
@@ -9500,6 +9753,9 @@ stages:
   - REQ-VERIFY-032
   - REQ-VERIFY-033
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-SYNC-038
   - REQ-VERIFY-036
   - REQ-OUT-026
@@ -9672,6 +9928,9 @@ stages:
   - REQ-VERIFY-033
   - REQ-VERIFY-035
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-OUT-026
   - REQ-OUT-027
   - REQ-OUT-028
@@ -9845,12 +10104,189 @@ stages:
   - REQ-VERIFY-035
   - REQ-VERIFY-036
   deferred_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
   - REQ-OUT-026
   - REQ-OUT-027
   - REQ-OUT-028
   - REQ-VERIFY-034
   check_refs:
   - final-delivery
+- id: command-shorthands
+  final_project: false
+  active_requirement_refs:
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-VERIFY-038
+  satisfied_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-036
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-INIT-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-OUT-025
+  - REQ-OUT-029
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-SYNC-038
+  - REQ-SYNC-039
+  - REQ-TIME-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-024
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-VERIFY-027
+  - REQ-VERIFY-028
+  - REQ-VERIFY-029
+  - REQ-VERIFY-030
+  - REQ-VERIFY-031
+  - REQ-VERIFY-032
+  - REQ-VERIFY-033
+  - REQ-VERIFY-035
+  - REQ-VERIFY-036
+  - REQ-VERIFY-037
+  deferred_requirement_refs:
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-VERIFY-034
+  check_refs:
+  - final-delivery
+
 verification:
   after_each_merge:
   - merge-hygiene

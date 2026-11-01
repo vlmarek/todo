@@ -1,3 +1,26 @@
+# Current continuation: TODO3-PLAN-019
+
+Design revision 20 adds positional rename, schedule/due/wait and hide without
+changing other command shapes. T39 owns the cohesive parser/help increment,
+directly affected workflow and fixture adaptations, distinguishing public/copied
+evidence and current-subject observations. Reuse the runner-provided baseline
+containing authorized manual work through 12426b92fdcd0d12fdd46c8770e8c404845e8524.
+Preserve all 38 accepted effective assignments and existing simplification and
+routine-notice delivery; do not repeat or undo manual work.
+
+The new stage activates three successors and satisfies 159 earlier planned
+requirements. Four routine-notice requirements retain explicit historical
+deferrals because no native full manual-delivery record exists; this is a
+coverage-record limitation, not an instruction to reimplement their already
+delivered code. No product completion or manual coverage is claimed.
+
+Keep lossless scalar/literal and explicit multi-term boundaries, first-argument
+shorthand selection even with reminders, sole-value full clear and all existing
+domain/mutation safeguards. Reuse focused feedback and the unchanged final-delivery
+gate for one complete offline suite plus distinct copied/PATH/real-less probes.
+Earlier continuation sections below retain historical scope and baselines.
+This preparation grants no runtime adoption, recovery or paid execution authority.
+
 # Current continuation: TODO3-PLAN-018
 
 Approved Design revision 19 in `docs/design/reminder-ownership.md` governs this

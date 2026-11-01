@@ -1,9 +1,42 @@
 # todo-3 product specification
 
-Design revision: **19 — tolerate unknown reminder owners, 2026-10-30**.
+Design revision: **20 — positional rename, scheduling and hiding, 2026-11-01**.
 State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 19
+## Current revision 20
+
+Read [command-shorthands.md](command-shorthands.md) first. Add positional rename,
+scheduling and hiding forms: after supported option extraction, the first
+positional argument is the selector and remaining arguments join into one new
+name or attention expression. Explicit `--to` and `--at`/`--due`/`--schedule`
+forms retain their existing multi-term-selector grammar. Reminder options do not
+change that positional boundary. Scheduling aliases `due` and `wait` share it.
+
+REQ-CLI-039 defines the new boundaries and compatibility consequences;
+REQ-CLI-040 updates discoverability; REQ-VERIFY-038 defines distinguishing offline
+evidence. Earlier definitions and accepted effective assignments remain historical
+inputs. Existing move, comment and completion shorthands, including creation-text
+grouping, remain unchanged. Inspection, priority, creation, noun-action operands,
+`now` and category filtering retain their existing command-specific grammar.
+
+The operator approved rename, scheduling and hiding shorthands, declined both
+multiple-category filtering and positional category filtering for `now`, and
+selected consistent date parsing even with reminder options after discussion of
+the current selector rules. They then answered yes to the concrete two-document
+revision-20 proposal, including the consequence that `schedule A B clear` now
+selects A with date expression `B clear`, while `schedule A clear` still clears
+scheduling. Actual answers, proposal context and separate interpretation are
+retained in the external Design report.
+
+This approval covers the two design documents and an uncommitted Design handoff;
+it grants no new commit, Planning, implementation, adoption or execution authority.
+There are no unresolved product choices or new external-provider investigations
+in this scope. Planning owns parser/help adaptations and proportional verification,
+preserving still-required validation, cached selection, mutation outcomes and
+accepted assignments. Historical operational authorizations below concern their
+recorded scopes and do not authorize this new work.
+
+## Preserved revision 19
 
 Read [reminder-ownership.md](reminder-ownership.md) first. After normal managed-state
 and lifecycle reconciliation, silently discard live reminders with usable identity
