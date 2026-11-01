@@ -71,19 +71,14 @@ def title_candidates(snapshot, query, *, target='item', parent_id=None):
 
 
 def move_destination_candidates(snapshot, query, *, kind='positional'):
-    """Typed categories and open items; promotion is the explicit empty scope."""
+    """Compatibility entry point for the command's destination selector."""
     if kind == 'promotion':
         return ()
-    categories = tuple(sorted((c for c in snapshot.categories.values()
-                              if matches(c.name, query)), key=lambda c: (c.name.lower(), c.id)))
-    if kind == 'category':
-        return categories
-    items = title_candidates(snapshot, query)
-    if kind in ('parent', 'task', 'item'):
-        return items  # --task is a parent destination, which may itself be a step.
-    if kind != 'positional':
+    if kind not in ('category', 'parent', 'task', 'item', 'positional'):
         raise ValueError('unknown move destination kind: ' + kind)
-    return categories + items
+    from .moves import destination_candidates
+    return destination_candidates(snapshot, terms(query),
+                                  'parent' if kind in ('task', 'item') else kind)
 
 
 def recent_candidates(snapshot, query, cursor, now, *, operation='reopen', target='item'):
