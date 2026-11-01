@@ -172,13 +172,10 @@ def combined_snapshot(result):
         raise LocalError('missing saved snapshot; use todo --refresh now')
     if current.binding != history.binding or current.account != history.account or current.categories != history.categories:
         raise LocalError('incompatible retained history; restore a consistent saved set')
-    collections = {}
-    for name in ('comments', 'reminders'):
-        collections[name] = {k: v for k, v in getattr(history, name).items()
-                             if v.item_id not in current.items}
-        collections[name].update(getattr(current, name))
-    return replace(current, items={**history.items, **current.items},
-                   occurrences={**history.occurrences, **current.occurrences}, **collections)
+    if getattr(result, 'context_combined', False):
+        return current
+    from todo_lib.local.context import saved_context
+    return saved_context(current, history)
 
 
 def search_candidates(snapshot, query, *, all_items=False):

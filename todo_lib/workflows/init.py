@@ -201,14 +201,9 @@ def _pending(state):
     history, cached = state.history, state.snapshot
     if cached is None:
         return history
-    items = {**history.snapshot.items, **cached.items}
-    comments = {**history.snapshot.comments, **cached.comments}
-    reminders = {**history.snapshot.reminders, **cached.reminders}
-    occurrences = {**history.snapshot.occurrences, **cached.occurrences}
-    occurrences = {k: o for k, o in occurrences.items()
-                   if items[o.item_id].completed or items[o.item_id].recurring}
-    return replace(history, snapshot=d.validate(replace(cached, items=items,
-        comments=comments, reminders=reminders, occurrences=occurrences)))
+    from todo_lib.local.context import saved_context
+    return replace(history, snapshot=saved_context(cached, history.snapshot,
+                                                  authoritative_collections=False))
 
 
 def _scope(catalogue, root, prior=None):

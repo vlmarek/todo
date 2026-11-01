@@ -15,6 +15,14 @@ def snapshot(items):
 
 
 class TraversalReuse(unittest.TestCase):
+    def test_descendant_closure_handles_missing_roots_cycles_and_multiple_edges(self):
+        graph = [d.Item('a', 'c', 'A', 'missing'),
+                 d.Item('b', 'c', 'B', 'a'), d.Item('a', 'c', 'A', 'b'),
+                 d.Item('other', 'c', 'Other')]
+        self.assertEqual(d.descendant_ids(graph, {'missing'}), {'missing', 'a', 'b'})
+        self.assertEqual(d.descendant_ids(graph, {'b'}), {'a', 'b'})
+        self.assertEqual(d.descendant_ids(graph, {'absent'}), {'absent'})
+
     def test_large_queue_and_selection_do_not_revalidate_per_row(self):
         now = datetime(2026, 10, 23, tzinfo=timezone.utc)
         s = snapshot([d.Item('root', 'c', 'Root')] +

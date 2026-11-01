@@ -17,6 +17,7 @@ from todo_lib.local import (StateStore, LocalState, LocalError, History, load_co
                             exclusive_lock, merge_history, prepare_candidates)
 from todo_lib.local.safety import read_bytes
 from .completion import reconcile_completions
+from todo_lib.local.context import saved_context
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class SyncResult:
     now: d.ExactInstant | datetime
     warnings: tuple[str, ...] = ()
     cache_cleared: bool = False
+    context_combined: bool = False
 
     @property
     def snapshot(self):
@@ -77,19 +79,7 @@ class SyncInterrupted(KeyboardInterrupt):
 
 def _known(state):
     """Keep pending context independently of the disposable cache."""
-    h, s = state.history.snapshot, state.snapshot
-    if s is None:
-        return h
-    items = {**h.items, **s.items}
-    collections = {}
-    for name in ('comments', 'reminders'):
-        collections[name] = {k: value for k, value in getattr(h, name).items()
-                             if value.item_id not in s.items}
-        collections[name].update(getattr(s, name))
-    occurrences = {**h.occurrences, **s.occurrences}
-    collections['occurrences'] = {k: value for k, value in occurrences.items()
-        if items[value.item_id].completed or items[value.item_id].recurring}
-    return d.validate(replace(s, items=items, **collections))
+    return saved_context(state.snapshot, state.history.snapshot)
 
 
 class OperationEvidence:
@@ -142,11 +132,7 @@ def affected_ids(result, known, current):
                 ids.add(value.item_id)
     ids.discard(None)
     roots = set(ids)
-    while True:
-        expanded = ids | {i.id for i in (*known.items.values(), *current.snapshot.items.values()) if i.parent_id in ids}
-        if expanded == ids:
-            break
-        ids = expanded
+    ids = d.descendant_ids((*known.items.values(), *current.snapshot.items.values()), ids)
     for identity in roots:
         seen = set()
         while identity in items and identity not in seen:
@@ -170,11 +156,7 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
 
     removed = set(current.deleted_ids | current.departed_ids)
     # Explicit parent deletion/scope departure removes its known subtree too.
-    while True:
-        expanded = removed | {i.id for i in {**known.items, **s.items}.values() if i.parent_id in removed}
-        if expanded == removed:
-            break
-        removed = expanded
+    removed = d.descendant_ids({**known.items, **s.items}.values(), removed)
     missing = set(known.items) - s.items.keys() - removed
     deferred = set() if affected is None else {k for k in missing
         if known.items[k].completed and k not in affected}
@@ -241,11 +223,7 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
                 latest[item.id] = record
         removed.update(k for k, record in latest.items() if record.deleted)
         evidence_items = {**known.items, **{k: r.item for k, r in latest.items()}, **s.items}
-        while True:
-            expanded = removed | {i.id for i in evidence_items.values() if i.parent_id in removed}
-            if expanded == removed:
-                break
-            removed = expanded
+        removed = d.descendant_ids(evidence_items.values(), removed)
         for identity in sorted(missing - removed):
             record = latest.get(identity)
             if record is not None:
@@ -258,11 +236,7 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
                 items[identity] = retained(known.items[identity])
             else:
                 raise owner_failure('unresolved disappeared managed item ' + d.scalar_title(identity) + '; supported lifecycle evidence required', identity)
-    while True:
-        expanded = removed | {i.id for i in {**known.items, **items}.values() if i.parent_id in removed}
-        if expanded == removed:
-            break
-        removed = expanded
+    removed = d.descendant_ids({**known.items, **items}.values(), removed)
     items = {k: v for k, v in items.items() if k not in removed}
     # Current live comments are authoritative, including absence/changed ownership.
     comments = {k: c for k, c in s.comments.items() if c.item_id in items}
@@ -344,7 +318,7 @@ class Synchronizer:
         warnings = ()
         if d.instant_key(now) - d.instant_key(state.synced_at) > 24 * 60 * 60:
             warnings = ('Saved snapshot is older than 24 hours; use --refresh.',)
-        return SyncResult(replace(state, snapshot=_known(state)), now, warnings)
+        return SyncResult(replace(state, snapshot=_known(state)), now, warnings, context_combined=True)
 
     def refresh(self, *, clear_cache=False):
         with exclusive_lock('refresh', self.store.root):

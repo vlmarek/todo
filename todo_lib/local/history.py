@@ -66,11 +66,7 @@ def merge_history(history, incoming, *, removed_item_ids=(), removed_comment_ids
         raise LocalError('foreign history account/root')
     items = {**old.items, **new.items}
     removed = set(removed_item_ids)
-    while True:
-        expanded = removed | {i.id for i in items.values() if i.parent_id in removed}
-        if expanded == removed:
-            break
-        removed = expanded
+    removed = d.descendant_ids(items.values(), removed)
     # Retired managed categories are current scope departures.
     removed |= {i.id for i in items.values() if i.category_id not in new.categories}
     items = {k: v for k, v in items.items() if k not in removed}

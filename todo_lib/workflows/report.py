@@ -262,11 +262,7 @@ class Reporter:
                 lower, now, state.cursor, config.hidden_from_now)
             removed = set(current.deleted_ids | current.departed_ids)
             all_items = {**known.items, **{r.item.id: r.item for r in records}, **snapshot.items}
-            while True:
-                expanded = removed | {i.id for i in all_items.values() if i.parent_id in removed}
-                if expanded == removed:
-                    break
-                removed = expanded
+            removed = d.descendant_ids(all_items.values(), removed)
             records = tuple(r for r in records if r.item.id not in removed
                             and r.item.category_id in snapshot.categories and not r.deleted)
             self.completed = replace(self.completed, records=records)

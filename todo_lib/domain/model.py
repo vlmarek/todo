@@ -295,6 +295,25 @@ def subtree_depths(snapshot: Snapshot, item_id: str) -> dict[str, int]:
     return {i.id: hierarchy.depths[i.id] for i in hierarchy.subtree(item_id)}
 
 
+def descendant_ids(items, roots):
+    """ID closure on intermediate graphs, including missing roots and cycles.
+
+    Accept an iterable so evidence from different phases can retain more than
+    one parent edge for an ID. This is not complete hierarchy validation.
+    """
+    children = {}
+    for item in items:
+        children.setdefault(item.parent_id, []).append(item.id)
+    found = set(roots)
+    pending = list(found)
+    while pending:
+        for identity in children.get(pending.pop(), ()):
+            if identity not in found:
+                found.add(identity)
+                pending.append(identity)
+    return found
+
+
 def validate_sibling_uniqueness(items: Iterable[Item], before: Iterable[Item] = ()) -> None:
     """Reject new colliding ID pairs, allowing unchanged imported relationships.
 
