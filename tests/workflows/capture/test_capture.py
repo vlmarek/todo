@@ -152,14 +152,49 @@ class CaptureTests(CaptureSupport, unittest.TestCase):
             self.run_request(['add', 'task', 'cat', '--title', 'One task', 'Other task', '--step', 'Child'])
         self.assertTrue(all('commands' not in c for c in self.http.calls))
 
-    def test_depth_four_and_step_priority_option_refused(self):
+    def test_depth_four_refused_even_with_explicit_priority(self):
         self.wire_items += [item(str(n), parent_id='parent' if n == 1 else str(n-1), content=f'Depth {n}') for n in range(1, 5)]
         self.seed()
         self.refresh()
         with self.assertRaisesRegex(d.DomainError, 'depth 4'):
-            self.run_request(['add', 'step', 'Depth 4', '--step', 'Too deep'])
-        with self.assertRaises(UsageError):
-            self.run_request(['add', 'step', '--p1', 'Parent', 'Child'])
+            self.run_request(['add', 'step', 'Depth 4', '--p1', '--step', 'Too deep'])
+
+    def test_explicit_step_priorities_higher_lower_equal_and_nested_batch(self):
+        # Parent P2, nested branch P3, existing child P2: effective default P2.
+        self.wire_items += [item('branch', content='Branch', parent_id='parent', priority=2),
+                            item('existing', content='Existing', parent_id='branch', priority=3)]
+        self.seed()
+        for priority, parent, parent_id, titles, prefix in (
+                (1, 'Parent', 'parent', ['Higher'], ['step', '--add']),
+                (4, 'Parent', 'parent', ['Lower'], ['add', 'step']),
+                (2, 'Parent', 'parent', ['Equal'], ['task', '--step']),
+                (4, 'Branch', 'branch', ['First override', 'Second override'], ['step', '--new'])):
+            # Reset the saved pre-creation subtree so each comparison uses P2.
+            self.seed()
+            rows = deepcopy(self.wire_items)
+            for index, title in enumerate(titles):
+                identity = f'created-{index}'
+                rows.append(item(identity, content=title, parent_id=parent_id, priority=5-priority))
+                self.operation('item_add', dict(project_id='cat', content=title,
+                    parent_id=parent_id, priority=5-priority, description='', labels=[],
+                    auto_reminder=False, due=None), self.state(items=rows), identity)
+            argv = prefix + [parent]
+            for index, title in enumerate(titles):
+                argv += ['--step', title]
+                if index == 0:
+                    argv += ['--priority', str(priority)]
+            result = self.run_request(argv)
+            self.assertEqual(result.status, 0, result.document.stderr)
+            self.assertEqual([o.operation for o in result.outcomes], ['create_task'] * len(titles))
+            self.assertEqual([o.outcome for o in result.outcomes], ['accepted'] * len(titles))
+            self.assertEqual([o.actual.priority for o in result.outcomes], [priority] * len(titles))
+            self.assertEqual([o.actual.parent_id for o in result.outcomes], [parent_id] * len(titles))
+            for snapshot in (result.snapshot, self.store.load_consistent_state().snapshot):
+                for index in range(len(titles)):
+                    self.assertEqual(snapshot.items[f'created-{index}'].priority, priority)
+                    self.assertEqual(snapshot.items[f'created-{index}'].parent_id, parent_id)
+                for original in self.wire_items:
+                    self.assertEqual(snapshot.items[original['id']].priority, 5-original['priority'])
 
     def test_sibling_steps_copy_effective_priority_and_preserve_precise_null(self):
         self.wire_items.append(item('existing', content='Important', parent_id='parent', priority=4))
@@ -178,6 +213,10 @@ class CaptureTests(CaptureSupport, unittest.TestCase):
         self.assertEqual(result.snapshot.items['new'].priority, 1)
         self.assertEqual(result.snapshot.items['next'].parent_id, 'parent')
         for snapshot in (result.snapshot, self.store.load_consistent_state().snapshot):
+            self.assertEqual(snapshot.items['new'].priority, 1)
+            self.assertEqual(snapshot.items['next'].priority, 1)
+            self.assertEqual(snapshot.items['parent'].priority, 2)
+            self.assertEqual(snapshot.items['existing'].priority, 1)
             self.assertEqual(d.instant_text(snapshot.items['precise'].added_at), PRECISE)
             self.assertIsNone(snapshot.items['null'].added_at)
 

@@ -126,6 +126,25 @@ class GrammarTests(unittest.TestCase):
                 self.assertEqual(r.selector, ('child',))
                 self.assertEqual(r.option('priority'), f'P{n}')
 
+    def test_step_creation_priority_options_preserve_groups_and_literals(self):
+        forms = [['add', 'step'], ['step', '--add'], ['step', '--new'],
+                 ['step', '--create'], ['task', '--step']]
+        flags = [(['--priority', 'p1'], 'P1'), (['--priority=4'], 'P4'),
+                 (['--priority=P3'], 'P3'), (['-p2'], 'P2'), (['--p1'], 'P1')]
+        operands = ['--literal', '--parent', '--step', 'a ', 'b',
+                    '--step', '--literal', '--p4']
+        baseline = parse(['add', 'step', *operands])
+        for form in forms:
+            for flag, expected in flags:
+                for position in (0, 5, len(operands)):
+                    with self.subTest(form=form, flag=flag, position=position):
+                        r = parse(form + operands[:position] + flag + operands[position:])
+                        self.assertEqual((r.command, r.target), ('add', 'step'))
+                        self.assertEqual(r.option('priority'), expected)
+                        self.assertEqual(r.parent, ('--parent',))
+                        self.assertEqual(r.parent_literals, (0,))
+                        self.assertEqual(r.groups, baseline.groups)
+
     def test_move_grammars(self):
         r = parse(['move', '--literal', '--source', '--task', '--literal', '--parent'])
         self.assertEqual(r.selector_literals, (0,))
@@ -149,7 +168,7 @@ class GrammarTests(unittest.TestCase):
             ['schedule', 'x', '--due', 'tomorrow', '--at=next week'],
             ['hide', 'x', '--reason'], ['hide', 'x', '--hide=reason'],
             ['hide', 'x', '--due='], ['done', 'x', '--yes'],
-            ['add', 'step', '--p1', 'x', 'title'],
+            ['add', 'step', '--priority=P0', 'x', 'title'],
             ['add', 'Work', 'a b', 'c', '--step', 'child'],
             ['add', 'Work', 'a ', ' ', 'b'], ['add', 'Work', 'a\tb'],
             ['comment', 'x', '--comment', 'a', '--comment'],

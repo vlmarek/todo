@@ -126,3 +126,16 @@ text are rejected; the unused final starter is harmless. Attachment/preview
 metadata is ignored, and text updates send the comment ID and text only. Offline
 verification does not establish live attachment preservation, notification
 delivery or recurring reminder advancement.
+
+Task and step creation accept `--priority P` / `--priority=VALUE` (1 through 4
+or case-insensitive P1 through P4), `-p1` through `-p4`, and `--p1` through
+`--p4`. P1 is highest. New tasks default to P2. Omitted step priority copies
+the saved pre-creation parent's effective priority, including open descendants.
+One explicit priority applies to all new siblings across the request's text
+groups. Each new item's priority is independent of later parent/sibling changes.
+
+```sh
+todo step --add 'Release plan' --p1 'Write summary' --at monday
+todo add step --priority=P4 'Release plan' --step 'Write summary' --step 'Check links'
+todo task --step 'Release plan' 'Review results' -p1
+```

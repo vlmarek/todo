@@ -93,3 +93,12 @@ accepts only displayed numbers, `q`, blank or EOF and returns the original objec
 It prints the identical candidates in noninteractive mode but fails before any
 question or detail. Callers retain their documented confirmation and `--yes`
 policies; this API grants no bypass for selection, setup, or delete-all.
+
+Task and step creation share `--priority VALUE`, `--priority=VALUE`, `-p1`…`-p4`
+and `--p1`…`--p4`, normalized to `P1`…`P4` from 1…4 or case-insensitive P1…P4.
+The option is request-wide across text groups, wherever extracted. Omission
+leaves the workflow to choose task P2 or the saved pre-creation parent effective
+priority for every new step. Later priorities remain independent. Creation aliases
+use the same path; leading existing-step priority mutations retain adjacent VALUE,
+PARENT and CHILD operands. For example:
+`todo step --add "Release plan" --p1 "Write summary" --at monday`.

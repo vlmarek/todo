@@ -172,6 +172,7 @@ def parse(argv):
 
     target = 'item'
     force_comment_creation = False
+    creation_step_alias = False
     alias_operands = None
     action_value = None
     action_literal = False
@@ -186,11 +187,12 @@ def parse(argv):
                           '--priority': 'priority', '--reminder': 'schedule', '--reminder-at': 'schedule',
                           '--rename': 'rename', '--move': 'move'}
         fixed = action in {f'{prefix}p{n}' for prefix in ('-', '--') for n in range(1, 5)}
-        if not words[0].literal and action in creation:
+        if not words[0].literal and (action in creation or (noun == 'task' and action == '--step')):
             if inline is not None:
                 fail('action takes no assignment', words[0].value)
             words.pop(0)
-            command, target = 'add', noun
+            creation_step_alias = noun == 'task' and action == '--step'
+            command, target = 'add', 'step' if creation_step_alias else noun
             if noun == 'comment':
                 command, target = 'comment', 'item'
                 force_comment_creation = True
@@ -250,8 +252,8 @@ def parse(argv):
     if command == 'now': allowed |= {'all', 'category'}
     if command == 'search': allowed |= {'all'}
     if command == 'add' and target in ('task', 'step'):
-        allowed |= {'done', 'at', 'hide', 'reason', 'reminder', 'reminder-at'}
-        if target == 'task': allowed |= {'priority', 'category'}
+        allowed |= {'done', 'at', 'hide', 'reason', 'reminder', 'reminder-at', 'priority'}
+        if target == 'task': allowed |= {'category'}
     if command == 'schedule': allowed |= {'at', 'hide', 'reason', 'reminder', 'reminder-at'}
     if command == 'hide': allowed |= {'at', 'reason'}
     if command == 'delete': allowed |= {'yes'}
@@ -358,7 +360,7 @@ def parse(argv):
         elif target == 'step':
             if alias_operands is not None:
                 parent, selector = selector, []
-            elif 'step' in seen_markers:
+            elif 'step' in seen_markers and not creation_step_alias:
                 parent, positional = positional, []
             else:
                 parent, positional = positional[:1], positional[1:]

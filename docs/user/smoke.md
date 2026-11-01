@@ -29,7 +29,7 @@ Run these ordinary commands, observing receipts and resulting views:
 ```sh
 todo now
 todo add task Work 'Smoke parent'
-todo add step 'Smoke parent' 'Smoke step'
+todo step --add 'Smoke parent' --p1 'Smoke step' --at monday
 todo rename 'Smoke parent' Smoke plan
 todo priority 'Smoke plan' P1
 todo comment 'Smoke step' --comment 'Progress from CLI'
@@ -43,7 +43,11 @@ todo 'Smoke plan'
 todo reopen 'Smoke step'
 ```
 
-Expected: stable nested step under the renamed parent; own comment searchable;
+Creation accepts the same priority options for tasks and steps. New tasks default
+to P2; omitted step priority copies the pre-creation parent effective priority.
+One explicit priority applies to every new sibling in the request.
+
+Expected: P1 step with Monday attention; stable nested step under the renamed parent; own comment searchable;
 priority change affects the selected parent independently. Scheduling uses the
 account's local calendar/timezone; the zero reminder is shown at due. Reminder
 creation requires the disposable account's advertised reminder capability. If it
