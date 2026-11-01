@@ -67,8 +67,9 @@ todo report --show-cursor
 ```
 
 Expected: explicit refresh observes external current truth and retains available
-completed-step context/comments under the open parent. Coverage warnings are
-honest; absent/unavailable provider history is not a full-history guarantee.
+completed-step context/comments under the open parent. Inspection and completed
+search emit no routine coverage notices; absent/unavailable provider history is
+not a full-history guarantee.
 Preview lists eligible finished/progress/hidden work and leaves the cursor
 unchanged. Final output succeeds directly and advances the cursor to its fixed
 end; the next display shows the new boundary. An account lacking required history

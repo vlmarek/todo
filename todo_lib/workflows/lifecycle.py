@@ -151,9 +151,6 @@ class LifecycleWorkflow:
                 # Include ancestor context for every shown bounded descendant.
                 included.update(a.id for i in tree if i.id in included for a in hierarchy.ancestors(i.id))
                 self._show('Delete scope:\n' + _preview(snapshot, root, included))
-                self.streams.stderr.write('Older completed descendants are outside this bounded preview '
-                    'and may also be cascade-deleted by Todoist.\n')
-                self.streams.stderr.flush()
                 if not request.option('yes'):
                     self._confirm('Delete this subtree? [y/yes]: ')
                 operations = [Operation('item_delete', {'id': root.id})]

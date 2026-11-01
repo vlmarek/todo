@@ -408,9 +408,7 @@ class Synchronizer:
             phase = 'local publication'
             self.store.publish_snapshot(candidates)
             return SyncResult(self.store.load_consistent_state(), now,
-                ('Explicit cache clearing occurred; unreported history was preserved. '
-                 'Clearing does not fill historical coverage gaps.',) if cleared else
-                ('Cache was already absent; unreported history was preserved.',) if clear_cache else (), cleared)
+                cache_cleared=cleared)
         except (LocalError, d.DomainError, HTTPFailure, OSError, KeyboardInterrupt) as error:
             facts = publication.failure_facts(preflight=lambda: load_config(self.store.root))
             failure = SyncError(phase, error, cache_cleared=cleared,

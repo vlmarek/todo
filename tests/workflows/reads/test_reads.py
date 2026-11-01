@@ -255,7 +255,7 @@ class ReadsTests(unittest.TestCase):
         self.assertNotIn('Leaf', self.read('search', 'Root').document.stdout)
         self.assertEqual(self.read('search', 'need hay').document.stdout, 'No matches.')
 
-    def test_search_all_empty_coverage_and_retained_stable_id_merge(self):
+    def test_search_all_without_notices_and_retained_stable_id_merge(self):
         completed = replace(self.snapshot.items['D'], completed=True, completed_at=NEW)
         history = History(replace(self.snapshot, items={**self.snapshot.items, 'D': completed}))
         current = replace(self.snapshot, items={k: v for k, v in self.snapshot.items.items() if k != 'D'})
@@ -264,15 +264,15 @@ class ReadsTests(unittest.TestCase):
         result = self.read('search', '--all', 'Unmatched')
         self.assertEqual(result.document.stdout.count('Unmatched sibling'), 1)
         self.assertIn('[x]', result.document.stdout)
-        self.assertIn('earliest retained completion:', result.document.stderr)
+        self.assertEqual(result.document.stderr, '')
         empty = self.read('search', '--all', 'absent').document
         self.assertEqual(empty.stdout, 'No matches in open or retained completed items.')
-        self.assertIn('coverage may be incomplete', empty.stderr)
+        self.assertEqual(empty.stderr, '')
         for argv in (['step', 'Unmatched'], ['Unmatched']):
             with self.assertRaises(NoMatch):
                 self.read(*argv)
         self.publish(replace(current, items={}, comments={}))
-        self.assertIn('earliest retained completion: none', self.read('search', '--all', 'absent').document.stderr)
+        self.assertEqual(self.read('search', '--all', 'absent').document.stderr, '')
 
     def test_recursive_inspection_retains_exact_sibling_and_comment_order_after_reload(self):
         items = {**self.snapshot.items,
@@ -298,7 +298,7 @@ class ReadsTests(unittest.TestCase):
         self.assertIn('completed 2026-10-21 12:00', text)
         self.assertEqual(text.count('Root comment'), 1)
         self.assertEqual(text.count('First owner comment'), 1)
-        self.assertIn('coverage may be incomplete', result.document.stderr)
+        self.assertEqual(result.document.stderr, '')
         self.assertEqual(d.instant_text(result.snapshot.items['z-new'].added_at), d.instant_text(NEW))
         self.assertEqual(self.http.requests, [])
 
@@ -309,7 +309,7 @@ class ReadsTests(unittest.TestCase):
         detail = fresh.execute(['Root']).document
         self.assertIn('[x] P1 Finished branch', detail.stdout)
         self.assertEqual(detail.stdout.count('Retained owner comment'), 1)
-        self.assertIn('coverage may be incomplete', detail.stderr)
+        self.assertEqual(detail.stderr, '')
         self.assertIn('Finished branch', fresh.execute(['search', '--all', 'Retained']).document.stdout)
         self.assertEqual(fresh.execute(['search', 'Retained']).document.stdout, 'No matches.')
         with self.assertRaises(NoMatch):
@@ -339,7 +339,7 @@ class ReadsTests(unittest.TestCase):
         self.assertIn('Inherited from Root: Waiting for approval', detail.stdout)
         self.assertIn('Needle haystack', detail.stdout)
         self.assertIn('Steps: none', detail.stdout)
-        self.assertIn('coverage may be incomplete', detail.stderr)
+        self.assertEqual(detail.stderr, '')
         self.assertNotIn('Needle haystack', self.read('comment', 'Root').document.stdout)
         self.assertIn('Root', self.read('search', 'approval').document.stdout)
         self.assertNotIn('Leaf', self.read('search', 'approval').document.stdout)

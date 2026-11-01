@@ -173,7 +173,7 @@ Comments
   second'''
         result = render_detail(snap(rows, comments), 'r', NOW)
         self.assertEqual(result.stdout, expected)
-        self.assertEqual(result.stderr, 'todo: completed steps use retained history; coverage may be incomplete')
+        self.assertEqual(result.stderr, '')
 
     def test_submicrosecond_newest_siblings_oldest_comments_and_ties_nulls(self):
         early = instant('2026-08-14T10:00:00.123456001Z')
@@ -298,7 +298,7 @@ class OtherViewTests(unittest.TestCase):
         self.assertEqual(render_someday(state, NOW).stdout, 'No someday items.')
         empty = render_search(state, [], NOW, all_items=True)
         self.assertEqual(empty.stdout, 'No matches in open or retained completed items.')
-        self.assertEqual(empty.stderr, 'todo: completed search uses retained history; earliest retained completion: none; coverage may be incomplete')
+        self.assertEqual(empty.stderr, '')
         self.assertEqual(render_search(state, [], NOW).stdout, 'No matches.')
 
     def test_mixed_ambiguity_exact_and_noninteractive(self):

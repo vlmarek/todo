@@ -140,7 +140,8 @@ def render_detail(snapshot, item, now, *, color=Color()):
     sections.append('Steps\n' + '\n'.join(steps) if steps else 'Steps: none')
     comments = _comments(snapshot, item)
     sections.append('Comments\n' + '\n'.join(comments) if comments else 'Comments: none')
-    return document('\n\n'.join(sections), '\n'.join(filter(None, ('todo: completed steps use retained history; coverage may be incomplete', convention_warnings(snapshot, (*hierarchy.ancestors(item.id), *hierarchy.subtree(item.id)))))))
+    return document('\n\n'.join(sections), convention_warnings(snapshot,
+        (*hierarchy.ancestors(item.id), *hierarchy.subtree(item.id))))
 
 
 def render_categories(snapshot):
@@ -235,12 +236,9 @@ def render_someday(snapshot, now, *, hidden_names=(), items=None, color=Color())
 
 
 def render_search(snapshot, items, now, *, all_items=False, earliest_completion=None, color=Color()):
-    warning = ''
-    if all_items:
-        warning = 'todo: completed search uses retained history; earliest retained completion: ' + absolute(earliest_completion, snapshot.account.timezone) + '; coverage may be incomplete'
     empty = 'No matches in open or retained completed items.' if all_items else 'No matches.'
     items = tuple(items)
-    return document(_list(snapshot, items, empty, now, color), '\n'.join(filter(None, (warning, convention_warnings(snapshot, items)))))
+    return document(_list(snapshot, items, empty, now, color), convention_warnings(snapshot, items))
 
 
 def render_ambiguity(snapshot, query, candidates, now, *, interactive=True, color=Color()):

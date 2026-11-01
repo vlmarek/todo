@@ -1757,3 +1757,25 @@ The change is diagnostic scope filtering; no copied fixture or probe adaptation
 was needed. No additional broad worker run was performed. The unchanged runner
 final-delivery owns the complete suite and copied-entrypoint/PATH/real-less probes
 on the integrated subject; previous passes do not certify this correction.
+
+
+### Routine notice removal — revision 16 direct delivery (2026-11-01)
+
+Implemented REQ-OUT-026/027/028 and verified REQ-VERIFY-034 from
+`docs/design/routine-notices.md`. Removed inspection/completed-search coverage
+notices, the historical-descendant deletion warning, and successful cache-clearing
+explanations, without replacement output. Results, preview bounds, confirmation,
+cancellation, direct deletion and failure diagnostics remain unchanged.
+
+Updated existing presentation, persisted-read and deletion assertions. Successful
+cache rebuilding is checked with both an existing and absent cache, retaining
+completed tasks/comments, configuration and the report cursor. Existing checks
+still cover failed rebuilding disclosures, stale snapshots, limited report history
+and convention diagnostics. User smoke instructions now reflect the quiet output.
+
+Verification: `./scripts/verify-clean` passed in the installed `cml-agents:latest`
+Docker image (Linux/amd64, CPython 3.11.2), with container networking disabled.
+All 766 offline tests passed, followed by unchanged copied-runtime/PATH probes,
+real GNU less PTY checks and Git-status/artifact checks. `git diff --check` passed.
+Pre-existing generated Python bytecode was removed before the verification run.
+No live account, provider requests or credentials were used.

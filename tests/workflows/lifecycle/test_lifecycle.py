@@ -288,12 +288,12 @@ class LifecycleTests(unittest.TestCase):
         self.assertNotIn('cursor [completed]', text)
         self.assertNotIn('future [completed]', text)
         self.assertNotIn('Older completed descendants', text)
-        self.assertIn('Older completed descendants', out.stderr.getvalue())
+        self.assertEqual(out.stderr.getvalue(), '')
         self.assertEqual([op.type for op, _ in gateway.calls], ['item_delete'])
         wf, _, gateway, out = self.workflow(before(recurring(), occurrences=[d.Occurrence('e', 'R', AT, True)]).snapshot, tty=False)
         self.assertEqual(wf.execute(['delete', '--yes', 'R']).status, 0)
         self.assertEqual(len(gateway.calls), 1)
-        self.assertIn('Older completed descendants', out.stderr.getvalue())
+        self.assertEqual(out.stderr.getvalue(), '')
         for title in ['cursor', 'future']:
             wf, _, gateway, _ = self.workflow(s)
             with self.assertRaises(NoMatch):
@@ -305,7 +305,7 @@ class LifecycleTests(unittest.TestCase):
             wf, _, gateway, out = self.workflow(before().snapshot, answer=answer, tty=tty)
             with self.assertRaises(InputError):
                 wf.execute(['delete', 'Original'])
-            self.assertIn('Older completed descendants', out.stderr.getvalue())
+            self.assertEqual(out.stderr.getvalue(), '')
             self.assertFalse(gateway.calls)
 
 
@@ -408,7 +408,7 @@ class AdapterLifecycleTests(LifecycleSupport, unittest.TestCase):
         self.assertEqual(len(deletion.commands), 1)
         self.assertIn('eligible [completed]', self.out.stdout.getvalue())
         self.assertNotIn('Older completed descendants', self.out.stdout.getvalue())
-        self.assertIn('Older completed descendants', self.out.stderr.getvalue())
+        self.assertEqual(self.out.stderr.getvalue(), '')
         saved = self.store.load_consistent_state()
         for snapshot in (saved.snapshot, saved.history.snapshot):
             self.assertIn('end', snapshot.items)

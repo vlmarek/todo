@@ -216,7 +216,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
             self.sync('full-token', delta()), self.completed([completed_b()]), self.comments()])
         result = workflow.refresh(clear_cache=True)
         self.assertTrue(result.cache_cleared)
-        self.assertIn('unreported history', result.warnings[0])
+        self.assertEqual(result.warnings, ())
         self.assert_precise()
         self.child_process()
         raw = loads((self.root / 'cache.json').read_bytes())
@@ -481,6 +481,25 @@ class SyncTests(SyncSupport, unittest.TestCase):
                 self.assertNotIn(b'private sentinel', path.read_bytes())
                 self.assertNotIn(b'unmanaged', path.read_bytes())
         self.child_process()
+
+    def test_clear_existing_or_absent_cache_preserves_history_without_notices(self):
+        workflow, _ = self.workflow(self.external())
+        workflow.refresh()
+        protected = {name: (self.root / name).read_bytes()
+                     for name in ('config', 'report-cursor')}
+        for cache_exists in (True, False):
+            with self.subTest(cache_exists=cache_exists):
+                if not cache_exists:
+                    (self.root / 'cache.json').unlink()
+                workflow, _ = self.workflow([
+                    self.sync('*', full(items=[item('A', added_at=CREATED)])),
+                    self.sync('full-token', delta()), *self.retained()])
+                result = workflow.refresh(clear_cache=True)
+                self.assertEqual(result.warnings, ())
+                self.assertEqual(result.cache_cleared, cache_exists)
+                self.assert_precise()
+                for name, data in protected.items():
+                    self.assertEqual((self.root / name).read_bytes(), data)
 
     def test_missing_history_symlink_and_lock_prevent_clearing(self):
         before = self.bytes()

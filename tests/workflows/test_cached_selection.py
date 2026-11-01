@@ -330,8 +330,7 @@ class CachedSelectionTests(unittest.TestCase):
                 self.assertIn('  Saved child\n    Saved leaf', out.getvalue())
                 self.assertNotIn('Older completed', out.getvalue())
                 self.assertNotIn('unseen', out.getvalue())
-                self.assertEqual(err.getvalue(), 'Older completed descendants are outside this bounded preview '
-                    'and may also be cascade-deleted by Todoist.\n')
+                self.assertEqual(err.getvalue(), '')
 
     def test_accepted_mutation_then_reconciliation_failure_is_partial(self):
         op = CommandRequest(self, 'item_update', {'id':'parent', 'priority':4})
