@@ -317,7 +317,7 @@ def phase(install, name):
         changed = item('A'); changed['content'] = 'Alpha'
         steps = [('POST', '/sync', None, accepted),
                  sync('delta-token', delta(items=[changed]))]
-        assert 'Alpha' in call(['rename', 'A', '--to', 'Alpha'], steps, INITIAL)
+        assert 'Alpha' in call(['rename', 'A', 'Alpha'], steps, INITIAL)
     elif name == 'affected-create':
         # The copied launcher writes against its saved current resources. An
         # unrelated archived owner and recurring owner must trigger no REST read.

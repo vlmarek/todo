@@ -30,12 +30,12 @@ Run these ordinary commands, observing receipts and resulting views:
 todo now
 todo add task Work 'Smoke parent'
 todo add step 'Smoke parent' 'Smoke step'
-todo rename 'Smoke parent' --to 'Smoke plan'
+todo rename 'Smoke parent' Smoke plan
 todo priority 'Smoke plan' P1
 todo comment 'Smoke step' --comment 'Progress from CLI'
 todo 'Smoke plan'
 todo search 'Progress from CLI'
-todo schedule 'Smoke step' --at 'tomorrow 15:00'
+todo schedule 'Smoke step' tomorrow 15:00
 todo schedule 'Smoke step' --reminder 0m
 todo waiting
 todo done 'Smoke step' --comment 'Reviewed'

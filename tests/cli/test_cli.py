@@ -59,6 +59,29 @@ class RoutingTests(unittest.TestCase):
                 self.assertIn('Example:', err.getvalue())
                 self.assertNotIn('sensitive', err.getvalue())
 
+    def test_positional_help_and_errors_are_offline(self):
+        with patch.object(cli, 'StateStore', side_effect=AssertionError('state touched')), \
+                patch.object(cli, 'Transport', side_effect=AssertionError('network touched')):
+            for command in ('rename', 'schedule', 'due', 'wait', 'hide'):
+                out = StringIO()
+                with patch.object(sys, 'stdout', out):
+                    self.assertEqual(cli.main([command, '--help']), 0)
+                self.assertIn('first remaining argument', out.getvalue())
+                self.assertIn('contiguous phrase', out.getvalue())
+                self.assertIn('--to' if command == 'rename' else '--at "tomorrow 10:00"', out.getvalue())
+            for argv in (['rename', 'A'], ['rename', 'A', '--to=Name'],
+                         ['schedule', 'A'], ['schedule', 'A', 'none'],
+                         ['schedule', 'A', 'clear', '--reminder=clear'],
+                         ['schedule', 'A', 'clear', '--hide'],
+                         ['hide', 'A', '--at=tomorrow', '--due=Friday'],
+                         ['now', 'Work'], ['now', '--category=Work', '--category=Later']):
+                err = StringIO()
+                with patch.object(sys, 'stderr', err):
+                    self.assertEqual(cli.main(argv), 2, argv)
+                self.assertIn('Usage: todo ', err.getvalue())
+                self.assertIn('Example: todo ', err.getvalue())
+            self.assertEqual(SYNOPSES['now'], 'now [--all] [--category CATEGORY] [--refresh]')
+
     def test_unexpected_failure_is_opaque_and_sigint_is_130(self):
         for error, status in ((RuntimeError('private provider response'), 1), (KeyboardInterrupt(), 130)):
             err = StringIO()
@@ -105,6 +128,53 @@ class PublicCapture(unittest.TestCase):
         result = invoke(self, argv, self.http, **kw)
         self.assertFalse(self.http.steps, 'missing adapter calls')
         return result[:3]
+
+    def test_shorthand_task_and_step_mutations_use_cached_ids_and_actual_state(self):
+        self.wire_items += [item('child', content='Saved child', parent_id='parent')]
+        self.seed()
+        calls = len(self.http.calls)
+        for identity, selector in (('parent', 'Parent'), ('child', 'Saved child')):
+            with self.subTest(identity=identity):
+                title = 'New joined ' + identity + ' title'
+                rows = [dict(i, content=title) if i['id'] == identity else i for i in self.wire_items]
+                self.operation('item_update', {'id': identity, 'content': title}, self.state(items=rows), identity)
+                status, out, err = self.call(['rename', selector, 'New', '--color=never', 'joined', identity, 'title'])
+                self.assertEqual(status, 0, err)
+                self.assertIn(title, out)
+                self.wire_items = rows
+                rows = [dict(i, due=capture.due('2026-10-23T10:00:00Z')) if i['id'] == identity else i for i in rows]
+                self.operation('item_update', {'id': identity, 'due': {'date': '2026-10-23T10:00:00Z', 'lang': 'en'}},
+                               self.state(items=rows), identity)
+                status, out, err = self.call(['wait', title, 'tomorrow', '10:00'])
+                self.assertEqual(status, 0, err)
+                saved = self.store.load_consistent_state().snapshot.items[identity]
+                self.assertTrue(saved.attention.exact)
+                self.assertFalse(saved.waiting)
+                self.wire_items = rows
+                rows = [dict(i, labels=['waiting']) if i['id'] == identity else i for i in rows]
+                self.operation('item_update', {'id': identity, 'labels': ['waiting']}, self.state(items=rows), identity)
+                status, out, err = self.call(['hide', title, 'tomorrow', '10:00'])
+                self.assertEqual(status, 0, err)
+                self.assertTrue(self.store.load_consistent_state().snapshot.items[identity].waiting)
+                self.wire_items = rows
+        self.assertEqual(len(self.http.calls) - calls, 18)
+        self.assertTrue(all('commands' in call for call in self.http.calls[calls::3]))
+
+    def test_invalid_date_never_retries_a_matching_multi_term_selector(self):
+        self.wire_items[0]['content'] = 'Parent 2026-99-99'
+        self.seed()
+        before = {name: (self.root / name).read_bytes() for name in
+                  ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
+        calls = len(self.http.calls)
+        for argv in (['schedule', 'Parent', '2026-99-99'], ['hide', 'Parent', '2026-99-99'],
+                     ['schedule', 'Parent', '--literal', 'clear']):
+            status, out, err = self.call(argv)
+            self.assertEqual(status, 1, err)
+            self.assertIn('invalid', err)
+            self.assertNotIn('Usage:', err)
+            self.assertNotIn('No match', err)
+        self.assertEqual(len(self.http.calls), calls)
+        self.assertEqual({name: (self.root / name).read_bytes() for name in before}, before)
 
     def test_default_implicit_queries_ambiguity_and_local_errors(self):
         first = self.call([])
