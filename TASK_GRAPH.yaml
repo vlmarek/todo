@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-019
-predecessor_revision_id: TODO3-PLAN-018
+revision_id: TODO3-PLAN-020
+predecessor_revision_id: TODO3-PLAN-019
 contract_sources:
+- docs/design/step-creation-priority.md
 - docs/design/command-shorthands.md
 - docs/design/reminder-ownership.md
 - docs/design/mutation-response-reuse.md
@@ -874,6 +875,15 @@ checks:
     tests.workflows.capture.test_reminders tests.workflows.test_cached_selection -v
   prerequisite_task_refs:
   - T39
+  evidence:
+    kind: unittest
+    minimum_discovered: 1
+- id: t40-focused
+  command: PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser tests.syntax.test_reminders
+    tests.cli.test_cli tests.cli.test_reminders tests.workflows.capture.test_capture tests.workflows.capture.test_reminders
+    tests.workflows.capture.test_named_timezones tests.workflows.test_cached_selection -v
+  prerequisite_task_refs:
+  - T40
   evidence:
     kind: unittest
     minimum_discovered: 1
@@ -8035,6 +8045,221 @@ tasks:
     outcomes; copied shorthand probe in existing harness when needed.
   - Append truthful current-subject evidence and limits; unchanged final-delivery provides one
     complete offline suite and distinct copied/PATH/real-less probes.
+- id: T40
+  title: Allow explicit step creation priority with the retained default
+  origin_stage_ref: step-creation-priority
+  observable_outcome: Canonical and retained alias step creation store the requested priority in each
+    create, preserve the omitted parent-effective default, and teach both behaviors in offline help.
+  dependencies:
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Extend the existing lossless parser and help without changing normalized request fields, grouping
+      or scalar mutation aliases.
+  - task_ref: T24
+    kind: interface
+    interface_ref: complete-reminder-scheduling
+    reason: Reuse CaptureWorkflow creation planning, initial attention and complete-set reminder behavior.
+  - task_ref: T31
+    kind: interface
+    interface_ref: cached-task-step-workflows
+    reason: Use saved parent selection and preflight, stable IDs and actual reconciled publication without
+      automatic preflight refresh.
+  - task_ref: T34
+    kind: interface
+    interface_ref: named-zone-scheduling
+    reason: Preserve existing initial attention parsing and timezone semantics when composed with creation
+      priority.
+  - task_ref: T37
+    kind: interface
+    interface_ref: combined-operation-evidence
+    reason: Reuse creation command/current-resource evidence and publication between ordered operations.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Verify actual public dispatch and state-independent help/status boundaries.
+  - task_ref: T39
+    kind: repository_state
+    interface_ref: null
+    reason: Preserve accepted command shorthands and their coupled parser/help/capture fixtures on the
+      completed integration baseline.
+  - task_ref: T17
+    kind: repository_state
+    interface_ref: null
+    reason: Reuse the installed-copy/PATH acceptance harness and append observed evidence.
+  goal: 'Implement Accepted Design revision 21 in docs/design/step-creation-priority.md on the runner-provided
+    baseline descending from 5dc406be71e194e7ddf87fcee6b1b0aff32335dc. Preserve all T01-T39 accepted assignments
+    and historical evidence, accepted manual simplifications, routine-notice removals and revision-20
+    shorthands. REQ-CREATE-009 overrides only REQ-CREATE-007''s task-only priority grammar/prohibition,
+    REQ-DOM-010''s unconditional copying, and the creation-priority exclusions in REQ-CLI-033/OUT-USABILITY-001.
+    All their other clauses remain. The copied default uses the validated saved pre-creation parent subtree
+    under cached-selection successors, not an added remote preflight read.
+
+
+    Extend todo_lib/syntax/parser.py parse: add/step must allow the same priority scalar and fixed options
+    as add/task, normalizing into existing CommandRequest.options priority values P1..P4. Preserve Word/literal
+    identity, original shell groups and the extraction/duplicate/arity/assignment rules. Canonical add
+    step and step --add/--new/--create plus task --step normalize through the existing creation path.
+    Accept priority before/after operands and within supported text groups without making it group-local.
+    Retain leading existing-step --priority VALUE PARENT CHILD and fixed-priority mutation aliases with
+    their existing boundaries. Do not add priority spellings or per-inline-step syntax.
+
+
+    In todo_lib/workflows/capture.py CaptureWorkflow._plan, remove the explicit-step-priority restriction:
+    use the supplied normalized priority for each direct new child; otherwise retain domain.creation_priority(snapshot,
+    parent.id), calculated once from the pre-creation subtree including elevated open descendants. Do
+    not modify the parent''s or existing siblings'' stored values. Parent may be a task or step within
+    current depth bounds. An explicit value equal to the default is valid creation, not a priority mutation
+    no-op. Keep new-task P2 default and inline-step behavior, including a new task''s explicit priority
+    and unscheduled inline children.
+
+
+    Pass the chosen own priority through each existing _Action(''create_task'') into Gateway.create_task(category_id,title,parent_id=...,priority=...).
+    The existing adapter in todo_lib/adapter/commands.py maps product priority to wire 5-priority and
+    already emits both priority and parent_id; no new adapter path or follow-up update_task is required.
+    Retained upstream api-v1.openapi.json tags[name=Sync].description, Tasks / Add a task, is the provider
+    authority. Preserve complete-batch validation before the first write, group order, one-object options
+    before the next, result matching by command/temp IDs, actual scalar/parent/category verification,
+    reconciliation/publication before the next operation and truthful accepted/rejected/unknown/unattempted
+    receipts. Preserve combined-operation-evidence and token provenance; no replay, rollback, fallback
+    or scope change.
+
+
+    Update todo_lib/syntax/help.py SYNOPSES/DETAILS/render_help and applicable README/docs/user examples
+    and syntax/API.md so creation help advertises both task/step priority, task P2 default, omitted parent-effective
+    step default and one request-level override for all siblings. Include a concrete step creation with
+    --p1 and --at monday. Correct misleading unconditional copying wording in relevant help while retaining
+    independent later priorities. Help/errors stay independent of configuration, saved state and network.
+    Preserve useful status-2 diagnostics and all other command grammars.
+
+
+    Own necessary old-test migration before shared gates: tests/workflows/capture/test_capture.py test_depth_four_and_step_priority_option_refused
+    contains the superseded valid-priority rejection; retain its depth refusal and replace only the obsolete
+    prohibition expectation. Inspect existing parser/CLI/help expectations and directly affected fixtures.
+    Reuse tests.support.capture CaptureSupport, strict Boundary/Combined fixture request assertions and
+    independent normalized after-state; do not create a provider emulator or derive accepted state from
+    outgoing requests.
+
+
+    Add proportionate distinguishing evidence in existing syntax, capture and public CLI suites. Cover
+    scalar separated/equals and fixed short/long forms with case normalization, representative canonical/creation
+    aliases and before/after/group option placement, preserving parent and original creation groups. At
+    the real workflow/gateway boundary, demonstrate higher and lower explicit own priorities than the
+    parent''s effective value, explicit equal-to-default success, a sibling override batch, and omission
+    with an existing elevated open descendant and a common sibling default. Assert exact item_add priority/parent_id
+    and accepted returned plus saved own priorities; assert no priority update and unchanged parent/existing
+    sibling stored values. Include a step parent case at a supported nested depth using existing fixtures.
+    Reuse adequate unchanged evidence for later priority independence, depth/collision validation, inline
+    task steps and ordered failure/publication.
+
+
+    Through real public dispatch, accept the reported step --add PARENT --p1 TEXT... --at monday shape
+    using a fixed existing test clock and independently specified expected attention; preserve current
+    date semantics. Show malformed/missing/duplicate/conflicting priority refusal before state/mutation
+    and offline help teaching explicit/default behavior. Existing test_sibling_steps_copy_effective_priority_and_preserve_precise_null,
+    test_nested_parent_creation_uses_effective_priority, task-default/late-reminder-failure, inline-step
+    and unknown/publication tests provide regression starting points, not substitutes for new override
+    assertions. Reuse adequate tests rather than multiplying every alias/flag/depth at every layer.
+
+
+    If the existing copied probe does not establish installed step-priority dispatch/help, extend tests/delivery/final/copy_probe.py
+    with one representative strict synthetic scenario, keeping unchanged copied runtime/PATH isolation
+    and no full-suite nesting. Run directed focused feedback. The unchanged runner final-delivery gate
+    performs one complete offline suite plus distinct copied/PATH/real-less probes on the integrated subject;
+    workers are not required to rerun that broad gate. Append exact observed subjects, commands, outcomes
+    and limitations to docs/implementation/acceptance-evidence.md, preserving old evidence and the frozen
+    contract ledger. Report any further needed Design/Plan change.
+
+    '
+  failure_domain: Request-level creation priority from lossless syntax through stored and published new-step
+    state, with compatible help and evidence.
+  verification_rationale: One coherent change spans existing parser allowance and creation planning, so
+    separating them would produce an unusable intermediate command. Existing concrete APIs and strict
+    fixtures support one fresh worker context. t40-focused covers parser/help/public dispatch, creation
+    and directly coupled cached/scheduling/reminder regressions; unchanged final-delivery covers the whole
+    offline application and independent installed-copy evidence once. No new harness, live-account gate,
+    timing threshold or mandatory worker broad rerun is introduced.
+  correction_instructions: Apply only revision-21 successor precedence. Preserve historical accepted assignments
+    and every still-applicable creation, grouping, alias-mutation, scheduling, cached-selection, result/publication
+    and recovery guarantee. Do not restore routine notices or older rejected-priority tests, propagate
+    priorities, change stored formats, add preflight reads, or create then reprioritize. Code/test adaptations
+    must stay within the owned increment; stop and report genuine additional design/plan needs.
+  requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
+  constraint_refs:
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-010
+  - REQ-CLI-012
+  - REQ-CLI-024
+  - REQ-CLI-031
+  - REQ-CLI-033
+  - REQ-CLI-035
+  - REQ-CLI-038
+  - REQ-MUT-001
+  - REQ-MUT-006
+  - REQ-SYNC-026
+  - REQ-SYNC-035
+  - REQ-SYNC-038
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  exclusion_refs:
+  - OUT-USABILITY-001
+  - OUT-TEST-001
+  - OUT-SELECT-001
+  - OUT-OPS-003
+  component_refs:
+  - syntax
+  - workflows
+  - cli
+  - delivery
+  provides_interface_refs: []
+  consumes_interface_refs:
+  - command-grammar
+  - complete-reminder-scheduling
+  - cached-task-step-workflows
+  - named-zone-scheduling
+  - combined-operation-evidence
+  - public-cli
+  expected_paths:
+  - todo_lib/syntax/**
+  - todo_lib/workflows/capture.py
+  - todo_lib/cli.py
+  - tests/syntax/**
+  - tests/workflows/capture/**
+  - tests/workflows/test_cached_selection.py
+  - tests/cli/**
+  - tests/delivery/**
+  - README.md
+  - docs/user/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - todo_lib/adapter/**
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/presentation/**
+  - scripts/**
+  check_refs:
+  - t40-focused
+  required_evidence:
+  - t40-focused
+  - Exact step item_add priority/parent_id, accepted and saved own values higher/lower/equal to the parent-based
+    default, sibling override and omitted elevated batch default; no follow-up priority update or parent/existing-sibling
+    rewrite.
+  - Representative canonical/alias/option ordering and original grouping, priority with Monday attention
+    through public dispatch, malformed/duplicate/conflicting input refusal before state/mutation, and
+    state-independent explicit/default help.
+  - Reuse applicable depth/collision/inline/task-default and failure/publication regression evidence;
+    append truthful observations and limits. Unchanged final-delivery supplies one full offline suite
+    and distinct copied/PATH/real-less probes.
 stages:
 - id: release-1
   final_project: false
@@ -8154,6 +8379,9 @@ stages:
   - REQ-VERIFY-025
   satisfied_requirement_refs: []
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -8330,6 +8558,9 @@ stages:
   - REQ-INIT-009
   - REQ-VERIFY-025
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -8516,6 +8747,9 @@ stages:
   - REQ-INIT-010
   - REQ-VERIFY-026
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -8692,6 +8926,9 @@ stages:
   - REQ-OUT-022
   - REQ-VERIFY-027
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -8869,6 +9106,9 @@ stages:
   - REQ-SYNC-033
   - REQ-VERIFY-028
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -9045,6 +9285,9 @@ stages:
   - REQ-CACHE-011
   - REQ-VERIFY-029
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -9223,6 +9466,9 @@ stages:
   - REQ-REPORT-018
   - REQ-VERIFY-030
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -9400,6 +9646,9 @@ stages:
   - REQ-VERIFY-030
   - REQ-VERIFY-031
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -9577,6 +9826,9 @@ stages:
   - REQ-VERIFY-031
   - REQ-VERIFY-032
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -9753,6 +10005,9 @@ stages:
   - REQ-VERIFY-032
   - REQ-VERIFY-033
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -9928,6 +10183,9 @@ stages:
   - REQ-VERIFY-033
   - REQ-VERIFY-035
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -10104,6 +10362,9 @@ stages:
   - REQ-VERIFY-035
   - REQ-VERIFY-036
   deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
   - REQ-CLI-039
   - REQ-CLI-040
   - REQ-VERIFY-038
@@ -10279,6 +10540,186 @@ stages:
   - REQ-VERIFY-035
   - REQ-VERIFY-036
   - REQ-VERIFY-037
+  deferred_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-VERIFY-034
+  check_refs:
+  - final-delivery
+
+- id: step-creation-priority
+  final_project: false
+  active_requirement_refs:
+  - REQ-CREATE-009
+  - REQ-CLI-041
+  - REQ-VERIFY-039
+  satisfied_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-036
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-INIT-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-OUT-025
+  - REQ-OUT-029
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-SYNC-038
+  - REQ-SYNC-039
+  - REQ-TIME-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-024
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-VERIFY-027
+  - REQ-VERIFY-028
+  - REQ-VERIFY-029
+  - REQ-VERIFY-030
+  - REQ-VERIFY-031
+  - REQ-VERIFY-032
+  - REQ-VERIFY-033
+  - REQ-VERIFY-035
+  - REQ-VERIFY-036
+  - REQ-VERIFY-037
+  - REQ-VERIFY-038
   deferred_requirement_refs:
   - REQ-OUT-026
   - REQ-OUT-027

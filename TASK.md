@@ -1,3 +1,32 @@
+# Current continuation: TODO3-PLAN-020
+
+Approved Design revision 21 in `docs/design/step-creation-priority.md` governs
+explicit step creation priority. T40 owns the coupled parser/creation/help change,
+necessary fixture adaptations and distinguishing offline and installed evidence.
+Reuse accepted integration `5dc406be71e194e7ddf87fcee6b1b0aff32335dc`, preserving all
+39 accepted assignments, definitions/interfaces/checks and historical evidence,
+manual simplifications, routine-notice removals and revision-20 shorthands.
+Successor precedence replaces only the old step-priority prohibition and makes
+parent-effective copying the omitted-option default; all other obligations remain.
+
+The appended nonfinal stage activates REQ-CREATE-009, REQ-CLI-041 and
+REQ-VERIFY-039. All 162 earlier planned requirements are satisfied. Four historical
+routine-notice coverage deferrals remain: preserve their existing implementation
+without duplicate work or invented manual coverage/final-project completion.
+Explicit priority is stored with each create; omit it to copy once from the
+validated saved pre-creation parent subtree, including elevated open descendants.
+Preserve cached stable-ID selection, task defaults, inline steps, ordered outcomes,
+actual-result verification/publication and all other creation/scheduling rules.
+
+Use existing focused fixtures and the unchanged final-delivery gate for one full
+offline suite plus distinct copied/PATH/real-less probes. Append observed evidence
+without changing the prepared ledger. No new provider capability or live test is
+required. The current operator request authorizes this scoped plan update and
+subsequent implementation under settled settings/limits. Publication/readiness and
+runtime adoption remain distinct; use supported validated resume. Stop on a
+further required Design/Plan change or persistent serious failure.
+Earlier continuation sections below are retained provenance.
+
 # Current continuation: TODO3-PLAN-019
 
 Design revision 20 adds positional rename, schedule/due/wait and hide without

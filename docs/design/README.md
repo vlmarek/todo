@@ -1,9 +1,42 @@
 # todo-3 product specification
 
-Design revision: **20 — positional rename, scheduling and hiding, 2026-11-01**.
+Design revision: **21 — explicit step creation priority, 2026-11-01**.
 State: **accepted scoped revision; uncommitted Design handoff**.
 
-## Current revision 20
+## Current revision 21
+
+Read [step-creation-priority.md](step-creation-priority.md) first, then the
+preserved revision-20 command shorthand contract below. Step creation accepts the
+same priority options as task creation. An explicit priority sets every new
+step's own priority in that request; omission preserves the parent's effective
+priority default. Existing inline steps created with a new task keep their
+current behavior. Priority is supplied during creation without a separate
+priority-update operation.
+
+REQ-CREATE-009 qualifies the creation prohibition, unconditional default-copying
+text and related alias/exclusion statements; REQ-CLI-041 covers discoverability;
+REQ-VERIFY-039 adds distinguishing offline evidence. Earlier definitions and
+accepted effective assignments remain historical inputs. Matching, grouping,
+hierarchy, scheduling, ordered outcomes, actual-result verification, publication
+and later independent priority changes retain their existing contracts.
+
+The operator requested a Design discussion after their --p1 step creation failed,
+then answered yes to explicit task-style priority options, the omitted default,
+a shared priority for batch steps and unchanged inline-step behavior. The scoped
+documentation approval and actual excerpts are retained separately in the external
+Design report. The purpose is to create a step with its intended own priority in
+one command, preserving the existing default for commands that omit it.
+
+This revision changes this index and step-creation-priority.md only. It introduces
+no per-inline-step priority syntax, propagation or new scheduling capability.
+Planning owns follow-up assignments, implementation decomposition, representative
+verification and revision adoption while preserving accepted historical inputs.
+There are no unresolved product decisions or new provider investigations in this
+scope. This complete uncommitted Design handoff prepares the requested scoped plan
+update. It authorizes no commit, production implementation, revision adoption or
+runner execution; historical authorizations below concern their recorded scopes.
+
+## Preserved revision 20
 
 Read [command-shorthands.md](command-shorthands.md) first. Add positional rename,
 scheduling and hiding forms: after supported option extraction, the first

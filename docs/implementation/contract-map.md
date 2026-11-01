@@ -1,12 +1,11 @@
 # Prepared ownership and evidence
 
-Design revision 20 adds positional rename/scheduling/hiding and their help. T39
-owns the cohesive syntax increment, coupled adaptations and observed acceptance.
-All 159 earlier planned requirements are satisfied and all 38 accepted assignments
-remain unchanged. Four routine-notice requirements retain explicit coverage
-deferrals: their code/evidence is already delivered at 12426b92, but no native full
-manual-delivery record exists. Preserve that code without redundant implementation;
-no manual coverage or final product completion is claimed.
+Design revision 21 adds explicit step creation priority with the omitted
+parent-effective default. T40 owns the cohesive creation/help increment and its
+coupled regression/acceptance evidence. All 162 earlier planned requirements are
+satisfied and all 39 accepted assignments remain unchanged. Four routine-notice
+coverage deferrals remain: their implementation is preserved, no native full
+manual-delivery coverage or final project completion is invented.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -134,16 +133,22 @@ requirements:
     - t31-focused
     - final-delivery
   REQ-CLI-039:
-    stage_status: active
-    primary_owner: T39
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t39-focused
     - final-delivery
   REQ-CLI-040:
-    stage_status: active
-    primary_owner: T39
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t39-focused
+    - final-delivery
+  REQ-CLI-041:
+    stage_status: active
+    primary_owner: T40
+    planned_evidence:
+    - t40-focused
     - final-delivery
   REQ-COMMENT-006:
     stage_status: satisfied
@@ -205,6 +210,12 @@ requirements:
     primary_owner: null
     planned_evidence:
     - t12-focused
+  REQ-CREATE-009:
+    stage_status: active
+    primary_owner: T40
+    planned_evidence:
+    - t40-focused
+    - final-delivery
   REQ-DOM-001:
     stage_status: satisfied
     primary_owner: null
@@ -896,9 +907,15 @@ requirements:
     - t38-focused
     - final-delivery
   REQ-VERIFY-038:
-    stage_status: active
-    primary_owner: T39
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t39-focused
+    - final-delivery
+  REQ-VERIFY-039:
+    stage_status: active
+    primary_owner: T40
+    planned_evidence:
+    - t40-focused
     - final-delivery
 ```
