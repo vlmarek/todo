@@ -15,9 +15,9 @@ import termios
 
 from todo_lib import domain as d
 from todo_lib import presentation as p
-from todo_lib.adapter.commands import Gateway, Operation, Outcome, Result, _Observed, _proof
+from todo_lib.adapter.commands import Gateway, Operation, Outcome, MutationInterrupted
 from todo_lib.adapter.current import Current
-from todo_lib.adapter.transport import HTTPFailure, redact
+from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import LocalError, command_argv, exclusive_lock, load_config
 from todo_lib.local.safety import read_bytes
 from todo_lib.syntax import parse
@@ -28,37 +28,6 @@ from .sync import SyncError, SyncInterrupted
 
 class CommentError(LocalError):
     pass
-
-
-class _CommentObserved(_Observed):
-    """Retain transport evidence for this mutation as well as JSON receipts."""
-    def __init__(self, transport, operation):
-        super().__init__(transport)
-        self.operation = operation
-        self.failures = []
-
-    def request(self, *args, **kwargs):
-        try:
-            return super().request(*args, **kwargs)
-        except HTTPFailure as error:
-            # A rejected reconciliation read says nothing about the mutation.
-            if args[:2] == ('POST', '/sync') and kwargs.get('command_uuids') == (self.operation.uuid,):
-                self.failures.append(error)
-            raise
-
-    def mutation_issues(self):
-        # HTTPFailure diagnostics are already safe and attributable to this
-        # mutation. Gateway retains their classification, but not their text.
-        issues = [str(error) for error in self.failures]
-        # Recover only this UUID's valid rejection message, including receipts
-        # found by read-only reconciliation. Never expose raw response fields.
-        for response in self.responses:
-            statuses = response.get('sync_status')
-            rejection = statuses.get(self.operation.uuid) if isinstance(statuses, dict) else None
-            if (isinstance(rejection, dict) and type(rejection.get('error_code')) is int
-                    and isinstance(rejection.get('error'), str) and rejection['error']):
-                issues.append(redact(rejection['error'], getattr(self.transport, '_secret', '')))
-        return tuple(dict.fromkeys(issues))
 
 
 def ordered_comments(comments):
@@ -253,33 +222,18 @@ class CommentWorkflow:
                     pass
 
     def _execute_operation(self, operation, current, owner):
-        # Retain the gateway's own attribution evidence across SIGINT in its
-        # read-only reconciliation. Reuse its classifier, including UUID and
-        # temporary-ID requirements; current text alone never proves acceptance.
-        transport = self.gateway.transport if isinstance(self.gateway, Gateway) else None
-        observed = _CommentObserved(transport, operation) if transport is not None else None
-        if observed is not None:
-            self.gateway.transport = observed
         try:
-            result = self.gateway.execute(operation, before=Current(current.snapshot, current.state.sync_token, current_snapshot=current.state.current_snapshot,
-                waiting_label_ids=current.state.waiting_label_ids, reminder_ids=current.state.current_reminder_ids),
-                                          known_owners={owner.id: owner}, owner_id=owner.id)
-            if observed is not None:
-                result = replace(result, issues=tuple(dict.fromkeys((*result.issues, *observed.mutation_issues()))))
-            return result, False
-        except KeyboardInterrupt:
-            if observed is None:
-                raise
-            outcome, target = _proof(operation, observed.responses)
-            if outcome == Outcome.UNKNOWN and any(e.outcome == 'rejected' for e in observed.failures):
-                outcome = Outcome.REJECTED
-            return Result(outcome, operation, target_id=target,
-                          evidence=tuple(('transport', e.outcome) for e in observed.failures) +
-                                   (('command', operation.uuid, outcome.value),),
-                          issues=observed.mutation_issues()), True
-        finally:
-            if observed is not None:
-                self.gateway.transport = transport
+            result = self.gateway.execute(operation,
+                before=Current(current.snapshot, current.state.sync_token,
+                    current_snapshot=current.state.current_snapshot,
+                    waiting_label_ids=current.state.waiting_label_ids,
+                    reminder_ids=current.state.current_reminder_ids),
+                known_owners={owner.id: owner}, owner_id=owner.id)
+            interrupted = False
+        except MutationInterrupted as error:
+            result, interrupted = error.result, True
+        return replace(result, issues=tuple(dict.fromkeys(
+            (*result.issues, *result.diagnostics)))), interrupted
 
     def _apply(self, current, owner, changes, *, editing=False):
         snapshot, now = current.snapshot, current.now

@@ -9,7 +9,7 @@ record every accepted/rejected/unknown/unattempted operation, including local fa
 from dataclasses import dataclass, replace
 
 from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, Operation
+from todo_lib.adapter.commands import Gateway, Operation, MutationInterrupted
 from todo_lib.adapter.current import Current
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import LocalError, exclusive_lock, load_config
@@ -217,7 +217,12 @@ class LifecycleWorkflow:
                 failure = error.failure if isinstance(error, SyncInterrupted) else error
                 status = 130 if isinstance(error, KeyboardInterrupt) or getattr(error, 'status', None) == 130 else 1
                 if len(outcomes) == index:
-                    outcomes.append(LifecycleOperation(operation, 'unknown', result))
+                    if isinstance(error, MutationInterrupted):
+                        result = error.result
+                        outcome = result.outcome.value if result.attempted else 'unattempted'
+                    else:
+                        outcome = 'unknown'
+                    outcomes.append(LifecycleOperation(operation, outcome, result))
                 outcomes.extend(LifecycleOperation(op, 'unattempted') for op in operations[index + 1:])
                 break
         stderr = []

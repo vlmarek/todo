@@ -7,7 +7,7 @@ another mutation. Failure receipts retain remote classification without replay.
 """
 from dataclasses import dataclass, field, replace
 from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, due_arguments, _UnsubmittedOperation
+from todo_lib.adapter.commands import Gateway, due_arguments, UnsubmittedOperation, MutationInterrupted
 from todo_lib.adapter.current import Current
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import exclusive_lock, load_config, LocalError
@@ -330,11 +330,16 @@ class CaptureWorkflow:
             except (SyncError, SyncInterrupted, d.DomainError, LocalError, HTTPFailure, OSError, KeyboardInterrupt) as error:
                 failure = error
                 status = 130 if isinstance(error, KeyboardInterrupt) else 1
+                if isinstance(error, MutationInterrupted):
+                    receipt = error.result
+                    outcome = receipt.outcome.value if receipt.attempted else 'unattempted'
+                    outcomes.append(OperationOutcome(action.method, action.title, outcome,
+                        receipt.target_id, receipt.actual, receipt.issues, receipt))
                 if receipt is None:
                     # Only the gateway's explicit pre-dispatch refusal proves
                     # that this operation was never submitted. Other failures
                     # without a receipt remain conservatively unknown.
-                    outcome = 'unattempted' if isinstance(error, _UnsubmittedOperation) else 'unknown'
+                    outcome = 'unattempted' if isinstance(error, UnsubmittedOperation) else 'unknown'
                     outcomes.append(OperationOutcome(action.method, action.title, outcome, target,
                         issues=(str(error),)))
                 elif receipt.accepted:

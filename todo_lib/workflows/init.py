@@ -18,7 +18,7 @@ import sys
 
 from todo_lib import domain as d
 from todo_lib.adapter import current
-from todo_lib.adapter.commands import Gateway, Operation, Outcome, _proof
+from todo_lib.adapter.commands import Gateway, Operation, Outcome, MutationInterrupted
 from todo_lib.adapter.transport import Transport, HTTPFailure
 from todo_lib.local import (StateStore, LocalError, ConfigState, History,
     check_paths, create_directory, wizard_mode_repairs, repair_wizard_modes,
@@ -91,18 +91,6 @@ class _Replay:
 
     def request(self, *args, **kwargs):
         return deepcopy(next(self.responses))
-
-
-class _Receipts:
-    """Keep command proof even if reconciliation is interrupted after acceptance."""
-    def __init__(self, transport):
-        self.transport, self.responses = transport, []
-
-    def request(self, *args, **kwargs):
-        result = self.transport.request(*args, **kwargs)
-        if isinstance(result, dict):
-            self.responses.append(result)
-        return result
 
 
 @dataclass
@@ -554,12 +542,12 @@ class Initializer:
                         args['parent_id'] = None if kind == 'root' else target.id
                     operation = Operation('label_add' if kind == 'label' else 'project_add', args)
                     provisions[index] = Provision(kind, name, 'unknown')
-                    receipts = _Receipts(transport)
                     try:
-                        result = Gateway(receipts).execute(operation)
-                    except KeyboardInterrupt:
-                        outcome, identity = _proof(operation, receipts.responses)
-                        provisions[index] = Provision(kind, name, outcome.value, identity)
+                        result = Gateway(transport).execute(operation)
+                    except MutationInterrupted as error:
+                        partial = error.result
+                        outcome = partial.outcome.value if partial.attempted else 'unattempted'
+                        provisions[index] = Provision(kind, name, outcome, partial.target_id)
                         raise
                     provisions[index] = Provision(kind, name, result.outcome.value, result.target_id)
                     if result.outcome != Outcome.ACCEPTED or result.issues:

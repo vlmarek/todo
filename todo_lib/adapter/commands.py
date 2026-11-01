@@ -30,7 +30,7 @@ from todo_lib.domain import (
 )
 from . import current
 from .history import HistoryAdapter, CompletedRecord
-from .transport import HTTPFailure, Replay
+from .transport import HTTPFailure, Replay, redact
 
 
 class Outcome(str, Enum):
@@ -197,6 +197,8 @@ class Result:
     restored_ancestors: tuple[Item, ...] = ()
     occurrences: tuple = ()
     before_token: str | None = None
+    diagnostics: tuple[str, ...] = ()
+    attempted: bool = True
 
     @property
     def accepted(self):
@@ -207,18 +209,51 @@ class Result:
         return self.accepted and bool(self.issues)
 
 
+class MutationInterrupted(KeyboardInterrupt):
+    """Interruption with the exact operation's accumulated, non-replayable facts."""
+    def __init__(self, result):
+        self.result = result
+        super().__init__('mutation interrupted')
+
+
 class _Observed:
     """Capture attribution from actual reads without altering retrieval semantics."""
-    def __init__(self, transport):
+    def __init__(self, transport, operation):
         self.transport, self.responses, self.reads = transport, [], []
+        self.operation, self.failures, self.attempted = operation, [], False
 
     def request(self, *args, **kwargs):
-        result = self.transport.request(*args, **kwargs)
+        mutation = (args[:2] == ('POST', '/sync') and
+                    kwargs.get('command_uuids') == (self.operation.uuid,))
+        if mutation:
+            self.attempted = True
+        try:
+            result = self.transport.request(*args, **kwargs)
+        except HTTPFailure as error:
+            if mutation:
+                self.failures.append(error)
+            raise
         if isinstance(result, dict):
             self.responses.append(result)
             if args[:2] == ('POST', '/sync') and kwargs.get('replay') is Replay.READ:
                 self.reads.append(result)
         return result
+
+    def proof(self):
+        outcome, target = _proof(self.operation, self.responses)
+        if outcome == Outcome.UNKNOWN and any(e.outcome == 'rejected' for e in self.failures):
+            outcome = Outcome.REJECTED
+        return outcome, target
+
+    def diagnostics(self):
+        issues = [str(error) for error in self.failures]
+        for response in self.responses:
+            statuses = response.get('sync_status')
+            value = statuses.get(self.operation.uuid) if isinstance(statuses, dict) else None
+            if (isinstance(value, dict) and type(value.get('error_code')) is int
+                    and isinstance(value.get('error'), str) and value['error']):
+                issues.append(redact(value['error'], getattr(self.transport, '_secret', '')))
+        return tuple(dict.fromkeys(issues))
 
 
 def _proof(op, responses):
@@ -289,7 +324,7 @@ def due_arguments(attention, previous=None):
     return raw
 
 
-class _UnsubmittedOperation(DomainError):
+class UnsubmittedOperation(DomainError):
     """Gateway validation refused the operation before transport dispatch."""
 
 
@@ -358,259 +393,268 @@ class Gateway:
             lower = start if start is not None else self.clock() - timedelta(minutes=5)
             instant_key(lower)
         except DomainError as error:
-            raise _UnsubmittedOperation(str(error)) from error
+            raise UnsubmittedOperation(str(error)) from error
         self._used.update(identities)
-        observed = _Observed(self.transport)
+        observed = _Observed(self.transport, op)
         issues, evidence = [], []
-        http_rejected = False
-        combined = (before is not None and before.current_snapshot is not None
-                    and before.sync_token not in (None, '*')
-                    and op.type not in ('project_add', 'label_add'))
-        form = {'commands': json.dumps([op.command()], ensure_ascii=False, separators=(',', ':'))}
-        if combined:
-            form.update(sync_token=before.sync_token,
-                        resource_types=json.dumps(list(current.RESOURCE_TYPES), separators=(',', ':')))
-        response = None
-        try:
-            response = observed.request('POST', '/sync', operation=op.type, replay=Replay.IDEMPOTENT,
-                form=form,
-                command_uuids=(op.uuid,))
-        except HTTPFailure as error:
-            http_rejected = error.outcome == 'rejected'
-            evidence.append(('transport', error.outcome))
         after, actual, records, restored = None, None, (), ()
-        supplied = False
         try:
-            if before is not None:
-                proven, created = _proof(op, observed.responses)
-                creation = ({created} if op.type == 'item_add' and proven == Outcome.ACCEPTED
-                            and created and created not in owners else set())
-                # Write-only receipts have no resource provenance. Their token
-                # must never be used with our unincorporated saved baseline.
-                if combined and isinstance(response, dict) and 'sync_token' in response:
-                    if _id(response['sync_token']) == '*':
-                        raise current.CurrentError('response sync_token must not be *')
-                supplied = (combined and isinstance(response, dict) and
-                            any(k in response for k in (*current.RESOURCE_TYPES, 'full_sync')))
-                supplied_args = ({'supplied_response': response, 'supplied_token': before.sync_token}
-                                 if supplied else {})
-                after = self.retrieve(observed, before.binding, prior=before.current_snapshot or before.snapshot,
-                                      sync_token=before.sync_token,
-                                      replace=before.sync_token == '*' or before.current_snapshot is None,
-                                      known=before.snapshot, reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids,
-                                      created_ids=frozenset(creation), **supplied_args)
-                if supplied:
-                    name = ('notes' if op.type.startswith('note_') else
-                            'reminders' if op.type.startswith('reminder_') else 'items')
-                    covered = any(isinstance(raw, dict) and raw.get('id') == created
-                                  for raw in response.get(name, ()))
-                    # A complete delta may omit unchanged objects. That proves
-                    # current membership, but not this command's normalized effect.
-                    if not covered and not response.get('full_sync'):
-                        after = self.retrieve(observed, before.binding, prior=before.current_snapshot,
-                            sync_token=before.sync_token, known=before.snapshot,
-                            reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids,
-                            created_ids=frozenset(creation))
-            else:
-                # Provisioning before a root binding exists: only project/label
-                # resources, full plus one bounded freshness delta.
-                response = observed.request('POST', '/sync', operation='provision reconciliation',
-                    replay=Replay.READ, form={'sync_token': '*', 'resource_types': '["projects","labels"]'})
-                if not isinstance(response, dict) or response.get('full_sync') is not True:
-                    raise DomainError('provision reconciliation requires full Sync')
-                token = _id(response.get('sync_token'))
-                if token == '*' or any(not isinstance(response.get(name), list) for name in ('projects', 'labels')):
-                    raise DomainError('invalid provision resources/token')
-                fresh = observed.request('POST', '/sync', operation='provision freshness', replay=Replay.READ,
-                    form={'sync_token': token, 'resource_types': '["projects","labels"]'})
-                if not isinstance(fresh, dict) or fresh.get('full_sync') is not False or not isinstance(fresh.get('sync_token'), str) or not fresh['sync_token'] or fresh['sync_token'] == '*':
-                    raise DomainError('invalid provision freshness response')
-        except (DomainError, HTTPFailure) as error:
-            # A failed necessary read cannot leave the insufficient first
-            # candidate/token available for accepted-operation publication.
-            after = None
-            issue = 'current reconciliation unavailable: ' + str(error)
-            issues.append(ReminderDiagnostic(issue) if getattr(error, 'managed_reminder', False) else issue)
-        outcome, target = _proof(op, observed.responses)
-        if http_rejected and outcome == Outcome.UNKNOWN:
-            outcome = Outcome.REJECTED
-        evidence.append(('command', op.uuid, outcome.value))
-        if op.temp_id and target:
-            evidence.append(('temporary ID', op.temp_id, target))
-        snapshot = after.snapshot if after is not None else None
-        if snapshot is not None:
-            collection = (snapshot.comments if op.type.startswith('note_') else
-                          snapshot.reminders if op.type.startswith('reminder_') else
-                          snapshot.categories if op.type == 'project_add' else snapshot.items)
-            actual = collection.get(target)
-        account_zone = after.account.timezone if after is not None else before.account.timezone if before else 'UTC'
-        history = self.history or HistoryAdapter(observed, timezone=account_zone)
-        try:
-            resource_responses = ([response] if supplied else []) + observed.reads
-            own_notes = any(r.get('full_sync') is True or any(
-                isinstance(raw, dict) and raw.get('id') == target for raw in r.get('notes', ()))
-                for r in resource_responses) if after is not None else False
-            if (op.type.startswith('note_') and not
-                    (own_notes and after is not None and after.current_snapshot is not None and
-                     owner in after.snapshot.items and not after.snapshot.items[owner].completed)):
-                # Scoped REST comments work for supported known archived owners,
-                # without requiring them to remain in active Sync.
-                comments = history.comments(owner)
-                actual = next((c for c in comments.records if c.id == target), None)
-                evidence.append(comments)
-            if op.type in ('item_close', 'item_complete', 'item_update_date_complete'):
-                upper = end if end is not None else self.clock()
-                instant_key(upper)
-                if instant_key(lower) > instant_key(upper):
-                    raise DomainError('reconciliation interval is reversed')
-                category = owners.get(op.args['id'])
-                if category is None:
-                    raise DomainError('known lifecycle owner required')
-                if (combined and supplied and isinstance(actual, Item) and actual.completed
-                        and actual.completed_at is not None and not actual.recurring and not category.recurring
-                        and op.type != 'item_update_date_complete'):
-                    # Actual lifecycle state is sufficient for this result; it
-                    # makes no claim about a completed-history interval.
-                    records = (CompletedRecord(actual, Occurrence(
-                        actual.id + '@' + str(instant_key(actual.completed_at)),
-                        actual.id, actual.completed_at, False)),)
-                    evidence.extend(records)
+            combined = (before is not None and before.current_snapshot is not None
+                        and before.sync_token not in (None, '*')
+                        and op.type not in ('project_add', 'label_add'))
+            form = {'commands': json.dumps([op.command()], ensure_ascii=False, separators=(',', ':'))}
+            if combined:
+                form.update(sync_token=before.sync_token,
+                            resource_types=json.dumps(list(current.RESOURCE_TYPES), separators=(',', ':')))
+            response = None
+            try:
+                response = observed.request('POST', '/sync', operation=op.type, replay=Replay.IDEMPOTENT,
+                    form=form,
+                    command_uuids=(op.uuid,))
+            except HTTPFailure as error:
+                evidence.append(('transport', error.outcome))
+            supplied = False
+            try:
+                if before is not None:
+                    proven, created = _proof(op, observed.responses)
+                    creation = ({created} if op.type == 'item_add' and proven == Outcome.ACCEPTED
+                                and created and created not in owners else set())
+                    # Write-only receipts have no resource provenance. Their token
+                    # must never be used with our unincorporated saved baseline.
+                    if combined and isinstance(response, dict) and 'sync_token' in response:
+                        if _id(response['sync_token']) == '*':
+                            raise current.CurrentError('response sync_token must not be *')
+                    supplied = (combined and isinstance(response, dict) and
+                                any(k in response for k in (*current.RESOURCE_TYPES, 'full_sync')))
+                    supplied_args = ({'supplied_response': response, 'supplied_token': before.sync_token}
+                                     if supplied else {})
+                    after = self.retrieve(observed, before.binding, prior=before.current_snapshot or before.snapshot,
+                                          sync_token=before.sync_token,
+                                          replace=before.sync_token == '*' or before.current_snapshot is None,
+                                          known=before.snapshot, reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids,
+                                          created_ids=frozenset(creation), **supplied_args)
+                    if supplied:
+                        name = ('notes' if op.type.startswith('note_') else
+                                'reminders' if op.type.startswith('reminder_') else 'items')
+                        covered = any(isinstance(raw, dict) and raw.get('id') == created
+                                      for raw in response.get(name, ()))
+                        # A complete delta may omit unchanged objects. That proves
+                        # current membership, but not this command's normalized effect.
+                        if not covered and not response.get('full_sync'):
+                            after = self.retrieve(observed, before.binding, prior=before.current_snapshot,
+                                sync_token=before.sync_token, known=before.snapshot,
+                                reminder_ids=before.reminder_ids, waiting_label_ids=before.waiting_label_ids,
+                                created_ids=frozenset(creation))
                 else:
-                    completed = history.completed(lower, upper, {'project_id': category.category_id})
-                    records = tuple(r for r in completed.records if r.item.id == op.args['id'] and not r.deleted)
-                    evidence.append(completed)
-                if actual is None and records and op.type != 'item_update_date_complete':
-                    actual = max(records, key=lambda r: instant_key(r.occurrence.completed_at)).item
-                # Occurrences are compared by exact instant, never datetime's
-                # microsecond projection or a reconstructed historical Item.
-                previous = before.snapshot.occurrences.values()
-                seen = {(r.item_id, instant_key(r.completed_at)) for r in previous}
-                seen.update((i.id, instant_key(i.completed_at)) for i in owners.values() if i.completed_at is not None)
-                new = tuple(r for r in records if (r.occurrence.item_id, instant_key(r.occurrence.completed_at)) not in seen)
-                # A changed recurring occurrence is necessary but not alone a
-                # command receipt. Without UUID proof we conservatively stay unknown.
-                if op.type == 'item_update_date_complete':
-                    evidence.append(('new completion occurrences', tuple(r.occurrence for r in new)))
-                    if op.args['is_forward'] == 0:
-                        activities = history.activities(lower, upper, {'object_type': 'item', 'object_id': op.args['id']})
-                        evidence.append(activities)
-            if op.type in ('project_add', 'label_add'):
-                resources = {}
-                name = 'projects' if op.type == 'project_add' else 'labels'
-                # Only read responses establish current resource state. Delta
-                # omissions preserve fields; full replacement discards old IDs.
-                for response in observed.reads:
-                    if response.get('full_sync') is True:
-                        resources.clear()
-                    for raw in response.get(name, ()):
-                        if isinstance(raw, dict) and isinstance(raw.get('id'), str):
-                            resources.setdefault(raw['id'], {}).update(raw)
-                raw = resources.get(target)
-                if raw is not None and raw.get('is_deleted') is False:
-                    if name == 'labels':
-                        actual = Label(_id(raw['id']), raw['name'])
-                        validate_title(actual.name)
-                    elif actual is None:
-                        actual = current._project(raw)
-        except (DomainError, HTTPFailure, KeyError, TypeError) as error:
-            issues.append('history/resource reconciliation unavailable: ' + str(error))
-        if op.type == 'item_uncomplete' and snapshot is not None and before is not None:
-            restored = tuple(snapshot.items[i.id] for i in old_ancestors
-                if i.completed and i.id in snapshot.items and not snapshot.items[i.id].completed)
-        if outcome == Outcome.ACCEPTED:
-            if actual is None and not op.type.endswith('_delete'):
-                issues.append('accepted object unavailable in authoritative state')
-            if actual is not None and op.type in ('item_add', 'item_update'):
-                for wire, attribute in (('content', 'title'), ('description', 'description'), ('priority', 'priority'), ('labels', 'labels')):
-                    if wire in op.args:
-                        expected = op.args[wire]
-                        expected = 5 - expected if wire == 'priority' else frozenset(expected) if wire == 'labels' else expected
-                        if getattr(actual, attribute) != expected:
-                            issues.append('accepted ' + attribute + ' differs from request')
-            if actual is not None and op.type.startswith('note_') and not op.type.endswith('_delete'):
-                if actual.item_id != owner or actual.body != op.args['content']:
-                    issues.append('accepted comment differs from requested owner/text')
-            if actual is not None and op.type in ('reminder_add', 'reminder_update'):
-                previous = reminders.get(op.args.get('id'))
-                owner_id = previous.item_id if previous else op.args['item_id']
-                # Untouched fields are authoritative returned context, rather
-                # than a comparison against potentially outdated saved values.
-                expected = replace(actual, item_id=owner_id)
-                kind = op.args.get('type', 'absolute' if 'due' in op.args else
-                                   'relative' if 'minute_offset' in op.args else actual.type)
-                expected = replace(expected, type=kind,
-                    minutes=op.args.get('minute_offset', expected.minutes) if kind == 'relative' else None,
-                    due=expected.due if kind == 'absolute' else None,
-                    **{k: op.args[k] for k in ('notify_uid', 'is_urgent') if k in op.args})
-                differs = False
-                if 'due' in op.args:
-                    prediction = op.expected_attention
-                    raw = op.args['due']
-                    if prediction is _UNSET and 'date' in raw:
-                        prediction = resolve_reminder_due(raw, account_zone)
-                    if prediction is not _UNSET:
-                        prediction = rebase_attention(prediction, account_zone, reminder=True)
-                    # The documented fixed request default is the user's zone.
-                    # Explicit null remains distinct from omitted timezone.
-                    if (prediction is not _UNSET and prediction.kind == 'fixed'
-                            and 'timezone' not in raw):
-                        prediction = replace(prediction, zone=account_zone)
-                    if prediction is _UNSET or prediction.kind == 'unresolved':
-                        differs = (actual.due is None or not actual.due.exact
-                                   or (raw.get('timezone') is not None
-                                       and (actual.due.kind != 'fixed' or actual.due.zone != raw['timezone'])))
+                    # Provisioning before a root binding exists: only project/label
+                    # resources, full plus one bounded freshness delta.
+                    response = observed.request('POST', '/sync', operation='provision reconciliation',
+                        replay=Replay.READ, form={'sync_token': '*', 'resource_types': '["projects","labels"]'})
+                    if not isinstance(response, dict) or response.get('full_sync') is not True:
+                        raise DomainError('provision reconciliation requires full Sync')
+                    token = _id(response.get('sync_token'))
+                    if token == '*' or any(not isinstance(response.get(name), list) for name in ('projects', 'labels')):
+                        raise DomainError('invalid provision resources/token')
+                    fresh = observed.request('POST', '/sync', operation='provision freshness', replay=Replay.READ,
+                        form={'sync_token': token, 'resource_types': '["projects","labels"]'})
+                    if not isinstance(fresh, dict) or fresh.get('full_sync') is not False or not isinstance(fresh.get('sync_token'), str) or not fresh['sync_token'] or fresh['sync_token'] == '*':
+                        raise DomainError('invalid provision freshness response')
+            except (DomainError, HTTPFailure) as error:
+                # A failed necessary read cannot leave the insufficient first
+                # candidate/token available for accepted-operation publication.
+                after = None
+                issue = 'current reconciliation unavailable: ' + str(error)
+                issues.append(ReminderDiagnostic(issue) if getattr(error, 'managed_reminder', False) else issue)
+            outcome, target = observed.proof()
+            evidence.append(('command', op.uuid, outcome.value))
+            if op.temp_id and target:
+                evidence.append(('temporary ID', op.temp_id, target))
+            snapshot = after.snapshot if after is not None else None
+            if snapshot is not None:
+                collection = (snapshot.comments if op.type.startswith('note_') else
+                              snapshot.reminders if op.type.startswith('reminder_') else
+                              snapshot.categories if op.type == 'project_add' else snapshot.items)
+                actual = collection.get(target)
+            account_zone = after.account.timezone if after is not None else before.account.timezone if before else 'UTC'
+            history = self.history or HistoryAdapter(observed, timezone=account_zone)
+            try:
+                resource_responses = ([response] if supplied else []) + observed.reads
+                own_notes = any(r.get('full_sync') is True or any(
+                    isinstance(raw, dict) and raw.get('id') == target for raw in r.get('notes', ()))
+                    for r in resource_responses) if after is not None else False
+                if (op.type.startswith('note_') and not
+                        (own_notes and after is not None and after.current_snapshot is not None and
+                         owner in after.snapshot.items and not after.snapshot.items[owner].completed)):
+                    # Scoped REST comments work for supported known archived owners,
+                    # without requiring them to remain in active Sync.
+                    comments = history.comments(owner)
+                    actual = next((c for c in comments.records if c.id == target), None)
+                    evidence.append(comments)
+                if op.type in ('item_close', 'item_complete', 'item_update_date_complete'):
+                    upper = end if end is not None else self.clock()
+                    instant_key(upper)
+                    if instant_key(lower) > instant_key(upper):
+                        raise DomainError('reconciliation interval is reversed')
+                    category = owners.get(op.args['id'])
+                    if category is None:
+                        raise DomainError('known lifecycle owner required')
+                    if (combined and supplied and isinstance(actual, Item) and actual.completed
+                            and actual.completed_at is not None and not actual.recurring and not category.recurring
+                            and op.type != 'item_update_date_complete'):
+                        # Actual lifecycle state is sufficient for this result; it
+                        # makes no claim about a completed-history interval.
+                        records = (CompletedRecord(actual, Occurrence(
+                            actual.id + '@' + str(instant_key(actual.completed_at)),
+                            actual.id, actual.completed_at, False)),)
+                        evidence.extend(records)
                     else:
-                        differs = not reconciles_attention(prediction, actual.due, account_zone)
-                    # Requested due has prediction tolerance; retained due must
-                    # instead remain exact. In either case compare actual metadata.
-                    expected = replace(expected, due=actual.due)
-                differs |= not preserves_reminder(expected, actual, account_zone)
-                if differs:
-                    issues.append(ReminderDiagnostic('accepted reminder differs from request [' +
-                        reminder_context(actual, snapshot.items, snapshot.categories,
-                            cached=actual.item_id not in {r.get('id') for response in resource_responses
-                                for r in response.get('items', ()) if isinstance(r, dict)}) + ']'))
-            if actual is not None and op.type in ('project_add', 'label_add'):
-                if actual.name != op.args['name'] or (op.type == 'project_add' and actual.parent_id != op.args.get('parent_id')):
-                    issues.append('accepted provision differs from request')
-            if isinstance(actual, Item) and op.type == 'item_add':
-                if (actual.parent_id, actual.category_id) != (op.args.get('parent_id'), op.args['project_id']):
-                    issues.append('accepted creation owner/category differs from request')
-            if (isinstance(actual, Item) and op.args.get('due') is not None
-                    and 'due' in op.args and actual.attention is None
-                    and op.expected_attention is _UNSET):
-                issues.append('accepted attention expression returned no attention')
-            if (isinstance(actual, Item) and op.expected_attention is _UNSET
-                    and isinstance(op.args.get('due'), dict)):
-                named = op.args['due'].get('timezone')
-                returned = actual.attention
-                if (named is not None and returned is not None and returned.kind != 'date'
-                        and (returned.kind != 'fixed' or returned.zone != named)):
-                    issues.append('accepted attention differs from requested named timezone')
-            if isinstance(actual, Item) and op.expected_attention is not _UNSET:
-                requested = attention_prediction(op.expected_attention, account_zone)
-                returned = actual.attention
-                # Delegated input has no predicted occurrence; the shared check
-                # still enforces explicit timed zone semantics.
-                matches = reconciles_attention(requested, returned, account_zone)
-                if not matches:
-                    issues.append('requested attention ' + repr(requested) + '; actual attention ' + repr(returned))
-            if isinstance(actual, Item):
-                if op.type in ('item_close', 'item_complete') and not actual.completed:
-                    issues.append('accepted completion has no completed lifecycle')
-                if op.type == 'item_uncomplete' and actual.completed:
-                    issues.append('accepted reopen remains completed')
-                if op.type == 'item_move':
-                    parent = op.args.get('parent_id')
-                    destination = snapshot.items.get(parent) if parent else None
-                    category = destination.category_id if destination else op.args.get('project_id')
-                    if (actual.parent_id, actual.category_id) != (parent, category):
-                        issues.append('accepted move destination differs from request')
-            if op.type.endswith('_delete') and actual is not None:
-                issues.append('accepted deletion still present')
-        return Result(outcome, op, target, after, actual, tuple(evidence), tuple(issues),
-                      restored, tuple(r.occurrence for r in records),
-                      before.sync_token if before is not None else None)
+                        completed = history.completed(lower, upper, {'project_id': category.category_id})
+                        records = tuple(r for r in completed.records if r.item.id == op.args['id'] and not r.deleted)
+                        evidence.append(completed)
+                    if actual is None and records and op.type != 'item_update_date_complete':
+                        actual = max(records, key=lambda r: instant_key(r.occurrence.completed_at)).item
+                    # Occurrences are compared by exact instant, never datetime's
+                    # microsecond projection or a reconstructed historical Item.
+                    previous = before.snapshot.occurrences.values()
+                    seen = {(r.item_id, instant_key(r.completed_at)) for r in previous}
+                    seen.update((i.id, instant_key(i.completed_at)) for i in owners.values() if i.completed_at is not None)
+                    new = tuple(r for r in records if (r.occurrence.item_id, instant_key(r.occurrence.completed_at)) not in seen)
+                    # A changed recurring occurrence is necessary but not alone a
+                    # command receipt. Without UUID proof we conservatively stay unknown.
+                    if op.type == 'item_update_date_complete':
+                        evidence.append(('new completion occurrences', tuple(r.occurrence for r in new)))
+                        if op.args['is_forward'] == 0:
+                            activities = history.activities(lower, upper, {'object_type': 'item', 'object_id': op.args['id']})
+                            evidence.append(activities)
+                if op.type in ('project_add', 'label_add'):
+                    resources = {}
+                    name = 'projects' if op.type == 'project_add' else 'labels'
+                    # Only read responses establish current resource state. Delta
+                    # omissions preserve fields; full replacement discards old IDs.
+                    for response in observed.reads:
+                        if response.get('full_sync') is True:
+                            resources.clear()
+                        for raw in response.get(name, ()):
+                            if isinstance(raw, dict) and isinstance(raw.get('id'), str):
+                                resources.setdefault(raw['id'], {}).update(raw)
+                    raw = resources.get(target)
+                    if raw is not None and raw.get('is_deleted') is False:
+                        if name == 'labels':
+                            actual = Label(_id(raw['id']), raw['name'])
+                            validate_title(actual.name)
+                        elif actual is None:
+                            actual = current._project(raw)
+            except (DomainError, HTTPFailure, KeyError, TypeError) as error:
+                issues.append('history/resource reconciliation unavailable: ' + str(error))
+            if op.type == 'item_uncomplete' and snapshot is not None and before is not None:
+                restored = tuple(snapshot.items[i.id] for i in old_ancestors
+                    if i.completed and i.id in snapshot.items and not snapshot.items[i.id].completed)
+            if outcome == Outcome.ACCEPTED:
+                if actual is None and not op.type.endswith('_delete'):
+                    issues.append('accepted object unavailable in authoritative state')
+                if actual is not None and op.type in ('item_add', 'item_update'):
+                    for wire, attribute in (('content', 'title'), ('description', 'description'), ('priority', 'priority'), ('labels', 'labels')):
+                        if wire in op.args:
+                            expected = op.args[wire]
+                            expected = 5 - expected if wire == 'priority' else frozenset(expected) if wire == 'labels' else expected
+                            if getattr(actual, attribute) != expected:
+                                issues.append('accepted ' + attribute + ' differs from request')
+                if actual is not None and op.type.startswith('note_') and not op.type.endswith('_delete'):
+                    if actual.item_id != owner or actual.body != op.args['content']:
+                        issues.append('accepted comment differs from requested owner/text')
+                if actual is not None and op.type in ('reminder_add', 'reminder_update'):
+                    previous = reminders.get(op.args.get('id'))
+                    owner_id = previous.item_id if previous else op.args['item_id']
+                    # Untouched fields are authoritative returned context, rather
+                    # than a comparison against potentially outdated saved values.
+                    expected = replace(actual, item_id=owner_id)
+                    kind = op.args.get('type', 'absolute' if 'due' in op.args else
+                                       'relative' if 'minute_offset' in op.args else actual.type)
+                    expected = replace(expected, type=kind,
+                        minutes=op.args.get('minute_offset', expected.minutes) if kind == 'relative' else None,
+                        due=expected.due if kind == 'absolute' else None,
+                        **{k: op.args[k] for k in ('notify_uid', 'is_urgent') if k in op.args})
+                    differs = False
+                    if 'due' in op.args:
+                        prediction = op.expected_attention
+                        raw = op.args['due']
+                        if prediction is _UNSET and 'date' in raw:
+                            prediction = resolve_reminder_due(raw, account_zone)
+                        if prediction is not _UNSET:
+                            prediction = rebase_attention(prediction, account_zone, reminder=True)
+                        # The documented fixed request default is the user's zone.
+                        # Explicit null remains distinct from omitted timezone.
+                        if (prediction is not _UNSET and prediction.kind == 'fixed'
+                                and 'timezone' not in raw):
+                            prediction = replace(prediction, zone=account_zone)
+                        if prediction is _UNSET or prediction.kind == 'unresolved':
+                            differs = (actual.due is None or not actual.due.exact
+                                       or (raw.get('timezone') is not None
+                                           and (actual.due.kind != 'fixed' or actual.due.zone != raw['timezone'])))
+                        else:
+                            differs = not reconciles_attention(prediction, actual.due, account_zone)
+                        # Requested due has prediction tolerance; retained due must
+                        # instead remain exact. In either case compare actual metadata.
+                        expected = replace(expected, due=actual.due)
+                    differs |= not preserves_reminder(expected, actual, account_zone)
+                    if differs:
+                        issues.append(ReminderDiagnostic('accepted reminder differs from request [' +
+                            reminder_context(actual, snapshot.items, snapshot.categories,
+                                cached=actual.item_id not in {r.get('id') for response in resource_responses
+                                    for r in response.get('items', ()) if isinstance(r, dict)}) + ']'))
+                if actual is not None and op.type in ('project_add', 'label_add'):
+                    if actual.name != op.args['name'] or (op.type == 'project_add' and actual.parent_id != op.args.get('parent_id')):
+                        issues.append('accepted provision differs from request')
+                if isinstance(actual, Item) and op.type == 'item_add':
+                    if (actual.parent_id, actual.category_id) != (op.args.get('parent_id'), op.args['project_id']):
+                        issues.append('accepted creation owner/category differs from request')
+                if (isinstance(actual, Item) and op.args.get('due') is not None
+                        and 'due' in op.args and actual.attention is None
+                        and op.expected_attention is _UNSET):
+                    issues.append('accepted attention expression returned no attention')
+                if (isinstance(actual, Item) and op.expected_attention is _UNSET
+                        and isinstance(op.args.get('due'), dict)):
+                    named = op.args['due'].get('timezone')
+                    returned = actual.attention
+                    if (named is not None and returned is not None and returned.kind != 'date'
+                            and (returned.kind != 'fixed' or returned.zone != named)):
+                        issues.append('accepted attention differs from requested named timezone')
+                if isinstance(actual, Item) and op.expected_attention is not _UNSET:
+                    requested = attention_prediction(op.expected_attention, account_zone)
+                    returned = actual.attention
+                    # Delegated input has no predicted occurrence; the shared check
+                    # still enforces explicit timed zone semantics.
+                    matches = reconciles_attention(requested, returned, account_zone)
+                    if not matches:
+                        issues.append('requested attention ' + repr(requested) + '; actual attention ' + repr(returned))
+                if isinstance(actual, Item):
+                    if op.type in ('item_close', 'item_complete') and not actual.completed:
+                        issues.append('accepted completion has no completed lifecycle')
+                    if op.type == 'item_uncomplete' and actual.completed:
+                        issues.append('accepted reopen remains completed')
+                    if op.type == 'item_move':
+                        parent = op.args.get('parent_id')
+                        destination = snapshot.items.get(parent) if parent else None
+                        category = destination.category_id if destination else op.args.get('project_id')
+                        if (actual.parent_id, actual.category_id) != (parent, category):
+                            issues.append('accepted move destination differs from request')
+                if op.type.endswith('_delete') and actual is not None:
+                    issues.append('accepted deletion still present')
+            return Result(outcome, op, target, after, actual, tuple(evidence), tuple(issues),
+                          restored, tuple(r.occurrence for r in records),
+                          before.sync_token if before is not None else None,
+                          diagnostics=observed.diagnostics(), attempted=observed.attempted)
+
+        except KeyboardInterrupt:
+            outcome, target = observed.proof()
+            command_evidence = tuple(e for e in evidence if not
+                (isinstance(e, tuple) and e and e[0] == 'command'))
+            partial = Result(outcome, op, target, after, actual,
+                (*command_evidence, ('command', op.uuid, outcome.value)), tuple(issues),
+                restored, tuple(r.occurrence for r in records),
+                before.sync_token if before is not None else None,
+                diagnostics=observed.diagnostics(), attempted=observed.attempted)
+            raise MutationInterrupted(partial) from None
 
     def provision_root(self, name, **context):
         return self.execute(Operation('project_add', {'name': name, 'parent_id': None}), **context)

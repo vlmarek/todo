@@ -4,14 +4,13 @@ The caller may pass argv or a normalized syntax request. One lock covers saved c
 selection, validation, the single direct move and authoritative reconciliation.
 No lifecycle operation, rollback, retry, or report-cursor update occurs here.
 """
-from copy import copy
 from dataclasses import dataclass, replace
 
 from todo_lib import domain as d, presentation as p
-from todo_lib.adapter.commands import Gateway, Outcome
+from todo_lib.adapter.commands import Gateway, Outcome, MutationInterrupted
 from todo_lib.adapter.current import Current, retrieve
 from todo_lib.adapter.history import HistoryAdapter
-from todo_lib.adapter.transport import HTTPFailure, redact
+from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import LocalError, exclusive_lock, load_config, prepare_candidates
 from todo_lib.syntax import parse
 from .reads import combined_snapshot, choose, select_child, select_title
@@ -25,49 +24,6 @@ class MoveError(d.DomainError):
     def __init__(self, message, *, remote_outcome='unattempted'):
         self.remote_outcome = remote_outcome
         super().__init__(message)
-
-
-class _MoveEvidence:
-    """Keep UUID-attributed receipts even if gateway reconciliation is interrupted.
-
-    This delegates every request unchanged; it neither retries nor reconciles.
-    Only the single move's status is retained, never unrelated response data.
-    """
-    def __init__(self, transport):
-        self.transport = transport
-        self.uuid = None
-        self.statuses = set()
-        self.reasons = []
-        self.http_rejected = False
-
-    def request(self, *args, **kwargs):
-        if kwargs.get('operation') == 'item_move':
-            self.uuid, = kwargs['command_uuids']
-        try:
-            response = self.transport.request(*args, **kwargs)
-        except HTTPFailure as error:
-            if kwargs.get('operation') == 'item_move' and error.outcome == 'rejected':
-                self.http_rejected = True
-                self.reasons.append(str(error))  # Transport diagnostics are already safe.
-            raise
-        status = response.get('sync_status') if isinstance(response, dict) else None
-        value = status.get(self.uuid) if isinstance(status, dict) and self.uuid else None
-        if value == 'ok':
-            self.statuses.add('accepted')
-        elif (isinstance(value, dict) and type(value.get('error_code')) is int
-              and isinstance(value.get('error'), str) and value['error']):
-            self.statuses.add('rejected')
-            # Only the resolved transport credential can safely redact provider text.
-            secret = getattr(self.transport, '_secret', None)
-            if secret is not None:
-                self.reasons.append(' '.join(redact(value['error'], secret).split()))
-        return response
-
-    @property
-    def outcome(self):
-        if len(self.statuses) == 1:
-            return next(iter(self.statuses))
-        return 'rejected' if self.http_rejected else 'unknown'
 
 
 class MoveReceiptError(MoveError):
@@ -186,25 +142,19 @@ class MoveWorkflow:
             context = ('move ' + self._item_context(snapshot, source) + ' to ' +
                 (self._item_context(snapshot, snapshot.items[parent_id]) if parent_id else
                  'standalone task in ' + snapshot.categories[category].name))
-            gateway, evidence = self.gateway, None
-            if isinstance(gateway, Gateway):
-                # A per-call facade preserves the gateway's UUID replay guard and
-                # injected retrieval hooks without replacing its caller-owned transport.
-                gateway = copy(gateway)
-                evidence = _MoveEvidence(gateway.transport)
-                gateway.transport = evidence
             try:
-                operation = gateway.move(source.id, before=before, **(
+                operation = self.gateway.move(source.id, before=before, **(
                     {'parent_id': parent_id} if parent_id is not None else {'project_id': category}))
-            except KeyboardInterrupt:
-                outcome = evidence.outcome if evidence else 'unknown'
-                phase = 'move reconciliation' if outcome != 'unknown' else 'remote move'
-                reason = '; '.join(dict.fromkeys(evidence.reasons)) if evidence else ''
+            except KeyboardInterrupt as error:
+                partial = error.result if isinstance(error, MutationInterrupted) else None
+                outcome = (partial.outcome.value if partial.attempted else 'unattempted') if partial else 'unknown'
+                phase = 'move reconciliation' if outcome not in ('unknown', 'unattempted') else 'remote move'
+                reason = '; '.join(' '.join(x.split()) for x in partial.diagnostics) if partial else ''
                 raise SyncInterrupted(SyncError(phase, context + '; interrupted' +
                     (('; ' + reason) if reason else ''),
                     saved_state_available=True, remote_outcome=outcome)) from None
             if operation.outcome != Outcome.ACCEPTED:
-                reason = '; '.join(dict.fromkeys(evidence.reasons)) if evidence else ''
+                reason = '; '.join(' '.join(x.split()) for x in operation.diagnostics)
                 raise MoveError(context + ': Remote move outcome: ' + operation.outcome.value +
                     (('; ' + reason) if reason else '') +
                     '; stopped without replay. Use read-only todo --refresh now for reconciliation.',
