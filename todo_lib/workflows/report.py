@@ -15,6 +15,7 @@ from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import (StateStore, LocalError, History, load_config,
     exclusive_lock, merge_history, prune_history, prepare_candidates)
 from todo_lib.local.safety import read_bytes, regular
+from todo_lib.local.publication import PublicationObserver
 from todo_lib.presentation import (Document, OriginalStreams, ReportEvent, deliver,
     history_warning, render_report, render_report_cursor)
 from todo_lib.syntax import parse
@@ -220,7 +221,8 @@ class Reporter:
         return ReportResult(start, end, True, warnings)
 
     def _prepare(self, state, config, options, now):
-        phase, before = 'current retrieval', None
+        phase = 'current retrieval'
+        publication = PublicationObserver(self.store)
         sync = Synchronizer(self.transport, self.store)
         try:
             known = _known(state)
@@ -325,12 +327,12 @@ class Reporter:
             candidates = prepare_candidates(cached, pending, account_display=state.binding.account_display,
                 sync_token=current.sync_token, synced_at=now, current_snapshot=current.snapshot,
                 waiting_label_ids=current.waiting_label_ids, current_reminder_ids=current.reminder_ids, hidden_names=config.hidden_from_now)
-            before = sync._bytes(('cache.json', 'history.json', 'binding.json'))
+            publication.capture()
             phase = 'local publication'
             self.store.publish_snapshot(candidates)
             return snapshot, pending, self.store.load_binding(), start, end
         except (LocalError, d.DomainError, HTTPFailure, OSError, KeyboardInterrupt) as error:
-            started = before is not None and sync._bytes(before.keys()) != before
+            started = publication.started
             failure = SyncError(phase, error, publication_started=started,
                                 refresh_permitted=not started)
             if isinstance(error, KeyboardInterrupt):

@@ -25,6 +25,7 @@ from todo_lib.local import (StateStore, LocalError, ConfigState, History,
     inspect_config, load_config, parse_config, write_config, resolve_credentials,
     exclusive_lock, empty_history, merge_history, prepare_candidates)
 from todo_lib.local.safety import regular, read_bytes
+from todo_lib.local.publication import PublicationObserver
 from todo_lib.syntax.input import prompt, interactive, InputError, Cancelled, Interrupted
 
 
@@ -586,13 +587,13 @@ class Initializer:
                     current_snapshot=live.current_snapshot, waiting_label_ids=live.waiting_label_ids, current_reminder_ids=live.reminder_ids,
                     initial_cursor=None if state else now, hidden_names=config.hidden_from_now)
                 phase = 'local publication'
-                before = {name: read_bytes(root / name) if regular(root / name, missing=True) else None
-                          for name in ('cache.json', 'history.json', 'report-cursor', 'binding.json')}
+                publication = PublicationObserver(self.store,
+                    ('cache.json', 'history.json', 'report-cursor', 'binding.json'))
+                publication.capture()
                 try:
                     self.store.publish_snapshot(candidates)
                 finally:
-                    started = any((read_bytes(root / name) if regular(root / name, missing=True) else None) != value
-                                  for name, value in before.items())
+                    started = publication.started
                 state = self.store.load_consistent_state()
                 message = (f'Configuration: {root / "config"}. Initialized {state.binding.root_name}; categories: '
                            f'{", ".join(state.binding.categories.values())}. Next: todo now')

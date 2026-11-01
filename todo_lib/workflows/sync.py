@@ -15,7 +15,7 @@ from todo_lib.adapter.history import CompletedRecord, HistoryAdapter, Retrieval
 from todo_lib.adapter.transport import HTTPFailure
 from todo_lib.local import (StateStore, LocalState, LocalError, History, load_config,
                             exclusive_lock, merge_history, prepare_candidates)
-from todo_lib.local.safety import read_bytes
+from todo_lib.local.publication import PublicationObserver, destination_bytes
 from .completion import reconcile_completions
 from todo_lib.local.context import saved_context
 
@@ -338,7 +338,8 @@ class Synchronizer:
 
     def refresh_locked(self, *, clear_cache=False, remote_outcome='unattempted', operation_result=None):
         """Caller holds exclusive_lock; no retries, token classifier or remote repair."""
-        phase, cleared, before = 'local validation', False, None
+        phase, cleared = 'local validation', False
+        publication = PublicationObserver(self.store)
         try:
             if type(clear_cache) is not bool:
                 raise LocalError('clear_cache must be boolean')
@@ -403,8 +404,7 @@ class Synchronizer:
                 hidden_names=config.hidden_from_now)
             # Observe actual destinations: publisher supplies per-file atomicity,
             # not a transaction. This also distinguishes first replacement failure.
-            names = ('cache.json', 'history.json', 'binding.json')
-            before = self._bytes(names)
+            publication.capture()
             phase = 'local publication'
             self.store.publish_snapshot(candidates)
             return SyncResult(self.store.load_consistent_state(), now,
@@ -412,36 +412,16 @@ class Synchronizer:
                  'Clearing does not fill historical coverage gaps.',) if cleared else
                 ('Cache was already absent; unreported history was preserved.',) if clear_cache else (), cleared)
         except (LocalError, d.DomainError, HTTPFailure, OSError, KeyboardInterrupt) as error:
-            started = before is not None and self._bytes(before.keys()) != before
-            try:
-                load_config(self.store.root)
-                self.store.load_consistent_state(require_cache=False)
-                permitted = True
-            except (LocalError, OSError):
-                permitted = False
-            try:
-                load_config(self.store.root)
-                self.store.load_consistent_state()
-                available = True
-            except (LocalError, OSError):
-                available = False
+            facts = publication.failure_facts(preflight=lambda: load_config(self.store.root))
             failure = SyncError(phase, error, cache_cleared=cleared,
-                publication_started=started, saved_state_available=available,
-                refresh_permitted=permitted, remote_outcome=remote_outcome)
+                publication_started=facts.started, saved_state_available=facts.saved_snapshot_available,
+                refresh_permitted=facts.required_state_usable, remote_outcome=remote_outcome)
             if isinstance(error, KeyboardInterrupt):
                 raise SyncInterrupted(failure) from None
             raise failure from error
 
     def _bytes(self, names):
-        result = {}
-        for name in names:
-            path = self.store.root / name
-            try:
-                result[name] = read_bytes(path) if path.exists() else None
-            except (LocalError, OSError):
-                # Unknown bytes cannot establish that the old set survived.
-                result[name] = object()
-        return result
+        return destination_bytes(self.store.root, names)
 
 
 def read_local(*, store=None, clock=None):

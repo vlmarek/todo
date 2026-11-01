@@ -15,6 +15,7 @@ from todo_lib.adapter.transport import HTTPFailure, redact
 from todo_lib.local import LocalError, exclusive_lock, load_config, prepare_candidates
 from todo_lib.syntax import parse
 from .reads import combined_snapshot, choose, select_child, select_title
+from todo_lib.local.publication import PublicationObserver
 from .sync import SyncError, SyncInterrupted, SyncResult, _reconcile, OperationEvidence, affected_ids
 
 
@@ -232,7 +233,8 @@ class MoveWorkflow:
 
     def _publish(self, operation, result, original, candidate, source, settings):
         sync, state = self.synchronizer, result.state
-        phase, before_bytes = 'move reconciliation', None
+        phase = 'move reconciliation'
+        publication = PublicationObserver(sync.store)
         try:
             current = operation.after
             if current is None:
@@ -274,24 +276,14 @@ class MoveWorkflow:
                 account_display=state.binding.account_display, sync_token=current.sync_token,
                 synced_at=result.now, hidden_names=settings.hidden_from_now,
                 current_snapshot=current.current_snapshot, waiting_label_ids=current.waiting_label_ids, current_reminder_ids=current.reminder_ids)
-            before_bytes = sync._bytes(('cache.json', 'history.json', 'binding.json'))
+            publication.capture()
             phase = 'local publication'
             sync.store.publish_snapshot(candidates)
             return SyncResult(sync.store.load_consistent_state(), result.now)
         except (LocalError, d.DomainError, HTTPFailure, OSError, KeyboardInterrupt) as error:
-            started = before_bytes is not None and sync._bytes(before_bytes) != before_bytes
-            try:
-                sync.store.load_consistent_state(require_cache=False)
-                permitted = True
-            except (LocalError, OSError):
-                permitted = False
-            try:
-                sync.store.load_consistent_state()
-                available = True
-            except (LocalError, OSError):
-                available = False
-            failure = SyncError(phase, error, publication_started=started,
-                saved_state_available=available, refresh_permitted=permitted,
+            facts = publication.failure_facts()
+            failure = SyncError(phase, error, publication_started=facts.started,
+                saved_state_available=facts.saved_snapshot_available, refresh_permitted=facts.required_state_usable,
                 remote_outcome='accepted')
             if isinstance(error, KeyboardInterrupt):
                 raise SyncInterrupted(failure) from None
