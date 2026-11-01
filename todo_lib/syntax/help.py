@@ -10,7 +10,7 @@ SYNOPSES = {
     'task': 'task [--refresh] SELECTOR...', 'step': 'step [--refresh] SELECTOR...',
     'category': 'category [--refresh] | category --add NAME...',
     'search': 'search [--all] [--refresh] TEXT...',
-    'add': 'add task CATEGORY TITLE... | add step PARENT STEP... | add category NAME...',
+    'add': 'add task CATEGORY TITLE... [--priority P] | add step PARENT STEP... [--priority P] | add category NAME...',
     'comment': 'comment [--refresh|--edit] SELECTOR | comment SELECTOR... --comment TEXT...',
     'done': 'done SELECTOR [TEXT...] | done SELECTOR... --comment TEXT...',
     'reopen': 'reopen SELECTOR...', 'delete': 'delete [--yes] SELECTOR...',
@@ -65,7 +65,7 @@ DESCRIPTIONS = {
     'schedule': 'Set attention, hiding or reminders. Use SELECTOR clear as the sole value to remove scheduling; relative reminders require timed attention; absolute reminders are independent.',
     'hide': 'Hide until a future attention day, with an optional reason. Inherited hiding applies to steps.',
     'unhide': 'Remove own hiding while preserving attention and reminders; parent hiding may still apply.',
-    'priority': 'Set task or step priority P1 through P4. A new step copies its immediate parent priority once; later priority changes are independent.',
+    'priority': 'Set task or step priority P1 through P4. When creation priority is omitted, a new step copies its immediate parent effective priority once; later priority changes are independent.',
     'rename': 'Rename selected work; new sibling-title collisions are rejected. Imported duplicates use ordinary ambiguity selection.',
     'move': 'Move work to a category or parent, or promote a step to a task. Cycles and excessive depth are rejected.',
     'report': 'Preview categorized progress since the report cursor. --final writes and flushes output before advancing the cursor.',
@@ -73,7 +73,8 @@ DESCRIPTIONS = {
 }
 
 DETAILS = {
-    'add': 'Optional task/step creation flags: --at WHEN, --hide, --reason VALUE, --reminder OFFSET, --reminder-at WHEN, --done. '
+    'add': 'Task/step priority: --priority P (1 through 4 or case-insensitive P1 through P4), --priority=VALUE, -p1 through -p4 or --p1 through --p4. P1 is highest. New tasks default to P2. When omitted, new steps copy their parent effective priority, including open descendants, once. An explicit priority applies to all new siblings across every text group; later priorities are independent. Example: todo step --add "Release plan" --p1 "Write summary" --at monday. '
+           'Optional task/step creation flags: --at WHEN, --hide, --reason VALUE, --reminder OFFSET, --reminder-at WHEN, --done. '
            'Completed creation cannot have attention, hiding or reminders. --close/--closed alias --done. '
            'Creation aliases: task/step --add/--new/--create, task --step PARENT TEXT..., category --add/--create, add comment.',
     'category': 'Creation alias: todo category --create "Client Work". Categories are direct children of the bound root.',
@@ -133,6 +134,7 @@ def render_help(command=None):
                    'Removing a block deletes by ID; new empty text and emptying nonblank text are rejected. '
                    'The unused final [new] starter is harmless. Attachment/preview metadata is ignored.\n')
     if command in ('task', 'step'):
+        result += DETAILS['add'] + '\n'
         result += ('Leading scalar actions take VALUE immediately: todo task --due "tomorrow 10:00" '
                    '"Release plan"; todo step --due tomorrow "Release plan" "Write summary".\n'
                    'Other adjacent scalar aliases: --priority P1, --reminder 10m, --reminder-at "Friday 09:00", --rename "New name", '

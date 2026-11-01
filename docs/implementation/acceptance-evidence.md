@@ -1930,3 +1930,211 @@ exit 0); its final captured result after all parser/public-test edits is the
 125-test result recorded above. Delivery and copied checks used the final
 runtime/probe bytes; subsequent edits added test assertions, moved unittest's
 main guard after the new class, and appended this evidence only.
+
+## T40 — revision-21 explicit step creation priority (2026-11-01)
+
+Observed subject: worktree `T40-1b55c5e3dc694025`, HEAD
+`45ce1cff81f50583b52ba74f3aaebb6f9caf0023`, with uncommitted T40 files bound
+below. Earlier evidence and the frozen contract ledger remain unchanged. No
+Design/Plan change is needed; only revision-21 successor precedence is applied.
+
+Parser creation allowance and capture planning now use the existing normalized
+priority and create action. `task --step` extracts options before assigning its
+one parent operand, preserving original Word/literal and group metadata. Leading
+existing-step scalar/fixed mutation boundaries retain existing evidence. The
+saved pre-creation subtree supplies the omitted default once per batch. No remote
+preflight or priority update was added. Reconciliation, UUID/temp attribution,
+scheduling, ordered execution and publication use the existing paths.
+
+Provider authority inspected offline: retained
+`docs/design/external/todoist/upstream/api-v1.openapi.json`, Sync tag description,
+Tasks / Add a task. The table permits both priority and parent_id on item_add,
+with provider 4 representing client P1. Application mapping remains `5 - priority`;
+there is no new provider path or contract assumption.
+
+Final focused command (exit 0, **141 tests**, 2.646 seconds; full captured output
+`/tmp/t40-focused-final.log` in this invocation):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser tests.syntax.test_reminders tests.cli.test_cli tests.cli.test_reminders tests.workflows.capture.test_capture tests.workflows.capture.test_reminders tests.workflows.capture.test_named_timezones tests.workflows.test_cached_selection -v > /tmp/t40-focused-final.log 2>&1
+```
+
+Distinguishing evidence uses CaptureSupport strict Boundary requests and
+independently supplied after-state. It proves P1 above and P4 below a P2 effective
+default, explicit P2 success, and P4 sibling overrides under a nested step parent.
+The option inside the first sibling group also applies to the second. Each exact
+item_add contains the expected wire priority/parent_id; accepted receipt actuals,
+returned snapshots and reloaded saved own values agree. Parent and existing-item
+stored priorities remain unchanged. Strict ordered expectations reject an extra
+priority update or preflight. The retained elevated-descendant omission batch now
+asserts both siblings' saved and returned P1 and unchanged parent/existing child.
+Existing depth, collision, task P2/late-reminder failure, inline unscheduled steps,
+nested defaults, later priority independence and unknown/publication cases pass.
+
+Parser evidence covers scalar separated/equals and fixed short/long flags,
+case-normalized values, all creation aliases, before/after/group placement,
+original shell groups and literal parent/text. Public dispatch accepts
+`step --add parent --p1 instal sru build machine in oci --at monday` at the
+existing fixed UTC clock 2026-10-22T12:00:00.123456789012350Z. Independent expected
+attention is date-only 2026-10-26; exact outgoing due and saved attention agree.
+Public malformed/missing/duplicate/conflicting options return status 2 with
+Usage/Example before StateStore or Transport construction. Add/task/step help
+teaches explicit priority, P2 task default, parent-effective omission default,
+request-wide siblings and Monday attention without state/network access.
+
+The old copied probe had no step creation priority dispatch/help case. Extended
+it with one strict `step-priority` scenario: installed launcher `step --add Alpha
+--p4 'Copied step'`, exact item_add priority 1/parent_id A, combined delta response
+with independently supplied state and UUID/temp attribution, saved own P4, and
+unchanged existing stored priorities. Help is checked with StateStore forbidden.
+Copied runtime/PATH isolation is unchanged, with no nested suite. Directed copy
+check command (exit 0, **17 separate-process phases**, zero network; complete
+output `/tmp/t40-copy.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY' > /tmp/t40-copy.log 2>&1
+import os, pathlib, shutil, subprocess, tempfile
+root=pathlib.Path.cwd()
+with tempfile.TemporaryDirectory(prefix='t40-copy-') as temp:
+    base=pathlib.Path(temp)
+    home,install,outside=(base/n for n in ('home','bin','outside'))
+    for path in (home,install,outside): path.mkdir(mode=0o700)
+    shutil.copy2(root/'todo',install/'todo')
+    shutil.copytree(root/'todo_lib',install/'todo_lib')
+    shutil.copy2(root/'tests/delivery/final/copy_probe.py',outside/'copy_probe.py')
+    env=dict(HOME=str(home),PATH=str(install)+':/usr/local/bin:/usr/bin:/bin',TMPDIR=str(outside),LANG='C.UTF-8',TERM='xterm',PYTHONDONTWRITEBYTECODE='1',TODOIST_TOKEN='synthetic-delivery-token')
+    subprocess.run(['python3.11','-I','-B',str(outside/'copy_probe.py'),str(install)],cwd=outside,env=env,check=True,timeout=60)
+    for source in [root/'todo',*(root/'todo_lib').rglob('*')]:
+        if source.is_file(): assert source.read_bytes()==(install/source.relative_to(root)).read_bytes()
+PY
+```
+
+Intermediate feedback (not certifications of final bytes): the same three-module
+selection below first failed on an import-time help quoting error, then ran 82
+tests with one obsolete syntax rejection and seven errors (five alias option
+placement cases, one cascading rejection context, one test API misuse). Corrected
+the quote, migrated the obsolete prohibition, fixed alias extraction, and called
+the Attention.day method correctly. Final directed feedback exited 0, 82 tests:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser tests.cli.test_cli tests.workflows.capture.test_capture -q > /tmp/t40-directed.log 2>&1
+```
+
+Earlier attempts used `/tmp/t40-initial.log` and `/tmp/t40-initial-fixed.log` with
+that same selection; the first log was later accidentally overwritten during an
+unsuccessful evidence-append shell command. Its import failure was observed in
+tool output. That append failed before writing repository evidence; Git status
+confirmed no unintended repository changes. The full focused selection also
+passed 141 tests with `/tmp/t40-focused.log` before the final stronger receipt and
+group-position assertions. `git diff --check` passed.
+
+Limits: synthetic offline evidence, no live provider request or user smoke.
+No complete offline suite or real-less probe was run by this worker; the unchanged
+runner final-delivery gate owns that complete suite and distinct copied/PATH/real-less
+verification on the integrated subject. The directed copied probe addresses the
+installed step-dispatch/help gap without invoking a broad suite. Runtime and copied
+probe bytes were unchanged after that copy run; only capture assertions and this
+append were subsequently edited.
+
+Content binding (SHA-256, excluding this evidence append):
+
+```text
+0cb085face66335918f76e81dc58871e43bf97121ddf364ad06ed1ae4bc67b9f  README.md
+e249dda22292bb7f25897f30595fc3d2149bb1555a4705650b341c499a11f803  docs/user/smoke.md
+72310aefaed7c6b5bca6f95e1bc4b270644a0b7144bce02f4642227a5954c4ad  tests/cli/test_cli.py
+2e4e6ebc71246c16ff936f8a7a7254a203019435656539a1e0392b70a1b775ce  tests/delivery/final/copy_probe.py
+20673b593505abd4397015e9381dce1ff7e31c3b7af4d4e5a573c5e3e4d52cde  tests/syntax/test_parser.py
+54332f08d5dedd0c8496b514ab30f49ea5cf6ce73c093de8db2e0250ba96f230  tests/workflows/capture/test_capture.py
+7e66de76d76091bd2a918d8e733f2d0943caf3790add7ccf2a7065b70729a112  todo_lib/syntax/API.md
+e8695c477854c079449176872bd392e1a8c5ff3dd2f38cce58cca36daba2821c  todo_lib/syntax/help.py
+30b6742b883df9f947794ecab168213f47f20d43769a959a80ccbee0f65189e4  todo_lib/syntax/parser.py
+ae3b1884829121b6bd40a275c90cdffad1b15ea43e425ffc916a8f429ec7bbad  todo_lib/workflows/capture.py
+```
+
+
+## T40 correction: copied priority fixture and subsequent pager selection (2026-11-01)
+
+Subject: retained candidate HEAD `9a8b796c2fb32955481c77af9499b011cb3567be`
+plus the uncommitted correction to `tests/delivery/final/copy_probe.py` described
+here. Corrected probe SHA-256:
+`2c8919af0d8e112bb890afc091ae9b577b7a2160b3b10fc2f12646677599cf37`.
+This entry appends observations; earlier evidence and the frozen ledger remain
+historical.
+
+The failed integrated subject `a9c755bb1ade79ed2f2878abc694070b02c1df0b`
+ran 777 offline tests successfully, but its later real-less probe timed out on
+an ambiguity prompt. The new `Copied step` title incorrectly assumed independence
+from the existing selector `D`. ReadWorkflow's title-only case-folded substring
+matching correctly matches both titles. The created title is published into the
+saved snapshot by the copied priority scenario; the subsequent standalone pager
+process consumes that same state. This is a delivery-fixture composition defect,
+not a production selector defect.
+
+Renamed the synthetic title to `Priority sample` consistently in the command,
+strict expected item_add and independently supplied response. Stable ID and token
+remain unchanged. Exact wire priority 1/parent_id A, UUID/temp attribution, returned
+output, saved own P4 and unchanged existing priorities are still asserted. Added
+an explicit saved-title assertion and a subsequent installed public `step D` read
+requiring `Newer pending work`, with no HTTP expectations. This regression catches
+the collision before leaving the copied scenario. The separate unchanged
+real-less probe still checks the actual pager, G navigation, q exit, truecolor,
+short-fit behavior and bounded timeout. Production matching and ambiguity handling
+were untouched. The retained upstream Sync / Tasks / Add a task table still
+permits priority and parent_id together (wire 4 is client P1); no provider or
+Design/Plan change is needed.
+
+Directed copied/PATH/real-less reproduction command (script content below):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B /tmp/t40-copy-less-check.py > /tmp/t40-copy-less-before.log 2>&1
+```
+
+On unchanged HEAD this exited **1** after all 17 copied phases passed: the
+unchanged real-less probe timed out listing both `Copied step` and `D`. After the
+fixture correction, the same script with output redirected to
+`/tmp/t40-copy-less-after.log` exited **0**: all 17 phases passed, the added public
+selection passed, and real less reported short-fit exit, long G reaching final
+work, q exit and truecolor retained on the 8x100 PTY. This deliberately composes
+the probes in one temporary HOME, unlike the previous copy-only worker check.
+It preserves copied runtime/PATH isolation and byte equality and nests no suite.
+
+Exact `/tmp/t40-copy-less-check.py` used for both observations:
+
+```python
+import os, pathlib, shutil, subprocess, tempfile
+root = pathlib.Path.cwd()
+with tempfile.TemporaryDirectory(prefix='t40-copy-less-') as temp:
+    base = pathlib.Path(temp)
+    home, install, outside = (base / n for n in ('home', 'bin', 'outside'))
+    for path in (home, install, outside):
+        path.mkdir(mode=0o700)
+    shutil.copy2(root / 'todo', install / 'todo')
+    shutil.copytree(root / 'todo_lib', install / 'todo_lib')
+    for name in ('copy_probe.py', 'less_probe.py'):
+        shutil.copy2(root / 'tests/delivery/final' / name, outside / name)
+    env = dict(HOME=str(home), PATH=str(install) + ':/usr/local/bin:/usr/bin:/bin',
+               TMPDIR=str(outside), LANG='C.UTF-8', TERM='xterm',
+               PYTHONDONTWRITEBYTECODE='1', TODOIST_TOKEN='synthetic-delivery-token')
+    subprocess.run(['todo', 'help'], cwd=outside, env=env, check=True, stdout=subprocess.PIPE)
+    for name, timeout in (('copy_probe.py', 60), ('less_probe.py', 30)):
+        subprocess.run(['python3.11', '-I', '-B', str(outside / name), str(install)],
+                       cwd=outside, env=env, check=True, timeout=timeout)
+    for source in [root / 'todo', *(root / 'todo_lib').rglob('*')]:
+        if source.is_file():
+            assert source.read_bytes() == (install / source.relative_to(root)).read_bytes()
+```
+
+Focused regression command on the corrected probe subject (exit **0**, **141
+tests**, complete local output `/tmp/t40-correction-focused.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.syntax.test_parser tests.syntax.test_reminders tests.cli.test_cli tests.cli.test_reminders tests.workflows.capture.test_capture tests.workflows.capture.test_reminders tests.workflows.capture.test_named_timezones tests.workflows.test_cached_selection -v > /tmp/t40-correction-focused.log 2>&1
+```
+
+`git diff --check` also exited **0** after this documentation append. No complete
+suite was rerun by this worker: the defect is isolated to shared copied-fixture
+state and is distinguished by the sequential installed probes. The runner must
+rerun the unchanged final-delivery gate and combined review on the corrected
+integrated subject. Earlier integrated passes do not certify these corrected
+bytes; synthetic offline evidence makes no live-account claim. Temporary logs
+and script paths identify this invocation's observations, not durable artifacts.

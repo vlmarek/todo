@@ -36,6 +36,23 @@ class RoutingTests(unittest.TestCase):
         self.assertIn('once', help_text)
         self.assertIn('independent', help_text)
 
+    def test_step_creation_help_and_priority_errors_are_offline(self):
+        with patch.object(cli, 'StateStore', side_effect=AssertionError('state touched')), \
+                patch.object(cli, 'Transport', side_effect=AssertionError('network touched')):
+            for command in ('add', 'task', 'step'):
+                out = StringIO()
+                with patch.object(sys, 'stdout', out):
+                    self.assertEqual(cli.main([command, '--help']), 0)
+                for text in ('--priority', '--p1', 'P2', 'effective priority', 'all new siblings', '--at monday'):
+                    self.assertIn(text, out.getvalue())
+            for flags in (['--priority'], ['--priority='], ['--priority=P5'],
+                          ['--priority', 'P1', '--priority=2'], ['--p1', '-p4'], ['--p1=value']):
+                err = StringIO()
+                with patch.object(sys, 'stderr', err):
+                    self.assertEqual(cli.main(['step', '--add', 'Parent', 'Child', *flags]), 2)
+                self.assertIn('Usage:', err.getvalue())
+                self.assertIn('Example:', err.getvalue())
+
     def test_help_all_commands_and_aliases_without_state(self):
         with patch.object(cli, 'StateStore', side_effect=AssertionError('state touched')):
             for command in [None, *SYNOPSES, *ALIASES]:
@@ -128,6 +145,22 @@ class PublicCapture(unittest.TestCase):
         result = invoke(self, argv, self.http, **kw)
         self.assertFalse(self.http.steps, 'missing adapter calls')
         return result[:3]
+
+    def test_step_add_priority_with_monday_attention(self):
+        title = 'instal sru build machine in oci'
+        after = self.state(items=self.wire_items + [item('new', content=title,
+            parent_id='parent', priority=4, due=capture.due('2026-10-26'))])
+        self.operation('item_add', dict(project_id='cat', content=title, parent_id='parent',
+            priority=4, description='', labels=[], auto_reminder=False,
+            due={'date': '2026-10-26', 'lang': 'en'}), after)
+        status, out, err = self.call(['step', '--add', 'parent', '--p1',
+            'instal', 'sru', 'build', 'machine', 'in', 'oci', '--at', 'monday'])
+        self.assertEqual(status, 0, err)
+        self.assertIn(title, out)
+        saved = self.store.load_consistent_state().snapshot
+        self.assertEqual(saved.items['new'].priority, 1)
+        self.assertEqual(saved.items['new'].attention.day('UTC').isoformat(), '2026-10-26')
+        self.assertEqual(saved.items['parent'].priority, 2)
 
     def test_shorthand_task_and_step_mutations_use_cached_ids_and_actual_state(self):
         self.wire_items += [item('child', content='Saved child', parent_id='parent')]

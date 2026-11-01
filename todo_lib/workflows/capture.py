@@ -141,7 +141,7 @@ class CaptureWorkflow:
                 category_id = parent.category_id
                 priority = d.creation_priority(snapshot, parent.id)
                 if 'priority' in options:
-                    raise d.DomainError('step creation has no priority option')
+                    priority = int(str(options['priority']).lower().removeprefix('p'))
             else:
                 category_id = d.lookup_category(snapshot, options['category']).id
                 priority = int(str(options.get('priority', 'P2')).lower().removeprefix('p'))

@@ -352,6 +352,40 @@ def phase(install, name):
             assert after.history.observations[identity] == observed
         for identity, comment in before.history.snapshot.comments.items():
             assert after.history.snapshot.comments[identity] == comment
+    elif name == 'step-priority':
+        # Installed launcher dispatch/help, synthetic combined operation evidence.
+        with patch.object(cli, 'StateStore', side_effect=AssertionError('help loaded state')):
+            help_text = call(['step', '--help'])
+        for text in ('--priority', 'P2', 'effective priority', 'all new siblings', '--at monday'):
+            assert text in help_text
+        before = store.load_consistent_state()
+        assert before.snapshot.items['A'].priority == 1
+        # Keep the later real-less selector D unique under substring matching.
+        row = item('copied-step', 'A'); row.update(content='Priority sample', priority=1)
+        def accepted(form):
+            assert set(form) == {'commands', 'sync_token', 'resource_types'}
+            assert form['resource_types'] == [RESOURCES]
+            assert form['sync_token'] == [before.sync_token]
+            commands = json.loads(form['commands'][0]); assert len(commands) == 1
+            op = commands[0]
+            assert set(op) == {'type', 'uuid', 'temp_id', 'args'}
+            UUID(op['uuid']); UUID(op['temp_id']); assert op['uuid'] != op['temp_id']
+            assert op['type'] == 'item_add'
+            assert op['args'] == dict(project_id='cat', content='Priority sample',
+                priority=1, parent_id='A', description='', labels=[], auto_reminder=False, due=None)
+            return dict(delta(items=[row]), sync_token='copied-step-token',
+                sync_status={op['uuid']: 'ok'}, temp_id_mapping={op['temp_id']: 'copied-step'})
+        assert 'Priority sample' in call(['step', '--add', 'Alpha', '--p4', 'Priority sample'],
+                                    [('POST', '/sync', None, accepted)], FINAL)
+        after = StateStore().load_consistent_state()
+        assert after.sync_token == 'copied-step-token'
+        assert after.snapshot.items['copied-step'].title == 'Priority sample'
+        assert after.snapshot.items['copied-step'].priority == 4
+        assert after.snapshot.items['copied-step'].parent_id == 'A'
+        for identity in before.snapshot.items:
+            assert after.snapshot.items[identity].priority == before.snapshot.items[identity].priority
+        # Subsequent public selection must still reach D's retained inspection context.
+        assert 'Newer pending work' in call(['step', 'D'], now=FINAL)
     elif name == 'affected-reload':
         saved = StateStore().load_consistent_state()
         assert saved.sync_token == 'copied-created-token'
@@ -469,6 +503,6 @@ if __name__ == '__main__':
         phase(install, sys.argv[2])
     else:
         for name in ('init', 'mutation', 'cached-parent', 'repeat', 'external', 'read', 'rebuild', 'read',
-                     'preview', 'failure', 'final', 'cleanup', 'tolerance', 'tolerance-read', 'affected-create', 'affected-reload'):
+                     'preview', 'failure', 'final', 'cleanup', 'tolerance', 'tolerance-read', 'affected-create', 'affected-reload', 'step-priority'):
             subprocess.run([sys.executable, '-I', '-B', __file__, str(install), name],
                            check=True, timeout=10)
