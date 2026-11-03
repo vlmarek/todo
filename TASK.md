@@ -1,3 +1,32 @@
+# Current continuation: TODO3-PLAN-021
+
+Approved Design revision 22 in docs/design/report-recovery.md governs this increment.
+T41 supplies supported deletion reconciliation for strict refresh/report; T42 then
+implements the cohesive partial-report, explicit final override, marked fallback,
+diagnostics, grammar/help and real-consumer evidence path. Reuse the runner-provided
+current accepted integration and preserve all 40 accepted assignments, historical
+contracts/evidence, manual simplifications, notice removals, shorthands and step priority.
+The external temporary deletion patch is not an input and must not be reapplied.
+
+Six successors are active; all 165 earlier planned obligations are satisfied.
+Four unrelated historical routine-notice deferrals remain unchanged. This nonfinal
+stage claims no whole-project completion or invented manual coverage. Deletion
+must be proven; fresh surviving parentage wins. Incomplete report output alone
+never authorizes finalization. Only explicit --final --override accepts disclosed
+retrieval omissions, with usable bound local state, known interval eligibility for
+cached activity and complete stdout/stderr delivery before saving the fixed end.
+Keep strict refresh/mutation failures, complete-evidence provenance, privacy, safe
+paths/modes, per-file publication limitations and no replay/repair.
+
+Use existing focused checks and strict fixtures. Preserve the unchanged full offline,
+copied/PATH and real-less final-delivery boundary; append observed results without
+changing the frozen ledger. No automated live account calls or new test framework.
+The operator approved these Design files and requested a fresh plan then CML
+implementation under existing settings/limits. Planning publication/readiness and
+runtime adoption remain distinct. Use supported validated resume. Stop on any
+further required substantive Design/Plan change or unproductive recovery.
+Earlier continuation sections below retain historical scope and baseline provenance.
+
 # Current continuation: TODO3-PLAN-020
 
 Approved Design revision 21 in `docs/design/step-creation-priority.md` governs

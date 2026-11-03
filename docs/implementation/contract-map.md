@@ -1,11 +1,12 @@
 # Prepared ownership and evidence
 
-Design revision 21 adds explicit step creation priority with the omitted
-parent-effective default. T40 owns the cohesive creation/help increment and its
-coupled regression/acceptance evidence. All 162 earlier planned requirements are
-satisfied and all 39 accepted assignments remain unchanged. Four routine-notice
-coverage deferrals remain: their implementation is preserved, no native full
-manual-delivery coverage or final project completion is invented.
+Design revision 22 activates six report recovery successors. T41 owns deletion
+reconciliation; T42 owns partial reporting, override, fallback, diagnostics and
+whole increment evidence under REQ-VERIFY-040, including T41 outcomes. All 165
+prior planned obligations are satisfied and all 40 accepted assignments remain
+unchanged. Four unrelated routine-notice deferrals retain their historical
+coverage limitation; preserve delivered behavior without inventing manual coverage
+or final-project completion. Current shared final-delivery gates remain binding.
 
 <!-- cml-contract-map:v1 -->
 ```yaml
@@ -145,8 +146,8 @@ requirements:
     - t39-focused
     - final-delivery
   REQ-CLI-041:
-    stage_status: active
-    primary_owner: T40
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t40-focused
     - final-delivery
@@ -211,8 +212,8 @@ requirements:
     planned_evidence:
     - t12-focused
   REQ-CREATE-009:
-    stage_status: active
-    primary_owner: T40
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t40-focused
     - final-delivery
@@ -913,9 +914,67 @@ requirements:
     - t39-focused
     - final-delivery
   REQ-VERIFY-039:
-    stage_status: active
-    primary_owner: T40
+    stage_status: satisfied
+    primary_owner: null
     planned_evidence:
     - t40-focused
+    - final-delivery
+  REQ-SYNC-040:
+    stage_status: active
+    primary_owner: T41
+    planned_evidence:
+    - t06-focused
+    - t08-focused
+    - t15-focused
+    - final-delivery
+  REQ-CLI-042:
+    stage_status: active
+    primary_owner: T42
+    planned_evidence:
+    - t03-focused
+    - t09-focused
+    - t15-focused
+    - t16-focused
+    - t02-focused
+    - final-delivery
+  REQ-REPORT-019:
+    stage_status: active
+    primary_owner: T42
+    planned_evidence:
+    - t03-focused
+    - t09-focused
+    - t15-focused
+    - t16-focused
+    - t02-focused
+    - final-delivery
+  REQ-REPORT-020:
+    stage_status: active
+    primary_owner: T42
+    planned_evidence:
+    - t03-focused
+    - t09-focused
+    - t15-focused
+    - t16-focused
+    - t02-focused
+    - final-delivery
+  REQ-OUT-030:
+    stage_status: active
+    primary_owner: T42
+    planned_evidence:
+    - t03-focused
+    - t09-focused
+    - t15-focused
+    - t16-focused
+    - t02-focused
+    - final-delivery
+  REQ-VERIFY-040:
+    stage_status: active
+    primary_owner: T42
+    planned_evidence:
+    - t03-focused
+    - t09-focused
+    - t15-focused
+    - t16-focused
+    - t02-focused
     - final-delivery
 ```

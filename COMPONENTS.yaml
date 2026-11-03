@@ -588,3 +588,24 @@ interfaces:
     unincorporated resources; necessary lifecycle/archived-owner and ambiguous-outcome
     reads remain. Provisioning/category policy and public Result compatibility remain
     unchanged.
+- id: deletion-aware-reconciliation
+  owner: workflows
+  supersedes_ref: scoped-write-reconciliation
+  description: 'Compatible successor of Synchronizer.refresh_locked and shared _reconcile plus Reporter
+    preparation: supported item:deleted evidence resolves managed owner disappearance and removes only
+    descendants established by known or authoritative hierarchy, with fresh surviving parentage winning.
+    Existing SyncResult, strict SyncError/SyncInterrupted, complete Retrieval provenance and ordinary
+    affected-state write reconciliation remain compatible; no incomplete-success refresh or mutation path.
+    Concrete APIs remain todo_lib/workflows/sync.py and adapter/history.py.'
+  status: provisional
+- id: recoverable-report-finalization
+  owner: workflows
+  supersedes_ref: reconciled-completion-reports
+  description: Successor Reporter.run(CommandRequest) and report() use revision-22 partial reporting,
+    explicit final override and marked bound-account fallback. ReportResult or a compatible extension
+    communicates incomplete status to public CLI, preserving existing start/end/finalized/warnings consumers.
+    Reports isolate unusable source/owner evidence without representing partial Retrieval as complete;
+    usable local boundary/account and complete stdout/stderr delivery before cursor saving remain required.
+    Strict Synchronizer and mutation callers retain their failure semantics. Concrete compatible extensions
+    are documented in existing workflows/adapter/local/presentation API notes as applicable.
+  status: provisional

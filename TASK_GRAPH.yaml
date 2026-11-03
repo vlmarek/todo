@@ -1,8 +1,9 @@
 schema_version: 5
 graph_id: todo-3
-revision_id: TODO3-PLAN-020
-predecessor_revision_id: TODO3-PLAN-019
+revision_id: TODO3-PLAN-021
+predecessor_revision_id: TODO3-PLAN-020
 contract_sources:
+- docs/design/report-recovery.md
 - docs/design/step-creation-priority.md
 - docs/design/command-shorthands.md
 - docs/design/reminder-ownership.md
@@ -607,6 +608,27 @@ interfaces:
     unincorporated resources; necessary lifecycle/archived-owner and ambiguous-outcome
     reads remain. Provisioning/category policy and public Result compatibility remain
     unchanged.
+  source_path: COMPONENTS.yaml
+- id: deletion-aware-reconciliation
+  owner: workflows
+  supersedes_ref: scoped-write-reconciliation
+  description: 'Compatible successor of Synchronizer.refresh_locked and shared _reconcile plus Reporter
+    preparation: supported item:deleted evidence resolves managed owner disappearance and removes only
+    descendants established by known or authoritative hierarchy, with fresh surviving parentage winning.
+    Existing SyncResult, strict SyncError/SyncInterrupted, complete Retrieval provenance and ordinary
+    affected-state write reconciliation remain compatible; no incomplete-success refresh or mutation path.
+    Concrete APIs remain todo_lib/workflows/sync.py and adapter/history.py.'
+  source_path: COMPONENTS.yaml
+- id: recoverable-report-finalization
+  owner: workflows
+  supersedes_ref: reconciled-completion-reports
+  description: Successor Reporter.run(CommandRequest) and report() use revision-22 partial reporting,
+    explicit final override and marked bound-account fallback. ReportResult or a compatible extension
+    communicates incomplete status to public CLI, preserving existing start/end/finalized/warnings consumers.
+    Reports isolate unusable source/owner evidence without representing partial Retrieval as complete;
+    usable local boundary/account and complete stdout/stderr delivery before cursor saving remain required.
+    Strict Synchronizer and mutation callers retain their failure semantics. Concrete compatible extensions
+    are documented in existing workflows/adapter/local/presentation API notes as applicable.
   source_path: COMPONENTS.yaml
 checks:
 - id: merge-hygiene
@@ -8260,6 +8282,450 @@ tasks:
   - Reuse applicable depth/collision/inline/task-default and failure/publication regression evidence;
     append truthful observations and limits. Unchanged final-delivery supplies one full offline suite
     and distinct copied/PATH/real-less probes.
+- id: T41
+  title: Reconcile supported task deletion in reports and explicit refresh
+  origin_stage_ref: report-recovery
+  observable_outcome: A task completed and deleted between observations is omitted rather than blocking
+    a complete report; explicit refresh reconciles supported deletion while preserving fresh surviving
+    children and strict unresolved-state failures.
+  dependencies:
+  - task_ref: T06
+    kind: interface
+    interface_ref: history-retrieval
+    reason: Extend the complete history adapter and strict request-shaped fixtures.
+  - task_ref: T29
+    kind: interface
+    interface_ref: reconciled-completion-reports
+    reason: Preserve shared completion/undo reconciliation and activity timestamp policy in report preparation.
+  - task_ref: T36
+    kind: interface
+    interface_ref: scoped-write-reconciliation
+    reason: Adapt shared reconciliation without broadening ordinary-write history scope.
+  - task_ref: T38
+    kind: repository_state
+    interface_ref: null
+    reason: Preserve accepted unknown-reminder-owner handling across refresh and report consumers.
+  goal: 'Implement REQ-SYNC-040 as the independently usable deletion-reconciliation increment. Reuse the
+    accepted application, not the external temporary patch. Read revision-22 precedence and the actual
+    dependency code. Do not add override behavior in this task; existing unresolved required refresh/report
+    failures remain strict until the later report successor.
+
+
+    In todo_lib/adapter/history.py extend _EVENTS with item:deleted alongside all five existing event
+    types. HistoryAdapter.activities still returns exhausted Retrieval(records,pages,start,end,endpoint,scope)
+    and Activity(id,object_type,object_id,event_type,event_date,owner_id,project_id,annotation). Preserve
+    one JSON-array query value, fixed page filters, precise interval widening/filtering, anonymous source
+    order, pagination progress and complete-or-error results. Provider authority is unchanged docs/design/external/todoist/upstream/api-v1.openapi.json
+    GET /api/v1/activities parameters object_event_types/object_type/object_id/parent_item_id/date_from/date_to
+    and components.schemas.ActivityEvents. Item deletion needs no annotation; parent_item_id on a note
+    establishes note ownership only. Retained Sync task-deletion documentation supplies established-subtree
+    semantics; do not invent an archived-owner endpoint or use active 404 as proof.
+
+
+    Integrate deletion evidence into todo_lib/workflows/sync.py _reconcile and Synchronizer.refresh_locked
+    and todo_lib/workflows/report.py Reporter._prepare before unresolved owner checks or archived-comment
+    discovery. _reconcile currently returns (validated Snapshot, History); _known merges compatible saved
+    current/pending observations, current retrieval exposes snapshot/deleted_ids/departed_ids, and _Evidence
+    shares already complete command-local Retrieval values. Reports already retrieve shared activity,
+    so reuse it rather than requesting the same deletion coverage again. For explicit refresh, use bounded
+    supported scope/shared reads where needed to resolve known missing owners, including saved completed
+    owners that would otherwise remain stale; reuse complete evidence. Known deletion can avoid impossible
+    live fields/comment requests. Preserve strict refusal and prior-state rules if required disappearance
+    remains unresolved.
+
+
+    Apply removal consistently to report events, owners, comments, reminders, occurrences, pending history
+    and published cache. Derive descendants from available known and authoritative item parentage, with
+    fresh current or completed authoritative parentage overriding old relationships. A freshly surviving/reparented
+    child must remain; recursive removal over the old tree alone is wrong. Preserve actual deletion/scope/privacy
+    precedence across merge_history and report removal passes. Unknown archived descendants need no enumeration.
+    Completion records or Activity annotations do not authorize invented relationships. An empty completed
+    result, retrieval failure, missing owner and 404 are not deletion/departure evidence.
+
+
+    Shared consumers include init, explicit reads with refresh, report, accepted-operation publication
+    and OperationEvidence. Preserve Result/SyncResult shapes, current-resource/full/delta/token provenance,
+    exact operation acceptance and pending-state protection. Ordinary writes keep REQ-SYNC-036/037/038
+    affected-state scope and reuse: no unconditional account-wide deletion/history scan and no weakened
+    mutation verification. Cached reads remain network-free. Permit necessary directly affected fixture/consumer
+    adaptations inside declared components; keep unrelated behavior unchanged and document any compatible
+    internal signature extension in existing API.md files.
+
+
+    Add distinguishing controlled-provider cases in tests/adapter/history, tests/workflows/sync and tests/workflows/report,
+    using tests/support/history.py, sync.py and report.py strict Boundary/Expected fixtures. Update all
+    affected exact five-event expectations in tests/support and other direct fixtures to six events; do
+    not teach the fake to accept arbitrary filters. Exercise never-observed completed-then-deleted owner
+    with no active/completed metadata while unrelated completion/comment output remains; known-owner refresh
+    deletion with no live fields; known descendants removed but a freshly reparented surviving child retained;
+    absent/404 without deletion still fails without state publication. Observe actual production request
+    encoding on multiple pages and final report cursor/output. Fixtures must not pre-remove the disputed
+    owner or pre-supply a synthetic tombstone in the case testing activity discovery.
+
+
+    Run t06-focused, t08-focused and t15-focused as directed feedback, expanding for concrete affected
+    consumers. Existing final-delivery gates supply full offline and copied/PATH/real-less acceptance
+    on integrated subjects; no worker full-suite rerun is required. Append truthful subject/command/results
+    and limits to docs/implementation/acceptance-evidence.md. Preserve historical evidence and planning
+    inputs. Report a genuine further product or plan contradiction rather than weakening a requirement.
+
+    '
+  failure_domain: Supported deletion evidence and authoritative hierarchy through shared strict lifecycle
+    reconciliation.
+  verification_rationale: Deletion is independently observable before incomplete-report behavior exists.
+    Three existing discovery checks cover the actual history adapter, refresh and report consumers; directed
+    fixture adaptations keep exact requests meaningful. Existing integrated final-delivery checks catch
+    shared mutation/init/local/presentation regressions on each changed integrated subject. No new harness,
+    live call or historical archive is introduced.
+  correction_instructions: Apply only revision-22 deletion precedence. Preserve accepted definitions and
+    unaffected code, complete Retrieval provenance and ordinary mutation scoping. Do not add a deletion
+    ledger, infer deletion from missing data, resurrect fresh surviving children through old hierarchy,
+    silently tolerate strict refresh failures or apply /tmp/diff.patch.
+  requirement_refs:
+  - REQ-SYNC-040
+  constraint_refs:
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-025
+  - REQ-SYNC-032
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-SYNC-038
+  - REQ-CACHE-006
+  - REQ-REPORT-005
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SEC-007
+  - REQ-VERIFY-003
+  - REQ-SEC-005
+  - REQ-LOCAL-002
+  exclusion_refs:
+  - OUT-ARCHIVE-001
+  - OUT-DATA-001
+  - OUT-OPS-003
+  - OUT-REPORT-001
+  - OUT-TEST-001
+  component_refs:
+  - adapter
+  - workflows
+  - domain
+  - local
+  - delivery
+  - cli
+  provides_interface_refs:
+  - deletion-aware-reconciliation
+  consumes_interface_refs:
+  - history-retrieval
+  - reconciled-completion-reports
+  - scoped-write-reconciliation
+  expected_paths:
+  - todo_lib/adapter/**
+  - todo_lib/workflows/**
+  - todo_lib/domain/**
+  - todo_lib/local/**
+  - todo_lib/cli.py
+  - tests/adapter/**
+  - tests/workflows/**
+  - tests/domain/**
+  - tests/local/**
+  - tests/support/**
+  - tests/cli/**
+  - tests/delivery/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - todo_lib/syntax/**
+  - todo_lib/presentation/**
+  - scripts/**
+  check_refs:
+  - t06-focused
+  - t08-focused
+  - t15-focused
+  required_evidence:
+  - t06-focused
+  - t08-focused
+  - t15-focused
+  - Production six-event single JSON-array filter across pages; completed/deleted unobserved report owner
+    omitted with unrelated activity preserved.
+  - Refresh known-owner deletion, established descendants versus fresh surviving/reparented child, and
+    unresolved disappearance/404 without evidence retaining strict failure and prior state.
+  - Shared write/init consumers and strict fixtures adapted only as necessary; no unconditional ordinary-write
+    history reads; append truthful observed acceptance evidence.
+- id: T42
+  title: Deliver partial reports and explicit final override with marked fallback
+  origin_stage_ref: report-recovery
+  observable_outcome: Incomplete reports expose useful output and actionable diagnostics; only explicit
+    final override accepts retrieval omissions and advances the fixed-end cursor after successful delivery,
+    using clearly marked eligible bound-account fallback.
+  dependencies:
+  - task_ref: T41
+    kind: interface
+    interface_ref: deletion-aware-reconciliation
+    reason: Use deletion-aware shared lifecycle handling and preserve fresh-parentage precedence.
+  - task_ref: T15
+    kind: interface
+    interface_ref: report-finalization
+    reason: Extend existing Reporter.run/_prepare/_online and report output/cursor lifecycle.
+  - task_ref: T03
+    kind: interface
+    interface_ref: command-grammar
+    reason: Extend lossless report option validation and offline help.
+  - task_ref: T09
+    kind: interface
+    interface_ref: document-delivery
+    reason: Preserve Document stderr/stdout complete-write/flush and direct final-delivery behavior.
+  - task_ref: T02
+    kind: interface
+    interface_ref: history-store
+    reason: Use validated bound pending metadata/observations, safe state loading and cursor/history publication.
+  - task_ref: T16
+    kind: interface
+    interface_ref: public-cli
+    reason: Propagate incomplete report status through the actual public dispatcher.
+  - task_ref: T17
+    kind: repository_state
+    interface_ref: null
+    reason: Reuse the existing clean copied-installation/PATH acceptance boundary.
+  - task_ref: T40
+    kind: repository_state
+    interface_ref: null
+    reason: Preserve accepted step-priority and command grammar on the current baseline.
+  goal: 'Implement all owned revision-22 report recovery successors together, consuming T41 deletion reconciliation.
+    Keep the smallest direct change to the existing report pipeline. The complete new definitions are
+    product authority; their narrow precedence qualifies earlier fail-before-normal-output and fresh-only
+    assertions without changing strict refresh or mutation verification.
+
+
+    Existing APIs: syntax.parser.parse yields CommandRequest.options; syntax/help.py describes report;
+    Reporter.run in workflows/report.py validates options, acquires exclusive lock, loads bound state
+    and calls _online. _prepare currently retrieves current Sync, category completed records and global
+    activity, shares complete evidence via _Evidence, calls sync._reconcile and required_comments, validates/publishes
+    candidates, then _online renders _select/render_report and calls deliver before write_cursor and prune_history.
+    ReportResult currently has start/end/finalized/warnings; cli._run discards its return and always returns
+    zero. Extend that result compatibly or use an equally clear report-specific outcome so actual CLI
+    returns nonzero on incomplete preview/non-overridden final and zero on successfully overridden final.
+    Keep report(), existing constructors/callers and ordinary complete reports compatible; update relevant
+    existing API.md documentation.
+
+
+    Add report-only --override, valid only with --final, accepting normal option positioning/common options.
+    Reject standalone, duplicate, unknown, since/until/show-cursor/set-cursor and invalid --yes combinations
+    with existing usage status 2 before local state or HTTP, including programmatic CommandRequest paths.
+    Extend offline report help and README/docs/user operations with syntax, fallback, broad retrieval
+    failures, no extra prompt, and explicit loss: advancing the fixed end means omitted activity is not
+    automatically retried by later default intervals. Older explicit previews remain possible where evidence
+    survives. Preserve local-only cursor setter and its existing recovery/confirmation rules.
+
+
+    Separate required local/account/boundary safety from recoverable information retrieval. Under the
+    same lock, require usable bound account association and report boundaries; capture one fixed end before
+    first remote read and retain exact interval rules. Never infer/reset a missing/corrupt cursor, bypass
+    unsafe paths/modes, mix publication generations/accounts, repair required protected storage or turn
+    KeyboardInterrupt into fallback success. Inspect StateStore.load_consistent_state(require_cache=False),
+    History.snapshot/observations, state.current_snapshot/synced_at and safety/publication APIs. Independently
+    unusable cache portions supply no fallback; preserve protected bytes. A remote account mismatch discards
+    those remote results, while validated evidence belonging to the bound account remains usable. Do not
+    expose incompatible account data even in diagnostics.
+
+
+    Continue independent needed retrieval and context resolution after recoverable failures, instead of
+    aborting the entire report at the first unresolved entry. Without override, unresolved task/comment/ancestor/lifecycle
+    context permits other resolvable report entries with stderr diagnostics, nonzero status and unchanged
+    cursor. History capability/retention failures remain fatal without override; preserve their earlier
+    behavior. Under --final --override cover all REQ-REPORT-019 failures, including failed/incomplete
+    completed/activity pages, owner comments, expired intervals, unavailable entire history, network/authentication
+    and unusable required provider data. Attempt useful independent sources/scopes within normal retry
+    bounds; no new unbounded loop or diagnostic-only HTTP. A failed source may contribute independently
+    valid evidence, but never masquerades as an exhausted complete Retrieval or complete empty set. If
+    retaining validated partial pages requires a separate report-only evidence/failure value, keep completeness
+    explicit and preserve strict HistoryAdapter/shared callers. Do not globally relax Current/History/Snapshot
+    validation to admit fabricated role, parentage or lifecycle. Owners missing essential safe context
+    are omitted individually; one owner failure must not discard unrelated usable events.
+
+
+    Under override prefer fresh validated evidence and use saved bound-account metadata, occurrences and
+    comments only when independently useful. Mark every fallback entry or clearly defined group with available
+    last-established observation/sync time, explicitly unknown when unknown; mark potentially stale title/hierarchy/category/completion/Hidden
+    state. observations/synced_at are observation times, not activity timestamps. Cached occurrences can
+    qualify by established occurrence time; cached comments need qualifying add/edit activity, not just
+    original creation or observation time. For an old comment observed in this interval with unknown edit
+    timing, omit the uncertain contribution and diagnose it. Include safely represented cached context
+    for a qualifying fresh event. T41 fresh deletion/departure/current parentage and fresh reopen/undo
+    defeat stale fallback; retain existing completion reconciliation, deduplication and precise activity
+    timestamp/order. Expired starts may retrieve still-supported history while disclosing the expired
+    range. No history/no eligible recoverable events may yield Finished/Progress/Hidden empty as applicable
+    plus explicit unknown-loss diagnostics, then successful overridden finalization.
+
+
+    Keep standard three-section framing, ordering, safe escaping and normal output streams. Put actionable
+    diagnostics on stderr identifying the actual reason, source/request scope, affected IDs/titles where
+    safe, missing field/range, omitted versus fallback information, known/unknown amount and whether finalization
+    was refused or override accepted loss. State explicitly that incomplete None. sections are not proof
+    of zero activity. Warn_limited_history cannot suppress these diagnostics. Preserve standard warning
+    preference for its existing limited-history warning only. No debug command, extra exact section, raw
+    response, persistent log or new diagnostic request belongs here. Existing presentation.render.render_report
+    and Document can be extended compatibly; do not inject unsanitized user text.
+
+
+    Deliver required diagnostics and the entire report, including flush, before saving the same fixed-end
+    cursor ordinary finalization would save. Final/override bypass pager. Incomplete non-overridden final
+    and every preview retain cursor and needed pending data. A failed/partial retrieval must not publish
+    guessed complete current/history provenance or erase a valid snapshot. When a complete candidate is
+    unavailable, preserve prior cache/history and perform only the allowed post-output cursor transition;
+    conservative extra retained context is acceptable. Distinguish this from genuine local publication
+    failure, which is not an override success. Preserve accepted per-file truth/no rollback; successful
+    output/cursor permits ordinary subsequent conservative cleanup, retaining later unreported context.
+    Output/stderr write/short-write/flush/broken pipe/interruption, cursor replacement and required unsafe-state
+    failures stay nonzero with truthful actual publication facts. No permanent skipped-event ledger.
+
+
+    Use existing report/sync/history strict fixtures and CLI PublicReports, presentation/local tests;
+    migrate old no-output assertions only for newly partial unresolved-context cases. Keep old strict
+    refresh/mutation, malformed local/safety, account privacy, complete-report, pagination/provenance
+    and output/cursor regressions. Add distinguishing cases from REQ-VERIFY-040: mixed unresolved and
+    valid entries without/with override and actual statuses/cursor; entire history unavailable with empty
+    event sections/unknown loss; expired interval; later page failure and owner-scoped failure preserving
+    independently useful evidence; authentication failure and remote account mismatch with bound cached
+    fallback only; known/unknown fallback observation times, eligible cached occurrence and old comment
+    with unproved edit omitted; fresh deletion/reopen/departure wins; failed sources cannot replace complete
+    saved provenance/history. Observe actual saved bytes and real render/dispatch, not only intermediate
+    selectors. Test required stdout and stderr delivery/flush before cursor, cursor failure and interruption
+    under override; reuse adequate existing fault-injection cases for unchanged mechanisms. Cover valid
+    normal option placement, early invalid combinations and offline help.
+
+
+    Extend tests/delivery/final/copy_probe.py with one representative copied/PATH public override finalization
+    scenario if existing probes do not establish it, using the current synthetic request boundary and
+    independent expected output/cursor. Preserve one full-suite invocation inside scripts/verify-clean
+    plus distinct copied/PATH/real-less probes; no new framework or nested broad run. Directed feedback
+    is existing t03-focused/t09-focused/t15-focused/t16-focused/t02-focused; checks discover added cases
+    in those suites. Existing final-delivery gates establish whole-product acceptance on integrated subjects.
+    Append exact observed subjects, commands, results and limitations to docs/implementation/acceptance-evidence.md,
+    preserving old evidence. Do not edit the frozen prepared ledger or repeat already accepted implementations.
+    Report genuine additional Design/Plan needs.
+
+    '
+  failure_domain: Report-only incomplete evidence isolation, marked fallback and explicit output/cursor
+    finalization through public CLI.
+  verification_rationale: Partial-evidence policy, fallback labels, result status and output-before-cursor
+    ordering form one usable command and share the same preparation pipeline; splitting them would create
+    temporary incomplete contracts. The worker has existing strict fixtures and concrete APIs, with bounded
+    delegated representation choices. Existing focused discovery checks cover parser/help, pure rendering,
+    report evidence/failures, real CLI status and local safeguards. Full regression and installed-copy
+    acceptance remain the existing final-delivery gate; no new broad worker rerun or bespoke harness is
+    required.
+  correction_instructions: Apply only revision-22 successors and T41 deletion precedence. Keep incomplete
+    handling specific to reports; strict refresh and mutation verification stay strict. Do not confuse
+    failed evidence with empty/complete collections, observation time with activity time, output with
+    successful finalization, or fallback with current truth. Preserve accepted historical assignments,
+    precise storage/order, privacy, per-file limitations, cached selection, shorthands/step priority and
+    routine-notice removals. Do not implement remote replay/repair, general archives or permanent skipped-event
+    tracking.
+  requirement_refs:
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
+  constraint_refs:
+  - REQ-SYNC-040
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-CACHE-006
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-LOCAL-002
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-SYNC-013
+  - REQ-SYNC-025
+  - REQ-SYNC-032
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-OUT-019
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-CLI-024
+  - REQ-SYNC-021
+  - REQ-OUT-015
+  exclusion_refs:
+  - OUT-ARCHIVE-001
+  - OUT-REPORT-001
+  - OUT-REPORT-002
+  - OUT-OPS-003
+  - OUT-LOCAL-001
+  - OUT-TEST-001
+  - OUT-LOGGING-001
+  - OUT-PRIVACY-001
+  component_refs:
+  - adapter
+  - workflows
+  - local
+  - domain
+  - syntax
+  - presentation
+  - cli
+  - delivery
+  provides_interface_refs:
+  - recoverable-report-finalization
+  consumes_interface_refs:
+  - deletion-aware-reconciliation
+  - report-finalization
+  - command-grammar
+  - document-delivery
+  - history-store
+  - public-cli
+  expected_paths:
+  - todo_lib/**
+  - tests/**
+  - README.md
+  - docs/user/**
+  - docs/implementation/acceptance-evidence.md
+  denied_paths:
+  - TASK.md
+  - TASK_GRAPH.yaml
+  - COMPONENTS.yaml
+  - docs/design/**
+  - docs/implementation/contract-map.md
+  - docs/implementation/provider-contracts.md
+  - todo
+  - scripts/**
+  check_refs:
+  - t03-focused
+  - t09-focused
+  - t15-focused
+  - t16-focused
+  - t02-focused
+  required_evidence:
+  - t03-focused
+  - t09-focused
+  - t15-focused
+  - t16-focused
+  - t02-focused
+  - 'Mixed resolvable/unresolved report through actual public dispatch: nonzero unchanged cursor without
+    override; useful output, explicit omissions and saved fixed end with override.'
+  - Expired or entire unavailable history, later paginated/owner failure, authentication and account-mismatch
+    fallback, with known versus unknown loss and no incompatible data.
+  - Marked cached known/unknown observation times and independently timed eligibility, old comment edit
+    omission, fresh deletion/reopen/departure precedence and preservation of complete saved current/history
+    provenance.
+  - Early grammar/help validation, stdout/stderr flush and cursor/interruption failures, complete-report
+    and strict refresh/mutation regressions; representative installed-copy override evidence via unchanged
+    final-delivery.
 stages:
 - id: release-1
   final_project: false
@@ -8435,6 +8901,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: project-sharing-correction
@@ -8611,6 +9083,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: todoist-coexistence
@@ -8787,6 +9265,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: request-conformance
@@ -8963,6 +9447,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: report-retrieval-reuse
@@ -9139,6 +9629,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: completion-reconciliation
@@ -9315,6 +9811,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: cached-selection
@@ -9491,6 +9993,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 
@@ -9668,6 +10176,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: named-timezone-scheduling
@@ -9844,6 +10358,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: mutation-retrieval-reuse
@@ -10020,6 +10540,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: combined-mutation-response
@@ -10196,6 +10722,12 @@ stages:
   - REQ-SYNC-039
   - REQ-OUT-029
   - REQ-VERIFY-037
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: reminder-owner-tolerance
@@ -10372,6 +10904,12 @@ stages:
   - REQ-OUT-027
   - REQ-OUT-028
   - REQ-VERIFY-034
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 - id: command-shorthands
@@ -10548,6 +11086,12 @@ stages:
   - REQ-OUT-027
   - REQ-OUT-028
   - REQ-VERIFY-034
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
   check_refs:
   - final-delivery
 
@@ -10720,6 +11264,195 @@ stages:
   - REQ-VERIFY-036
   - REQ-VERIFY-037
   - REQ-VERIFY-038
+  deferred_requirement_refs:
+  - REQ-OUT-026
+  - REQ-OUT-027
+  - REQ-OUT-028
+  - REQ-VERIFY-034
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
+  check_refs:
+  - final-delivery
+
+- id: report-recovery
+  final_project: false
+  active_requirement_refs:
+  - REQ-SYNC-040
+  - REQ-CLI-042
+  - REQ-REPORT-019
+  - REQ-REPORT-020
+  - REQ-OUT-030
+  - REQ-VERIFY-040
+  satisfied_requirement_refs:
+  - REQ-ARCH-002
+  - REQ-BUILD-002
+  - REQ-CACHE-005
+  - REQ-CACHE-006
+  - REQ-CACHE-008
+  - REQ-CACHE-009
+  - REQ-CACHE-010
+  - REQ-CACHE-011
+  - REQ-CLI-012
+  - REQ-CLI-016
+  - REQ-CLI-021
+  - REQ-CLI-024
+  - REQ-CLI-027
+  - REQ-CLI-029
+  - REQ-CLI-030
+  - REQ-CLI-031
+  - REQ-CLI-032
+  - REQ-CLI-033
+  - REQ-CLI-034
+  - REQ-CLI-035
+  - REQ-CLI-036
+  - REQ-CLI-037
+  - REQ-CLI-038
+  - REQ-CLI-039
+  - REQ-CLI-040
+  - REQ-CLI-041
+  - REQ-COMMENT-006
+  - REQ-COMMENT-007
+  - REQ-COMMENT-008
+  - REQ-COMMENT-009
+  - REQ-COMP-005
+  - REQ-COMP-006
+  - REQ-COMP-007
+  - REQ-COMP-008
+  - REQ-CONFIG-002
+  - REQ-CONFIG-003
+  - REQ-CREATE-007
+  - REQ-CREATE-008
+  - REQ-CREATE-009
+  - REQ-DOM-001
+  - REQ-DOM-006
+  - REQ-DOM-007
+  - REQ-DOM-009
+  - REQ-DOM-010
+  - REQ-DOM-012
+  - REQ-DOM-013
+  - REQ-DOM-014
+  - REQ-DOM-015
+  - REQ-DOM-016
+  - REQ-DOM-017
+  - REQ-DOM-018
+  - REQ-INIT-002
+  - REQ-INIT-003
+  - REQ-INIT-005
+  - REQ-INIT-008
+  - REQ-INIT-009
+  - REQ-INIT-010
+  - REQ-LOCAL-002
+  - REQ-LOCAL-003
+  - REQ-LOCAL-005
+  - REQ-LOCAL-006
+  - REQ-LOCAL-007
+  - REQ-MUT-001
+  - REQ-MUT-003
+  - REQ-MUT-004
+  - REQ-MUT-005
+  - REQ-MUT-006
+  - REQ-MUT-007
+  - REQ-NET-001
+  - REQ-OPS-001
+  - REQ-OUT-009
+  - REQ-OUT-015
+  - REQ-OUT-017
+  - REQ-OUT-018
+  - REQ-OUT-019
+  - REQ-OUT-020
+  - REQ-OUT-021
+  - REQ-OUT-022
+  - REQ-OUT-023
+  - REQ-OUT-024
+  - REQ-OUT-025
+  - REQ-OUT-029
+  - REQ-PLAT-001
+  - REQ-PLAT-002
+  - REQ-PLAT-003
+  - REQ-PROD-004
+  - REQ-PROD-005
+  - REQ-REPORT-003
+  - REQ-REPORT-005
+  - REQ-REPORT-006
+  - REQ-REPORT-009
+  - REQ-REPORT-011
+  - REQ-REPORT-013
+  - REQ-REPORT-014
+  - REQ-REPORT-015
+  - REQ-REPORT-016
+  - REQ-REPORT-017
+  - REQ-REPORT-018
+  - REQ-SCHED-005
+  - REQ-SCHED-010
+  - REQ-SCHED-011
+  - REQ-SCHED-012
+  - REQ-SCHED-013
+  - REQ-SCHED-014
+  - REQ-SCHED-015
+  - REQ-SCHED-016
+  - REQ-SCHED-017
+  - REQ-SCHED-018
+  - REQ-SEC-004
+  - REQ-SEC-005
+  - REQ-SEC-007
+  - REQ-SYNC-005
+  - REQ-SYNC-013
+  - REQ-SYNC-016
+  - REQ-SYNC-021
+  - REQ-SYNC-024
+  - REQ-SYNC-025
+  - REQ-SYNC-026
+  - REQ-SYNC-027
+  - REQ-SYNC-028
+  - REQ-SYNC-029
+  - REQ-SYNC-030
+  - REQ-SYNC-031
+  - REQ-SYNC-032
+  - REQ-SYNC-033
+  - REQ-SYNC-034
+  - REQ-SYNC-035
+  - REQ-SYNC-036
+  - REQ-SYNC-037
+  - REQ-SYNC-038
+  - REQ-SYNC-039
+  - REQ-TIME-001
+  - REQ-VERIFY-001
+  - REQ-VERIFY-002
+  - REQ-VERIFY-003
+  - REQ-VERIFY-004
+  - REQ-VERIFY-005
+  - REQ-VERIFY-007
+  - REQ-VERIFY-010
+  - REQ-VERIFY-011
+  - REQ-VERIFY-012
+  - REQ-VERIFY-013
+  - REQ-VERIFY-016
+  - REQ-VERIFY-017
+  - REQ-VERIFY-018
+  - REQ-VERIFY-019
+  - REQ-VERIFY-020
+  - REQ-VERIFY-021
+  - REQ-VERIFY-022
+  - REQ-VERIFY-023
+  - REQ-VERIFY-024
+  - REQ-VERIFY-025
+  - REQ-VERIFY-026
+  - REQ-VERIFY-027
+  - REQ-VERIFY-028
+  - REQ-VERIFY-029
+  - REQ-VERIFY-030
+  - REQ-VERIFY-031
+  - REQ-VERIFY-032
+  - REQ-VERIFY-033
+  - REQ-VERIFY-035
+  - REQ-VERIFY-036
+  - REQ-VERIFY-037
+  - REQ-VERIFY-038
+  - REQ-VERIFY-039
   deferred_requirement_refs:
   - REQ-OUT-026
   - REQ-OUT-027
