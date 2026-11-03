@@ -167,7 +167,11 @@ def phase(install, name):
                 raise AssertionError('launcher did not exit')
         assert status == (1 if failure else expected_status), (argv, status, error.getvalue(), boundary.errors)
         boundary.done()
-        if argv[0] == 'report' and not any(a in argv for a in ('--set-cursor', '--show-cursor')):
+        if name == 'override':
+            assert 'override accepted loss' in error.getvalue()
+            assert 'unresolved' in error.getvalue()
+            assert 'None. does not prove zero activity' in error.getvalue()
+        if argv[0] == 'report' and name != 'override' and not any(a in argv for a in ('--set-cursor', '--show-cursor')):
             # These are requests emitted by the copied real adapter/Transport.
             # Exact steps also reject redundant REST reads for active A or D.
             assert boundary.paths == ['/api/v1/sync',
@@ -459,6 +463,21 @@ def phase(install, name):
         assert '    [x] P1 B — completed 2026-10-21 15:00\n' in search
         assert 'due:none' not in search and ' — none' not in search
         assert 'Alpha' in call(['now'])
+    elif name == 'override':
+        before = {n: (store.root / n).read_bytes() for n in ('cache.json', 'history.json', 'binding.json')}
+        steps = reports()[:3]
+        steps[-1][3]['results'].append(dict(id=99, object_type='item', object_id='unresolved',
+            event_type='completed', event_date=LATE))
+        # Recovery still resolves the independently usable archived owner.
+        steps.append(own('B', True))
+        out = call(['report', '--final', '--override'], steps)
+        assert 'Completed step: B' in out
+        assert 'Fresh synchronized active text' in out
+        assert 'unresolved' not in out
+        assert d.instant_text(store.load_cursor()) == END
+        assert before == {n: (store.root / n).read_bytes() for n in before}
+        # Restore this synthetic boundary for the following independent phases.
+        store.write_cursor(d.instant_from_wire(CURSOR))
     elif name in ('preview', 'failure', 'final', 'cleanup'):
         before = (store.root / 'report-cursor').read_bytes()
         final = name != 'preview'
@@ -507,6 +526,6 @@ if __name__ == '__main__':
         phase(install, sys.argv[2])
     else:
         for name in ('init', 'mutation', 'cached-parent', 'repeat', 'external', 'read', 'rebuild', 'read',
-                     'preview', 'failure', 'final', 'cleanup', 'tolerance', 'tolerance-read', 'affected-create', 'affected-reload', 'step-priority'):
+                     'preview', 'failure', 'override', 'final', 'cleanup', 'tolerance', 'tolerance-read', 'affected-create', 'affected-reload', 'step-priority'):
             subprocess.run([sys.executable, '-I', '-B', __file__, str(install), name],
                            check=True, timeout=10)

@@ -55,3 +55,31 @@ Deletion roots and established descendants are removed before required owner or
 comment resolution. Available completed parentage supersedes saved relationships,
 and current parentage supersedes both. No deletion ledger or public result shape
 is added; unresolved required state and failed coverage still refuse publication.
+
+Revision 22 report-specific successor: `Reporter.run` / `report()` still return
+`ReportResult(start, end, finalized, warnings)` compatibly; appended defaults are
+`incomplete=False` and `status=0`. The public CLI returns `status`. An incomplete
+preview or non-overridden final returns 1; an overridden final returns 0 only
+after delivery and cursor saving. Exceptions retain the existing failure boundary.
+Programmatic requests receive early duplicate/unknown/combination validation.
+
+`report_recovery.Available` is command-local evidence with explicit
+`complete=False`; it is not an exhausted `Retrieval`. `ReportHistory` retains
+validated records and isolates record/owner failures only for report display.
+Conflicting comment representations are excluded individually while subsequent
+pages and independent owners remain useful. Recovery checks comment identity
+across all scoped reads (including rejected representations) and current Sync
+notes before merging display text. Only independently eligible, marked saved
+comments may replace conflicting fresh evidence. An unavailable activity
+capability under override skips that source while still attempting bounded
+completed scopes and owner resolution; ordinary capability refusal is unchanged. After Current retrieval fails,
+independently checked authenticated identity permits bounded reads of saved
+bound scopes; failed Current data never becomes a Sync baseline. Account mismatch
+stops those reads and discards incompatible results before mapping. Strict
+HistoryAdapter, refresh and mutation semantics remain unchanged. Complete reports
+retain existing candidate publication. Recovery builds a validated display from
+independently usable evidence, marks bound saved fallback, and never publishes a
+candidate or prunes pending history. It may save only the fixed-end cursor after
+complete diagnostic/report delivery with explicit `--final --override`. Required
+local state, boundary/account safety, local publication failure and interruption
+remain fatal. No observation time becomes an activity timestamp.

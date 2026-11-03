@@ -96,8 +96,8 @@ def _run(argv=None):
             secrets.append(credentials.token())
             transport = Transport(credentials.token(), stderr=streams.stderr)
         if request.command == 'report':
-            Reporter(transport, store, streams=streams).run(request)
-            return 0
+            result = Reporter(transport, store, streams=streams).run(request)
+            return result.status
         synchronizer = Synchronizer(transport, store)
         options = dict(settings=settings, streams=streams)
         if read:

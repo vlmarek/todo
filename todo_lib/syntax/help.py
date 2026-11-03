@@ -19,7 +19,7 @@ SYNOPSES = {
     'unhide': 'unhide SELECTOR...', 'priority': 'priority SELECTOR... P',
     'rename': 'rename SELECTOR NEW_NAME... | rename SELECTOR... --to NEW_NAME...',
     'move': "move SELECTOR TARGET... | move SELECTOR '' | move SELECTOR... --task [PARENT...] [--category NAME...]",
-    'report': 'report [--final | --since TIMESTAMP --until TIMESTAMP | --show-cursor | --set-cursor TIMESTAMP [--yes]]',
+    'report': 'report [--final [--override] | --since TIMESTAMP --until TIMESTAMP | --show-cursor | --set-cursor TIMESTAMP [--yes]]',
     'init': 'init',
 }
 # Examples are executable invocations, not synopses with optional operands or
@@ -94,7 +94,10 @@ DETAILS = {
                'todo comment --create SELECTOR TEXT....',
     'report': 'Absolute boundaries: YYYY-MM-DD, local YYYY-MM-DDTHH:MM[:SS], or aware RFC3339 including fractions. '
               'Relative boundaries: positive Nd ago or N days ago, retaining account-local wall time. --set-cursor requires confirmation or --yes; '
-              'moving backward may repeat work and moving forward may skip work. Final reports bypass the pager.',
+              'moving backward may repeat work and moving forward may skip work. Final reports bypass the pager. '
+              '--final --override accepts retrieval omissions (network/authentication, incomplete pages, missing context, unavailable or expired history), '
+              'using marked bound-account cached fallback where eligible; no extra prompt. Advancing the fixed end means omitted activity '
+              'is not automatically retried by later default intervals. Explicit older previews remain possible where evidence survives.',
 }
 
 

@@ -405,6 +405,24 @@ class PublicReports(unittest.TestCase):
     boundary = sync_fixture.SyncSupport.boundary
     requests = report.ReportSupport.requests
 
+    def test_partial_report_actual_status_and_override_cursor(self):
+        for flags in ([], ['--final'], ['--final', '--override']):
+            override = '--override' in flags
+            before = (self.root / 'report-cursor').read_bytes()
+            steps = self.requests(events=[report.event(1, report.LAST),
+                report.event(2, report.LAST, 'completed', obj='unknown', typ='item')])
+            transport, _ = self.boundary(steps)
+            args = ['--color=never', 'report', *flags]
+            status, out, err, _ = invoke(self, args, transport, now=sync_fixture.NOW)
+            self.assertEqual(status, 0 if override else 1, err)
+            self.assertIn('Current post-boundary text', out)
+            self.assertIn('unknown', err)
+            self.assertIn('override accepted loss' if override else 'finalization refused', err)
+            if override:
+                self.assertEqual(d.instant_text(self.store.load_cursor()), report.END)
+            else:
+                self.assertEqual((self.root / 'report-cursor').read_bytes(), before)
+
     def test_detail_order_and_final_exact_cursor_reload_with_actual_http(self):
         self.store.write_cursor(d.instant_from_wire(report.START))
         notes = [note('early', 'B', content='Earlier own text', posted_at=report.FIRST),

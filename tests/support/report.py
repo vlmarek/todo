@@ -36,7 +36,8 @@ class ReportSupport:
         return OriginalStreams(StringIO(), out or StringIO(), StringIO())
 
     def requests(self, *, events=(), rows=(), days=-1, access=True, comments=None,
-                 cursor=CURSOR, now=NOW, current_items=None, current_notes=None):
+                 cursor=CURSOR, now=NOW, current_items=None, current_notes=None,
+                 completed_when_unavailable=False):
         lower = min((cursor, self.store.load_consistent_state().synced_at), key=d.instant_key)
         lo = d.instant_text(d.instant_datetime(lower).replace(microsecond=0))
         hi = '2026-10-22T12:00:01Z'
@@ -50,9 +51,10 @@ class ReportSupport:
         token = self.store.load_consistent_state().sync_token
         steps = [self.sync(token, full(items=active, notes=notes, user_plan_limits=limits(access, days))),
                  self.sync('full-token', delta())]
-        if access and days != 0:
+        if (access and days != 0) or completed_when_unavailable:
             steps += [(Expected('/tasks/completed/by_completion_date', cq), {'items': list(rows)}),
-                      (Expected('/activities', aq), {'results': list(events), 'next_cursor': None})]
+                      *([(Expected('/activities', aq), {'results': list(events), 'next_cursor': None})]
+                        if access and days != 0 else [])]
             # Reconciliation needs all missing known owners. Only uncovered owners
             # have REST expectations; active notes above are complete Sync evidence.
             missing = (set(self.store.load_consistent_state().snapshot.items) | set(self.store.load_history().snapshot.items)) - {i['id'] for i in active}

@@ -1082,8 +1082,12 @@ class MutationReuseTests(unittest.TestCase):
                     self.own('X', 'Deferred changed text') if not failed else
                     (self.own('X', '')[0], Response(b'{invalid'))]
         transport, _ = self.boundary(steps(True))
-        with self.assertRaises(SyncError):
-            Reporter(transport, self.store, clock=lambda: NOW).run(['--final'])
+        out, err = StringIO(), StringIO()
+        result = Reporter(transport, self.store, clock=lambda: NOW,
+            streams=OriginalStreams(StringIO(), out, err)).run(['--final'])
+        self.assertEqual(result.status, 1)
+        self.assertIn('Finished\n', out.getvalue())
+        self.assertIn('/comments', err.getvalue())
         self.assertEqual(self.bytes(), before)
         for boundary in ('output', 'cursor'):
             transport, _ = self.boundary(steps())
