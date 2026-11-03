@@ -1,6 +1,6 @@
 # Report recovery and explicit incomplete finalization — revision 22
 
-Status: **Accepted scoped agreement; uncommitted Design input for requested planning**.
+Status: **Accepted**. Scoped agreement selected as the planning baseline.
 
 ## Agreement, purpose and precedence
 
