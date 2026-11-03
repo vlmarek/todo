@@ -89,3 +89,14 @@ existing note events using one six-element JSON-array query value on every page.
 standard identity/type/time fields; note `parent_item_id` establishes note
 ownership and never an item-parent relationship. Exhausted pagination and exact
 product interval filtering remain required before evidence can be shared.
+
+Report recovery does not relax these adapter contracts. The workflow-local
+`ReportHistory` subclass isolates mapped records using the private `_records`
+hook (the default remains strict), retains independently valid rows from mixed
+pages, and excludes conflicting comment identities across pages and owner scopes
+(including ownership supplied by scoped REST requests versus current Sync notes)
+in `Available` values
+with `complete=False` on recoverable failures; these values authorize display
+only and never establish Sync provenance, exhausted coverage or empty owner sets.
+Strict `HistoryAdapter` producers and shared refresh/mutation consumers still
+require exhausted `Retrieval` values.

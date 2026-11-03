@@ -147,3 +147,9 @@ compact views and replacement previews keep defaults. Creation attention in
 `render_mutation` opts in. CaptureWorkflow's receipt-only `reminder_values` and
 Due scalar callers opt in using authoritative previous/result/retained objects
 before converting to strings. Existing fractional-change fallback remains exact.
+
+`render_report(..., annotations=None)` optionally labels report-only cached owner
+context with supplied observation text. Labels affect display only: original
+canonical title sorting, hierarchy, event order and identity remain unchanged.
+Document delivery still flushes required stderr then stdout before returning;
+report finalization uses the existing direct `report-final` delivery kind.

@@ -99,7 +99,7 @@ def _values(words):
 READS = {'now', 'waiting', 'someday', 'task', 'step', 'category', 'search', 'lookup'}
 GLOBAL = {'color', 'refresh', 'clear-cache'}
 SCALAR = {'color', 'at', 'reason', 'category', 'reminder', 'reminder-at', 'priority', 'since', 'until', 'set-cursor'}
-BOOL = {'refresh', 'clear-cache', 'all', 'hide', 'done', 'yes', 'edit', 'final', 'show-cursor'}
+BOOL = {'refresh', 'clear-cache', 'all', 'hide', 'done', 'yes', 'edit', 'final', 'show-cursor', 'override'}
 OPTION_ALIASES = {'due': 'at', 'schedule': 'at', 'close': 'done', 'closed': 'done'}
 
 
@@ -258,7 +258,7 @@ def parse(argv):
     if command == 'hide': allowed |= {'at', 'reason'}
     if command == 'delete': allowed |= {'yes'}
     if command == 'comment': allowed |= {'edit'}
-    if command == 'report': allowed |= {'since', 'until', 'set-cursor', 'final', 'yes', 'show-cursor'}
+    if command == 'report': allowed |= {'since', 'until', 'set-cursor', 'final', 'yes', 'show-cursor', 'override'}
 
     markers = set()
     if command == 'add' and target == 'task': markers = {'title', 'step'}
@@ -498,6 +498,8 @@ def parse(argv):
     if options.get('clear-cache') and (not cache_read or not options.get('refresh')):
         fail('--clear-cache requires an applicable read with --refresh', '--clear-cache')
     if command == 'report':
+        if 'override' in options and not options.get('final'):
+            fail('--override requires --final', '--override')
         if options.get('final') and any(k in options for k in ('since', 'until', 'set-cursor', 'show-cursor', 'yes')):
             fail('--final conflicts with boundary/cursor options')
         if options.get('show-cursor') and any(k in options for k in ('since', 'until', 'set-cursor', 'yes')):

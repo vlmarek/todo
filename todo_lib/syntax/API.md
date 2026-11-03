@@ -102,3 +102,9 @@ priority for every new step. Later priorities remain independent. Creation alias
 use the same path; leading existing-step priority mutations retain adjacent VALUE,
 PARENT and CHILD operands. For example:
 `todo step --add "Release plan" --p1 "Write summary" --at monday`.
+
+Report accepts the boolean `--override` only with `--final`; normal common option
+placement remains unchanged. Final boundary/cursor conflicts and `--yes` rules
+also apply. Duplicate/unknown options remain usage failures before local/HTTP
+work. Report offline help explains fallback and the accepted loss of automatic
+retry through the fixed end.

@@ -139,3 +139,17 @@ todo step --add 'Release plan' --p1 'Write summary' --at monday
 todo add step --priority=P4 'Release plan' --step 'Write summary' --step 'Check links'
 todo task --step 'Release plan' 'Review results' -p1
 ```
+
+`todo report --final --override` explicitly accepts an incomplete report and advances
+its fixed-end cursor after successful stderr/stdout delivery and flushing. It
+requires `--final`; it cannot combine with `--since`, `--until`, `--show-cursor`,
+`--set-cursor` or `--yes`. There is no extra confirmation prompt. Reports can
+show useful entries with diagnostics when other context is unresolved; without
+an override these incomplete reports return nonzero and retain the cursor.
+Override also covers unavailable/expired history, failed pages or owner comments,
+network/authentication failures and unusable provider data. Eligible bound-account
+cached fallback is marked with its observation time (or unknown); its title,
+hierarchy, category, completion and Hidden state may be stale. Observation time
+never proves activity occurred in the interval. **Omitted activity is not
+automatically retried by later default intervals after the cursor advances.**
+Explicit older previews remain possible where provider/local evidence survives.

@@ -1,4 +1,7 @@
-"""Current-truth reports. Only complete final delivery authorizes cursor/pruning.
+"""Current-truth reports with explicit, marked report-only recovery.
+
+Complete delivery authorizes final cursor saving; retrieval omissions additionally
+require explicit final override. Only complete candidates authorize publication.
 
 Public entry points: Reporter(transport, store=None, clock=None, streams=None).run
 accepts the normalized report CommandRequest (or report argv); report() is the
@@ -6,7 +9,7 @@ functional equivalent. Operational failures propagate to the CLI's status handle
 ReportResult records the fixed endpoints and any safe post-finalization warning.
 """
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from todo_lib import domain as d
 from todo_lib.adapter.current import retrieve
@@ -23,6 +26,7 @@ from todo_lib.syntax.input import prompt, Cancelled
 from todo_lib.syntax.parser import UsageError
 from .sync import Synchronizer, SyncError, SyncInterrupted, _known, _reconcile
 from .completion import reconcile_completions
+from .report_recovery import AccountRead, Available, ReportHistory, recover
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,8 @@ class ReportResult:
     end: object = None
     finalized: bool = False
     warnings: tuple[str, ...] = ()
+    incomplete: bool = False
+    status: int = 0
 
 
 def _within(value, start, end):
@@ -42,9 +48,9 @@ def _key(event):
             event.id or '', event.object_id)
 
 
-def _select(snapshot, completed, activities, start, end, hidden_names, *, now=None):
+def _select(snapshot, completed, activities, start, end, hidden_names, *, now=None, retained=()):
     events = sorted(activities.records, key=_key)
-    occurrences = reconcile_completions(snapshot.items, completed.records, events, end=end)
+    occurrences = reconcile_completions(snapshot.items, completed.records, events, retained, end=end)
     finished, progress = [], []
     for occurrence in occurrences.values():
         item = snapshot.items[occurrence.item_id]
@@ -125,6 +131,11 @@ class Reporter:
         if request.command != 'report':
             raise UsageError('report', 'expected report request')
         options = dict(request.options)
+        allowed = {'final', 'override', 'since', 'until', 'show-cursor', 'set-cursor', 'yes', 'color'}
+        if len(options) != len(request.options) or set(options) - allowed:
+            raise UsageError('report', 'duplicate or unknown/inapplicable report option')
+        if 'override' in options and not options.get('final'):
+            raise UsageError('report', '--override requires --final')
         # Normalize combinations even for programmatically constructed requests.
         flags = [name for name in ('final', 'show-cursor', 'set-cursor') if name in options]
         if len(flags) > 1 or (flags and any(k in options for k in ('since', 'until'))) or ('yes' in options and 'set-cursor' not in options):
@@ -192,22 +203,37 @@ class Reporter:
             state = self.store.load_consistent_state()
         except LocalError:
             pass  # Only disposable cache content may be rebuilt.
+        self.diagnostics = []
+        self.recovered = False
+        self.annotations = {}
         now = self.clock()
         # Freeze the command time immediately before retrieval; calendar inputs
         # are resolved only after synchronization supplies the account timezone.
         snapshot, pending, binding, start, end = self._prepare(state, config, options, now)
         finished, progress, hidden = _select(snapshot, self.completed, self.activities,
-                                           start, end, config.hidden_from_now, now=now)
-        document = render_report(snapshot, start, end, finished=finished, progress=progress, hidden=hidden)
+                                           start, end, config.hidden_from_now, now=now,
+                                           retained=snapshot.occurrences.values() if self.recovered else ())
+        document = render_report(snapshot, start, end, finished=finished, progress=progress, hidden=hidden, annotations=self.annotations)
         limit = snapshot.account.capabilities.history_limit
-        if limit > 0 and config.warn_limited_history:
+        if limit is not None and limit > 0 and config.warn_limited_history:
             document = replace(document, stderr=history_warning(limit).stderr + document.stderr)
+        incomplete = bool(self.diagnostics)
         final = bool(options.get('final'))
+        if incomplete:
+            disposition = ('override accepted loss through fixed end; omitted activity will not automatically be retried by later default intervals'
+                           if options.get('override') else 'finalization refused; cursor unchanged')
+            diagnostic = '\n'.join('todo: incomplete report: ' + ''.join(
+                ('\\u%04x' % ord(c)) if ord(c) < 32 or 127 <= ord(c) < 160 else c
+                for c in d.scalar_title(message)) for message in self.diagnostics)
+            document = replace(document, stderr=document.stderr + diagnostic + '\n' +
+                'todo: incomplete report: missing amount/identities may be unknown; None. does not prove zero activity; ' + disposition + '\n')
         deliver(document, config, self.streams, 'report-final' if final else 'report-preview')
-        if not final:
-            return ReportResult(start, end)
+        if not final or (incomplete and not options.get('override')):
+            return ReportResult(start, end, incomplete=incomplete, status=1 if incomplete else 0)
         self.store.write_cursor(end)
         warnings = ()
+        if self.recovered:
+            return ReportResult(start, end, True, incomplete=incomplete)
         try:
             cleaned = prune_history(pending, end, output_finalized=True, saved_cursor=end)
             self.store.save_history(cleaned, binding=binding)
@@ -225,9 +251,20 @@ class Reporter:
         phase = 'current retrieval'
         publication = PublicationObserver(self.store)
         sync = Synchronizer(self.transport, self.store)
+        current = adapter = None
+        account_read = AccountRead(self.transport, state.binding.account_id, allow_delta=state.current_snapshot is not None)
+        self.completed, self.activities = Available(), Available()
+        # Required boundary validation is independent of provider availability.
+        zone = state.binding.last_synced_account_timezone
+        start = self._boundary(options['since'], now, zone) if 'since' in options else state.cursor
+        end = self._boundary(options['until'], now, zone) if 'until' in options else now
+        if d.instant_key(start) > d.instant_key(end):
+            raise LocalError('report start exceeds end')
+        if d.instant_key(end) > d.instant_key(now):
+            raise LocalError('report end cannot be in the future')
         try:
             known = _known(state)
-            current = retrieve(self.transport, known.binding,
+            current = retrieve(account_read, known.binding,
                 prior=state.current_snapshot or known, sync_token=state.sync_token,
                 replace=state.current_snapshot is None, hidden_names=config.hidden_from_now,
                 known=known, waiting_label_ids=state.waiting_label_ids, reminder_ids=state.current_reminder_ids)
@@ -239,27 +276,42 @@ class Reporter:
             if d.instant_key(end) > d.instant_key(now):
                 raise LocalError('report end cannot be in the future')
             caps = current.account.capabilities
-            if not caps.activity_history:
-                raise LocalError('activity history is unavailable')
-            if caps.history_limit == 0:
-                raise LocalError('no activity history is retained')
-            if caps.history_limit is None:
-                raise LocalError('activity retention capability is unavailable')
+            unavailable = ('activity history is unavailable' if not caps.activity_history else
+                'no activity history is retained' if caps.history_limit == 0 else
+                'activity retention capability is unavailable' if caps.history_limit is None else None)
+            if unavailable:
+                if not options.get('override'):
+                    raise LocalError(unavailable)
+                self.diagnostics.append('history /activities: ' + unavailable +
+                    '; omitted interval (' + d.instant_text(start) + ', ' + d.instant_text(end) + ']; amount unknown')
             # Retention is elapsed UTC days; keep the precise fractional endpoint.
-            if caps.history_limit > 0 and d.instant_key(start) < d.instant_key(now) - caps.history_limit * 86400:
+            expired = not unavailable and caps.history_limit > 0 and d.instant_key(start) < d.instant_key(now) - caps.history_limit * 86400
+            if expired and not options.get('override'):
                 raise LocalError('report start is earlier than retained activity history')
+            if expired:
+                wire = d.instant_text(now)
+                fraction = wire[wire.index('.'):] if '.' in wire else 'Z'
+                retained_start = d.instant_from_wire((d.instant_datetime(now).replace(microsecond=0) - timedelta(days=caps.history_limit)).isoformat().removesuffix('+00:00') + fraction)
+                self.diagnostics.append('activity retention expired range from ' + d.instant_text(start) + ' until ' + d.instant_text(retained_start) + '; start is earlier than retained activity history; omitted amount unknown')
             phase = 'report history retrieval'
             lower = min((start, state.cursor, state.synced_at or state.cursor), key=d.instant_key)
-            adapter = HistoryAdapter(self.transport,
+            adapter = ReportHistory(self.transport, override=bool(options.get('override')),
                 timezone=current.account.timezone, stderr=self.streams.stderr)
+            if expired:
+                lower = retained_start
             records, pages = [], []
             for category in sorted(current.snapshot.categories):
                 result = adapter.completed(lower, now, {'project_id': category})
                 records.extend(result.records)
                 pages.extend(result.pages)
-            self.completed = Retrieval(tuple(records), tuple(pages), lower, now,
-                'managed/completed', tuple(('project_id', k) for k in sorted(current.snapshot.categories)))
-            self.activities = adapter.activities(lower, now)
+            self.completed = (Available(tuple(records), tuple(pages), lower, now) if adapter.failures else
+                Retrieval(tuple(records), tuple(pages), lower, now, 'managed/completed',
+                          tuple(('project_id', k) for k in sorted(current.snapshot.categories))))
+            self.activities = Available() if unavailable else adapter.activities(lower, now)
+            if adapter.failures or self.diagnostics:
+                self.completed = Available(tuple(records), tuple(pages), lower, now)
+                self.diagnostics.extend(adapter.failures)
+                return self._recover(state, current, adapter, start, end, options)
             evidence = _Evidence(adapter, self.completed, self.activities, current.snapshot)
             snapshot, pending = _reconcile(current, known, state.history, evidence,
                 lower, now, state.cursor, config.hidden_from_now,
@@ -332,6 +384,9 @@ class Reporter:
                 **{name: {k: value for k, value in getattr(pending.snapshot, name).items()
                           if value.item_id in cache_ids}
                    for name in ('comments', 'reminders', 'occurrences')})
+            if adapter.failures:
+                self.diagnostics.extend(adapter.failures)
+                return self._recover(state, current, adapter, start, end, options)
             phase = 'candidate preparation'
             candidates = prepare_candidates(cached, pending, account_display=state.binding.account_display,
                 sync_token=current.sync_token, synced_at=now, current_snapshot=current.snapshot,
@@ -342,11 +397,42 @@ class Reporter:
             return snapshot, pending, self.store.load_binding(), start, end
         except (LocalError, d.DomainError, HTTPFailure, OSError, KeyboardInterrupt) as error:
             started = publication.started
+            context_failure = isinstance(error, (d.DomainError, LocalError)) and ('unresolved' in str(error) or (adapter is not None and adapter.failures))
+            if not isinstance(error, KeyboardInterrupt) and not started and phase in ('current retrieval', 'report history retrieval') and (options.get('override') or context_failure):
+                self.diagnostics.append(phase + ': ' + str(error))
+                if phase == 'current retrieval' and current is None and account_read.matched and not account_read.incompatible:
+                    # Current mapping/capabilities can fail independently of
+                    # authenticated identity. Saved bound scopes still authorize
+                    # useful history reads, never a replacement Sync baseline.
+                    lower = min((start, state.cursor, state.synced_at or state.cursor), key=d.instant_key)
+                    adapter = ReportHistory(self.transport, override=True,
+                        timezone=zone, stderr=self.streams.stderr)
+                    records, pages = [], []
+                    for category in sorted(known.categories):
+                        result = adapter.completed(lower, now, {'project_id': category})
+                        records.extend(result.records)
+                        pages.extend(result.pages)
+                    self.completed = Available(tuple(records), tuple(pages), lower, now)
+                    self.activities = adapter.activities(lower, now)
+                if adapter is not None:
+                    self.diagnostics.extend(adapter.failures)
+                return self._recover(state, current, adapter, start, end, options)
             failure = SyncError(phase, error, publication_started=started,
                                 refresh_permitted=not started)
             if isinstance(error, KeyboardInterrupt):
                 raise SyncInterrupted(failure) from None
             raise failure from error
+
+
+    def _recover(self, state, current, adapter, start, end, options):
+        self.recovered = True
+        snapshot, self.completed, self.activities, self.annotations = recover(
+            state, current, self.completed, self.activities, adapter,
+            start, end, bool(options.get('override')), self.diagnostics)
+        if adapter is not None:
+            self.diagnostics.extend(message for message in adapter.failures if message not in self.diagnostics)
+        self.diagnostics.append('available evidence only for (' + d.instant_text(start) + ', ' + d.instant_text(end) + ']; prior cache/history preserved')
+        return snapshot, state.history, state.binding, start, end
 
 
 def report(transport=None, request=(), *, store=None, clock=None, streams=None):

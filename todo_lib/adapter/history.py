@@ -173,6 +173,9 @@ class HistoryAdapter:
         self.timezone = timezone
         self.stderr = stderr
 
+    def _records(self, values, mapper):
+        return tuple(mapper(_object(value)) for value in values)
+
     def _pages(self, endpoint, parameters, mapper, *, omission=False, count=None):
         """Freeze all fixed parameters, and never let a transport mutate them."""
         fixed = tuple(parameters)
@@ -198,7 +201,7 @@ class HistoryAdapter:
                     if next_cursor in seen:
                         raise HistoryError('repeated next_cursor')
                     seen.add(next_cursor)
-                records = tuple(mapper(_object(value)) for value in values)
+                records = self._records(values, mapper)
             except (DomainError, HTTPFailure) as error:
                 raise HistoryError(context + ': ' + str(error)) from error
             count[0] += 1

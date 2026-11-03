@@ -2203,3 +2203,389 @@ the probe. No suite is nested. This worker did not run the full offline suite or
 real-less acceptance; unchanged runner gates remain responsible for those checks
 on the integrated subject. Temporary script/log paths identify local observations,
 not durable artifacts. `git diff --check` also passed.
+
+### T42 revision-22 report recovery — 2026-11-03
+
+Observed subject: worktree HEAD `d22fb99808b0a30ffd2bcbcb2757a772f49af2fc`
+plus the retained uncommitted T42 deliverables. SHA-256 of the 19 changed/new
+files excluding this append-only evidence file is
+`26456666b67ae1b2634907581c236cf1c6ea675e691f2836523b3caa73a18d74`.
+Reproduce the subject digest by sorting the union of `git diff --name-only` and
+`git ls-files --others --exclude-standard`, excluding this file, then hashing
+UTF-8 path, NUL, exact file bytes, NUL for each path in order. No commit or Git
+metadata was changed.
+
+Directed commands (all from the supplied worktree root, exit 0):
+
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/local -p 'test_*.py' -v`: 30 tests, OK (`/tmp/t42-local-focused.log`).
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/syntax -p 'test_*.py' -v`: 33 tests, OK (`/tmp/t42-syntax-final.log`).
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/presentation -p 'test_*.py' -v`: 67 tests, OK (`/tmp/t42-presentation-delivery.log`).
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v`: 72 tests, OK (`/tmp/t42-report-accepted.log`).
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/cli -p 'test_*.py' -v`: 50 tests, OK (`/tmp/t42-cli-accepted.log`).
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p 'test_*.py' -v`: 51 tests, OK (`/tmp/t42-sync-delivery.log`).
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/lifecycle -p 'test_*.py' -v`: 30 tests, OK (`/tmp/t42-lifecycle-final.log`).
+- `PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v`: 35 tests, OK (`/tmp/t42-history-final.log`).
+- `git diff --check`: exit 0.
+
+The additional scoped sync/lifecycle/history checks challenge preservation of
+strict refresh, mutation verification and exhausted adapter provenance. They are
+not broad suite invocations. Earlier directed iterations exposed completion
+selection accidentally using retained evidence on ordinary reports, and obsolete
+no-output/exception assertions for newly recoverable owner/comment context.
+Selection was restricted to recovery; only those report assertions were migrated,
+including the report invocation inside the sync suite. The final commands above
+passed. Strict refresh/mutation failures, local corruption, account privacy,
+publication and ordinary complete-report assertions remain in place.
+
+Controlled-provider evidence uses the retained
+`docs/design/external/todoist/upstream/api-v1.openapi.json`, including
+ActivityEvents required identity/type/time fields and optional metadata,
+TasksCompletedDateResponse terminal omission, and NoteSyncView posted_at/content
+semantics. These are synthetic dates/identities, not observed live provider
+behavior. Existing real Transport fixtures enforce scopes, bounds, methods,
+resource selection and continuation requests; incorrect requests fail the fixture.
+Strict HistoryAdapter is unchanged. Report-only partial evidence has explicit
+`complete=False` and cannot authorize current/history publication.
+
+New real render/dispatch and saved-byte cases establish mixed valid/unresolved
+output with nonzero preview/final status and unchanged cursor, followed by
+explicit override success and the same fixed end. They cover entire unavailable
+history, expired range with supported retrieval, later activity/completed page
+failure preserving earlier valid pages, owner-comment failure preserving another
+owner, authentication rejection, and account mismatch with no foreign title
+exposure. Cached occurrences qualify by occurrence time; known and unknown
+observation labels remain distinct from event times. An old cached comment's
+unproved add/edit contribution is diagnosed and omitted. Fresh deletion,
+departure and reopen defeat retained occurrences. Failed sources preserve exact
+cache/history/binding bytes. Corrupt disposable cache supplies no fallback;
+corrupt required cursor/history and unsafe cache paths still fail without repair.
+Required stdout/stderr writes, short writes, flushes, interruption and cursor
+failure prevent cursor advancement. Both output flushes are observed before the
+fixed-end cursor writer. Limited-history warning preference cannot suppress
+incompleteness. Parser/help and programmatic invalid requests fail early.
+
+Copied/PATH/real-less command, exit 0 (`/tmp/t42-copied-final.log`):
+
+```sh
+python3.11 -B - <<'PY'
+from pathlib import Path
+import tempfile, shutil, subprocess
+from scripts.verify_clean import environment
+root=Path.cwd()
+with tempfile.TemporaryDirectory(prefix='t42-copy-') as temp:
+    base=Path(temp)
+    home, install, outside=(base/n for n in ('home','bin','outside'))
+    for path in (home,install,outside): path.mkdir(mode=0o700)
+    shutil.copy2(root/'todo',install/'todo')
+    shutil.copytree(root/'todo_lib',install/'todo_lib')
+    for name in ('copy_probe.py','less_probe.py'):
+        shutil.copy2(root/'tests/delivery/final'/name,outside/name)
+    env=environment(home,install,outside)
+    subprocess.run(['todo','help'],cwd=outside,env=env,check=True,stdout=subprocess.PIPE)
+    subprocess.run(['python3.11','-I','-B',str(outside/'copy_probe.py'),str(install)],cwd=outside,env=env,check=True)
+    subprocess.run(['python3.11','-I','-B',str(outside/'less_probe.py'),str(install)],cwd=outside,env=env,check=True)
+    for source in [root/'todo',*(root/'todo_lib').rglob('*')]:
+        if source.is_file(): assert source.read_bytes()==(install/source.relative_to(root)).read_bytes()
+PY
+```
+
+All 18 separate copied phases passed, including new `override`: actual copied
+PATH launcher, independent expected completion/comment output, unresolved-owner
+diagnostic, status 0, exact saved end and unchanged cache/history/binding. The
+probe restores its synthetic cursor afterward for subsequent independent phases.
+The real-less probe passed short-fit, long-document G/q and truecolor checks at
+8x100 PTY. Runtime files were byte-compared after execution; no network was used.
+
+Limitations: these are offline controlled-provider observations; no live account
+or exhaustive failure matrix was exercised. Recovery intentionally retains extra
+pending history and does not publish partial candidates or create a skipped-event
+ledger. Unknown remote amounts stay explicitly unknown. The worker did not run a
+full suite or `scripts/verify-clean`; the existing gate remains unchanged with one
+full-suite invocation and distinct copied/PATH/real-less probes for integrated
+acceptance. Temporary logs are local observations, not durable artifacts. No
+additional Design/Plan change was required.
+
+## T42 correction: independent reads and record isolation (2026-11-03)
+
+Subject: correction worktree HEAD `a17406808e83a11b0c8eadb95628315fa874c938`
+plus the uncommitted correction. Final `git diff -- todo_lib tests | sha256sum`
+was `44730067e5263969a56f39dee0335337d1bba0389e083cb86f0748989771a068`.
+No Git metadata or protected design/ledger files were changed. The retained
+integrated review of `c3bb6b670de6aa609a16cde10092e46733e619dc` supplied the
+three findings; its earlier passing checks were not treated as current acceptance.
+
+The failed assumption was that a complete Current value was necessary to make
+any further account-scoped read. Report-only account observation now preserves
+independently validated bound identity, including valid incremental user omission,
+without admitting failed Current resources as display truth or publication
+provenance. On mapping failure, saved bound category scopes authorize independent
+completed/activity reads. Authentication failure before identity establishment and
+account mismatch still permit bound saved fallback only. Mismatch is rejected
+before mapping incompatible payload fields or exposing them in diagnostics.
+
+The other assumption was that mapped page rows were either all usable or all
+unusable. The shared adapter's private record-mapping hook retains its strict
+default; only ReportHistory isolates rejected rows. Partial results remain
+Available(complete=False). Cross-page conflicting comment identities lose every
+fresh representation, while independent records and subsequent pages remain
+usable. Independently saved comment text may appear only as marked fallback.
+No partial candidate replaces complete cache/history/provenance. Required local
+publication and output/cursor safeguards remain unchanged.
+
+New real-adapter/public-dispatch regressions in `test_recovery.py` exercise full
+and incremental Current capability failure, mixed malformed/valid activity and
+completed pages, conflicting comment versions followed by useful third-page text,
+and a malformed comment beside that text. They assert rendered contributions,
+actual status, diagnostic scope/fields, marked saved fallback, exact unchanged
+cache/history/binding bytes and saved/retained cursor. The account-mismatch case
+also contains malformed foreign parentage, establishing rejection before foreign
+mapping. Two old parent_item_id no-output assertions now require partial framing,
+nonzero status, diagnostics and unchanged cursor. Their strict adapter equivalents
+remain strict. The inherited interruption test continues to pass when its adapter
+method is replaced by a mock raising KeyboardInterrupt.
+
+Focused commands (all from the assigned root; each listed final result exit 0):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/local -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/syntax -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/presentation -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/cli -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/current -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/lifecycle -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/comments -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/capture -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/moves -p 'test_*.py' -v
+```
+
+Observed discoveries/results: local 30, syntax 33, presentation 67, CLI 50,
+report 76, history adapter 35, current adapter 56, sync 51, lifecycle 30,
+comments 49, capture 76, moves 22: 575 tests, all OK. Logs are `/tmp/t42-local.log`,
+`/tmp/t42-syntax.log`, `/tmp/t42-presentation.log`, `/tmp/t42-cli-verified.log`,
+`/tmp/t42-report-final-subject.log`, `/tmp/t42-adapter-history.log`,
+`/tmp/t42-adapter-current.log` and `/tmp/t42-workflows-{sync,lifecycle,comments,capture,moves}.log`.
+The final report discovery ran on the fingerprinted subject. Other suites ran
+while developing the correction: later changes were confined to report diagnostics,
+explicit report read-kind arguments (verified again through CLI), added report
+assertions and API documentation. The unchanged shared strict hook was exercised
+by adapter and refresh/mutation consumer suites. These are focused checks, not a
+new complete-suite invocation.
+
+Initial report runs exposed three obsolete parent-context no-output assertions
+(including one inherited test), a mock lacking __name__, and a synthetic fixture
+incorrectly expecting a comments request for a discarded malformed completed row.
+The assertions were migrated only for newly partial context cases, the wrapper
+now receives explicit read-kind arguments, and the fixture no longer pre-supplies
+that rejected owner's lookup. Final discovery above passes all 76 cases.
+
+Rejected-subject distinction command (exit 0, `/tmp/t42-rejected-regressions.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY'
+import subprocess, sys, types, unittest
+from unittest.mock import patch
+from todo_lib.workflows.report import Reporter
+from tests.workflows.report.test_recovery import Recovery
+
+def retained(name, path):
+    module = types.ModuleType(name)
+    module.__package__ = 'todo_lib.workflows'
+    sys.modules[name] = module
+    source = subprocess.check_output(['git', 'show', 'HEAD:' + path], text=True)
+    exec(compile(source, path + '@rejected-HEAD', 'exec'), module.__dict__)
+    return module
+recovery = retained('todo_lib.workflows._rejected_recovery', 'todo_lib/workflows/report_recovery.py')
+report = retained('todo_lib.workflows._rejected_report', 'todo_lib/workflows/report.py')
+report.ReportHistory, report.recover = recovery.ReportHistory, recovery.recover
+names = ['test_current_mapping_failure_still_reads_independent_history_publicly',
+         'test_conflicting_comment_versions_are_excluded_individually',
+         'test_invalid_rows_keep_independent_same_page_events']
+with patch.object(Reporter, '_prepare', report.Reporter._prepare), patch.object(Reporter, '_recover', report.Reporter._recover):
+    results = []
+    for name in names:
+        result = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite([Recovery(name)]))
+        assert not result.wasSuccessful(), name + ' did not distinguish the rejected implementation'
+        results.append(name)
+print('All three new regressions distinguish rejected HEAD:', ', '.join(results))
+PY
+```
+
+This in-memory substitution used rejected HEAD report/recovery methods with the
+then-current new test cases, before the later incremental and completed-row
+extensions. All three failed for the reviewed behavior: missing useful completion,
+rendered rejected second comment text, and missing useful same-page comment.
+Controlled HTTP also identified abandoned independent requests. This command's
+success means the negative-control assertions worked, not that rejected behavior
+was accepted.
+
+Final copied/PATH/real-less command (exit 0, `/tmp/t42-correction-copied-final.log`):
+
+```sh
+python3.11 -B - <<'PY'
+from pathlib import Path
+import tempfile, shutil, subprocess
+from scripts.verify_clean import environment
+root=Path.cwd()
+with tempfile.TemporaryDirectory(prefix='t42-correction-copy-') as temp:
+    base=Path(temp)
+    home, install, outside=(base/n for n in ('home','bin','outside'))
+    for path in (home,install,outside): path.mkdir(mode=0o700)
+    shutil.copy2(root/'todo',install/'todo')
+    shutil.copytree(root/'todo_lib',install/'todo_lib')
+    for name in ('copy_probe.py','less_probe.py'):
+        shutil.copy2(root/'tests/delivery/final'/name,outside/name)
+    env=environment(home,install,outside)
+    subprocess.run(['todo','help'],cwd=outside,env=env,check=True,stdout=subprocess.PIPE)
+    subprocess.run(['python3.11','-I','-B',str(outside/'copy_probe.py'),str(install)],cwd=outside,env=env,check=True)
+    subprocess.run(['python3.11','-I','-B',str(outside/'less_probe.py'),str(install)],cwd=outside,env=env,check=True)
+    for source in [root/'todo',*(root/'todo_lib').rglob('*')]:
+        if source.is_file(): assert source.read_bytes()==(install/source.relative_to(root)).read_bytes()
+PY
+```
+
+All 18 copied phases, including public override finalization, and real less
+short-fit/long-document/truecolor checks passed. Runtime bytes were compared.
+`git diff --check` also passed. The existing verify-clean script and its one
+complete suite plus distinct copy/PATH/less gates remain unchanged; no additional
+broad check was run. Retained pinned report-retrieval notes and adapter contracts
+were consulted offline; no new provider guarantee or live account behavior is
+claimed. Temporary logs are not durable repository artifacts. Unknown omissions
+remain unknown, and independent reads cannot recover evidence the provider no
+longer supplies. No additional Design/Plan authority or blocker was identified.
+
+### T42 correction of BATCH-2f9526fe8e164a8c (2026-11-03)
+
+Subject: HEAD `5dcf30bfa088166d9534ba9fa9b07bf15cf184d3` plus this uncommitted
+correction. Reviewed integration: `99d446f1e2d3456ec10eba9da3282f94f9c35ccd`.
+Final relevant file SHA-256 values:
+
+```
+0874fb8a6a6c0294e132cfd735adbd425489867ac607e88756b5b83a0378734b todo_lib/workflows/report.py
+f4bad772f0bfa20cac7949479eb1e6b5a1b7fa53a8708944a75174dddddf9d99 todo_lib/workflows/report_recovery.py
+485eef4e5979623de0d815abe8b3380330efedb4a9ed107a230df9ac79ec1087 tests/workflows/report/test_recovery.py
+9d276c5171d2c0f465bc7443dac5ec74313719903d3925e494020248b7587205 tests/support/report.py
+b6a946ddc20aa6a66455656687bc693d4d02430cbd2be2bda7a547bc55e4c4cb todo_lib/workflows/API.md
+5cdaa87beb572ad077b665c042d7d870dbc000d57e0b86dccb8ecf3705f9c6b4 todo_lib/adapter/API.md
+```
+
+Confirmed failed assumptions: comment identity was checked only within an owner
+read, then merged by ID across owners; activity capability refusal was treated as
+failure of all historical sources. Recovery now retains command-local ownership
+claims across scoped reads, including rejected rows, and checks those claims
+against fresh Sync notes before display. Conflicting fresh identities are omitted
+with diagnostics; independently timed bound saved comments can still be marked
+fallback. Unavailable activity capability or zero retention under override still
+attempts completed scopes and owner resolution. Ordinary reporting preserves the
+earlier capability refusal. Recovery does not publish complete cache/history
+provenance or change strict shared adapter/refresh/mutation validation.
+
+New public dispatch regressions in `tests/workflows/report/test_recovery.py`:
+`test_cross_owner_comment_conflicts_are_omitted_publicly` covers two REST owners,
+Sync versus REST ownership, a malformed owner representation, marked saved
+fallback, and recovery after strict composition has already read owners. It checks
+rendered safe text/completions, excluded conflicting text, diagnostics, actual
+status, exact cursor transitions and unchanged saved cache/history/binding bytes.
+`test_unavailable_activity_still_reads_completed_scopes_publicly` checks access
+false and zero retention, exact four requests (two Sync, completed, owner comments),
+useful completion output and override cursor advancement. Ordinary final refuses
+after Sync with unchanged cursor. REST responses omit `item_id`; request scope
+supplies ownership. Retained report-retrieval notes and pinned OpenAPI
+`/api/v1/comments` parameters and `NoteSyncView` properties were inspected offline.
+Independent completed access is demonstrated by synthetic responses, not claimed
+for every live account without activity access.
+
+Directed commands, all exit 0:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/local -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/syntax -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/presentation -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/cli -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p 'test_*.py' -v
+```
+
+Discoveries: local 30, syntax 33, presentation 67, report 78, CLI 50,
+history adapter 35, strict sync 51: 344 tests, all OK. Captures:
+`/tmp/t42-final-{local,syntax,presentation,workflows-report,cli,adapter-history,workflows-sync}.log`.
+Report discovery was repeated after adding the strict-composition entry case and
+diagnosing events whose owner differs from surviving fallback. Other focused runs
+precede only those test/diagnostic changes and API notes. Initial development
+exposed an invalid fixture assumption that null provider retention could map to
+valid Current. That case was removed rather than relaxing strict validation;
+malformed Current recovery remains covered by retained full/incremental tests.
+
+Negative control (exit 0; `/tmp/t42-negative-final.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY'
+import subprocess, sys, types, unittest
+from unittest.mock import patch
+from todo_lib.workflows.report import Reporter
+from tests.workflows.report.test_recovery import Recovery
+
+def retained(name, path):
+    module = types.ModuleType(name)
+    module.__package__ = 'todo_lib.workflows'
+    sys.modules[name] = module
+    source = subprocess.check_output(['git', 'show', 'HEAD:' + path], text=True)
+    exec(compile(source, path, 'exec'), module.__dict__)
+    return module
+recovery = retained('todo_lib.workflows._rejected_recovery', 'todo_lib/workflows/report_recovery.py')
+report = retained('todo_lib.workflows._rejected_report', 'todo_lib/workflows/report.py')
+report.ReportHistory, report.recover = recovery.ReportHistory, recovery.recover
+with patch.object(Reporter, '_prepare', report.Reporter._prepare), patch.object(Reporter, '_recover', report.Reporter._recover):
+    for name in ('test_cross_owner_comment_conflicts_are_omitted_publicly', 'test_unavailable_activity_still_reads_completed_scopes_publicly'):
+        result = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite([Recovery(name)]))
+        assert not result.wasSuccessful(), name + ' failed to distinguish rejected implementation'
+print('Both regression tests distinguish rejected HEAD')
+PY
+```
+
+Rejected code renders `Conflicting REST text` and omits `Completed step: B` in
+the capability case, with abandoned requests. Command success means both negative
+controls detected rejected behavior, not acceptance of that behavior.
+
+Copied/PATH/real-less command (exit 0; `/tmp/t42-copied-final.log`):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B - <<'PY'
+from pathlib import Path
+import tempfile, shutil, subprocess
+from scripts.verify_clean import environment
+root=Path.cwd()
+with tempfile.TemporaryDirectory(prefix='t42-correction-copy-') as temp:
+    base=Path(temp)
+    home, install, outside=(base/n for n in ('home','bin','outside'))
+    for path in (home,install,outside): path.mkdir(mode=0o700)
+    shutil.copy2(root/'todo',install/'todo')
+    shutil.copytree(root/'todo_lib',install/'todo_lib')
+    for name in ('copy_probe.py','less_probe.py'):
+        shutil.copy2(root/'tests/delivery/final'/name,outside/name)
+    env=environment(home,install,outside)
+    subprocess.run(['todo','help'],cwd=outside,env=env,check=True,stdout=subprocess.PIPE)
+    subprocess.run(['python3.11','-I','-B',str(outside/'copy_probe.py'),str(install)],cwd=outside,env=env,check=True)
+    subprocess.run(['python3.11','-I','-B',str(outside/'less_probe.py'),str(install)],cwd=outside,env=env,check=True)
+    for source in [root/'todo',*(root/'todo_lib').rglob('*')]:
+        if source.is_file(): assert source.read_bytes()==(install/source.relative_to(root)).read_bytes()
+PY
+```
+
+All 18 copied phases, including override finalization, and real less fit/scroll/
+truecolor probes passed with unchanged copied bytes. This captured run preceded
+only the final ownership-diagnostic refinement, test extension and API notes.
+An evidence-append shell heredoc delimiter collision failed before writing the
+document and inadvertently repeated the same isolated copied/less probe; it also
+passed, with output in the execution transcript. The append was then corrected
+using apply_patch. No protected files or Git metadata changed.
+
+`git diff --check` passed. Existing `scripts/verify-clean` remains unchanged with
+one full-suite invocation and distinct installed/PATH/less gates. No additional
+broad run was required or performed; integrated acceptance remains the runner's
+responsibility. Logs are temporary. No live provider calls were made; unavailable
+historical evidence remains unrecoverable. No additional Design/Plan authority
+or concrete blocker was identified.

@@ -175,3 +175,40 @@ leave safe extra records without undoing finalization. Required ancestry for new
 pending work stays. Covered objects may disappear from local search/inspection
 after cleanup. Copy/report timestamps preserve supplied fractional precision;
 calendar/display/relative command calculations may use ordinary aware datetimes.
+
+`todo report --final --override` is the explicit route for accepting retrieval
+loss. Normal common options still apply, for example
+`todo --color=never report --override --final`. It requires `--final` and conflicts
+with `--since`, `--until`, `--show-cursor`, `--set-cursor` and `--yes`. It asks no
+extra question. It does not change the local-only confirmed cursor setter above.
+
+Unresolved task/comment/ancestor/lifecycle context produces the other resolvable
+entries, diagnostics on stderr and a nonzero result without advancing the cursor.
+History capability/retention failures still refuse ordinary reports. Override
+also accepts failed or incomplete activity/completed pages, unavailable owner
+comments, entire unavailable history, expired ranges, network/authentication
+failures and unusable required provider data. The report still uses Finished,
+Progress and Hidden; incomplete `None.` sections do not prove zero activity.
+These diagnostics remain visible even with `warn_limited_history = false`.
+
+Override prefers validated fresh evidence. Independently usable bound-account
+saved metadata, occurrences and comments can supply marked cached fallback,
+including its last established observation/synchronization time or `unknown`.
+Cached title, hierarchy, category, completion and Hidden state may be stale.
+Observation time is not activity time; an old comment without qualifying add/edit
+activity is omitted. Fresh deletion, departure, parentage and reopen/undo prevail.
+An incompatible remote account supplies no report data. Missing/corrupt cursor,
+unsafe paths and required protected storage still require explicit local recovery;
+override neither repairs them nor turns interruption into success.
+
+After the full report and required stderr diagnostics have been written and
+flushed directly (final reports bypass pagers), the fixed end is saved. Failed
+output/flush or cursor saving remains an error. Partial retrieval preserves prior
+cache/history rather than publishing guessed complete provenance. Preview and
+incomplete non-overridden final retain the cursor and pending data.
+
+**Advancing the fixed end accepts missing information through that end: omitted
+activity is not automatically retried by later default intervals.** Older explicit
+`--since`/`--until` previews remain possible where evidence survives. Refresh does
+not promise repair of expired history or unresolved archived metadata. There is
+no permanent skipped-event ledger or remote mutation replay/repair.

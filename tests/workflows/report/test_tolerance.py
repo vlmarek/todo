@@ -61,7 +61,8 @@ class ToleranceTests(unittest.TestCase):
         steps[-1][1].pop('next_cursor')
         streams = self.streams()
         before = (self.root / 'report-cursor').read_bytes()
-        with self.assertRaisesRegex(base.SyncError, 'next_cursor'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, streams = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertIn('next_cursor', streams.stderr.getvalue())
+        self.assertIn('Finished\n', streams.stdout.getvalue())
         self.assertEqual((self.root / 'report-cursor').read_bytes(), before)

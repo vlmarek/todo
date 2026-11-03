@@ -324,9 +324,10 @@ class Reports(ReportSupport, unittest.TestCase):
             {'results': []}))
         before = {name: (self.root / name).read_bytes() for name in ('report-cursor', 'history.json')}
         streams = self.streams()
-        with self.assertRaisesRegex(SyncError, 'page 2.*next_cursor'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, streams = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertIn('incomplete report', streams.stderr.getvalue())
+        self.assertIn('Finished\n', streams.stdout.getvalue())
         for name, value in before.items():
             self.assertEqual((self.root / name).read_bytes(), value)
 
@@ -539,9 +540,10 @@ class Reports(ReportSupport, unittest.TestCase):
                 streams = self.streams()
                 before = (self.root / 'report-cursor').read_bytes()
                 history = (self.root / 'history.json').read_bytes()
-                with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent'):
-                    self.run_report(steps, ['--final'], streams)
-                self.assertEqual(streams.stdout.getvalue(), '')
+                result, streams = self.run_report(steps, ['--final'], streams)
+                self.assertEqual(result.status, 1)
+                self.assertIn('incomplete report', streams.stderr.getvalue())
+                self.assertIn('Finished\n', streams.stdout.getvalue())
                 self.assertEqual((self.root / 'report-cursor').read_bytes(), before)
                 self.assertEqual((self.root / 'history.json').read_bytes(), history)
 
@@ -626,9 +628,10 @@ class Reports(ReportSupport, unittest.TestCase):
         before = {name: (self.root / name).read_bytes() for name in
                   ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
         streams = self.streams()
-        with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent X'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, streams = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertIn('unresolved archived owner/parent X', streams.stderr.getvalue())
+        self.assertIn('Finished\n', streams.stdout.getvalue())
         self.assertEqual(before, {name: (self.root / name).read_bytes() for name in before})
         self.last_http.assert_done()
 
@@ -840,8 +843,9 @@ else:
 
     def test_unresolved_completion_owner_is_not_silently_omitted(self):
         steps = self.requests(events=[event(1, LAST, 'completed', obj='unknown', typ='item')])[:4]
-        with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent unknown'):
-            self.run_report(steps, ['--final'])
+        result, streams = self.run_report(steps, ['--final'])
+        self.assertEqual(result.status, 1)
+        self.assertIn('incomplete report', streams.stderr.getvalue())
 
 
     def test_retained_archived_metadata_is_not_current_owner_evidence(self):
@@ -864,9 +868,10 @@ else:
         steps = self.requests(events=[event(1, LAST)], current_items=[item('A')])
         steps = [self.sync('delta-token', delta()), *steps[2:]]
         streams = self.streams()
-        with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, streams = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertIn('incomplete report', streams.stderr.getvalue())
+        self.assertIn('Finished\n', streams.stdout.getvalue())
         self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
         self.assertEqual((self.root / 'history.json').read_bytes(), pending)
         # Completion-only activity has the same provenance requirement; a
@@ -874,9 +879,10 @@ else:
         steps = self.requests(events=[event(2, LAST, 'completed', obj='B', typ='item')],
                               current_items=[item('A')])
         steps = [self.sync('delta-token', delta()), *steps[2:]]
-        with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, streams = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertIn('incomplete report', streams.stderr.getvalue())
+        self.assertIn('Finished\n', streams.stdout.getvalue())
         self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
         self.assertEqual((self.root / 'history.json').read_bytes(), pending)
         # Recovery preview with no eligible B event can proceed, but must retain
@@ -905,9 +911,10 @@ else:
                               is_deleted=False, file_attachment=None)], 'next_cursor': None})
         steps[-1] = x
         streams = self.streams()
-        with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent B'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, streams = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertIn('incomplete report', streams.stderr.getvalue())
+        self.assertIn('Finished\n', streams.stdout.getvalue())
         for name, content in before.items():
             self.assertEqual((self.root / name).read_bytes(), content)
 
@@ -1015,12 +1022,19 @@ else:
                         raise BrokenPipeError('controlled output failure')
                     setattr(streams.stdout, failure, broken)
                 with patch(target, side_effect=error):
-                    with self.assertRaises((SyncError, LocalError, OutputError)):
-                        self.run_report(steps, ['--final'], streams)
+                    if failure == 'owner-page':
+                        result, streams = self.run_report(steps, ['--final'], streams)
+                        self.assertEqual(result.status, 1)
+                    else:
+                        with self.assertRaises((SyncError, LocalError, OutputError)):
+                            self.run_report(steps, ['--final'], streams)
                 self.last_http.assert_done()
                 self.assertEqual((self.root / 'report-cursor').read_bytes(), before)
                 if failure in ('activity-page', 'owner-page'):
-                    self.assertEqual(streams.stdout.getvalue(), '')
+                    if failure == 'activity-page':
+                        self.assertEqual(streams.stdout.getvalue(), '')
+                    else:
+                        self.assertIn('Finished\n', streams.stdout.getvalue())
                     self.assertEqual((self.root / 'history.json').read_bytes(), pending)
                 else:
                     observed = list(StateStore(self.root).load_history().snapshot.occurrences.values())
@@ -1115,9 +1129,12 @@ else:
         steps = self.requests(events=[unrelated])[:4]
         before = (self.root / 'report-cursor').read_bytes()
         streams = self.streams()
-        with self.assertRaisesRegex(SyncError, 'parent_item_id'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, _ = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertFalse(result.finalized)
+        self.assertIn('Finished\n', streams.stdout.getvalue())
+        self.assertIn('parent_item_id', streams.stderr.getvalue())
+        self.assertIn('finalization refused', streams.stderr.getvalue())
         self.assertEqual((self.root / 'report-cursor').read_bytes(), before)
 
     def test_potentially_managed_activity_still_requires_owner(self):
@@ -1127,8 +1144,11 @@ else:
         cursor = (self.root / 'report-cursor').read_bytes()
         pending = (self.root / 'history.json').read_bytes()
         streams = self.streams()
-        with self.assertRaisesRegex(SyncError, 'parent_item_id'):
-            self.run_report(steps, ['--final'], streams)
-        self.assertEqual(streams.stdout.getvalue(), '')
+        result, _ = self.run_report(steps, ['--final'], streams)
+        self.assertEqual(result.status, 1)
+        self.assertFalse(result.finalized)
+        self.assertIn('Finished\n', streams.stdout.getvalue())
+        self.assertIn('parent_item_id', streams.stderr.getvalue())
+        self.assertIn('finalization refused', streams.stderr.getvalue())
         self.assertEqual((self.root / 'report-cursor').read_bytes(), cursor)
         self.assertEqual((self.root / 'history.json').read_bytes(), pending)
