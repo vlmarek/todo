@@ -1,9 +1,50 @@
 # todo-3 product specification
 
-Design revision: **21 — explicit step creation priority, 2026-11-01**.
-State: **accepted scoped revision; uncommitted Design handoff**.
+Design revision: **22 — report recovery and explicit incomplete finalization, 2026-11-03**.
+State: **accepted scoped revision; uncommitted Design input for requested planning**.
 
-## Current revision 21
+## Current revision 22
+
+Read [report-recovery.md](report-recovery.md) first, then the preserved revision-21
+agreement below. Reports and explicit refresh reconcile confirmed task deletion
+even when active/completed reads omit the deleted owner. Reports can show useful
+partial output with contextual diagnostics. `report --final --override` explicitly
+accepts missing information, uses clearly identified cached fallback when needed,
+and advances the cursor only after successful report delivery. Without override,
+an incomplete final report remains unsuccessful and retains its cursor.
+
+REQ-SYNC-040 defines deletion evidence and shared refresh/report behavior;
+REQ-CLI-042 adds the override grammar; REQ-REPORT-019/020 define partial reporting,
+accepted retrieval failures, cached fallback and state protection; REQ-OUT-030
+defines actionable omission/fallback diagnostics; REQ-VERIFY-040 adds proportional
+offline evidence. The amendment identifies narrow precedence over earlier strict
+report failure/freshness requirements, preserving their historical definitions
+and accepted effective assignments.
+
+The operator approved deletion handling for both reports and ordinary refresh,
+requested useful diagnostics with continued report generation, explicitly chose
+`--final --override` to accept missing information, selected all discussed retrieval
+failures, accepted clearly marked cached fallback, and agreed to exclude cached
+activity whose interval eligibility cannot be established. They approved the
+concrete two-document revision and separately requested planning and CML execution.
+Exact excerpts and proposal context are retained in external Design recording.
+
+This revision changes this index and report-recovery.md only. It adds no mutation
+override, guessed deletion, automatic cursor skip without the flag, permanent
+activity/deletion ledger, remote repair, or general archive reconstruction. Cached
+context can be outdated, omitted activity may be unknowable, and successful
+overridden finalization accepts that loss through its fixed end. Valid bound
+account/boundary information and actual output/cursor saving remain necessary.
+
+The requested next step is fresh cml-plan authoring against these agreed inputs,
+then cml-execute under existing settings and limits. Design leaves these edits
+uncommitted as requested; planning owns its required committed baseline, follow-up
+assignments, exact packets, verification and supported revision adoption. No
+application code, tests or plan are changed by this Design amendment. There are
+no unresolved product decisions; technical choices and focused provider-contract
+conformance checks remain delegated to Planning within the stated behavior.
+
+## Preserved revision 21
 
 Read [step-creation-priority.md](step-creation-priority.md) first, then the
 preserved revision-20 command shorthand contract below. Step creation accepts the
