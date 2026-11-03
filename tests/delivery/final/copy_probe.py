@@ -186,7 +186,7 @@ def phase(install, name):
     def reports(last=False):
         steps = report_steps(last)
         method, path, query, _ = steps[-1]
-        query['object_event_types'] = ['["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]']
+        query['object_event_types'] = ['["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]']
         active = dict(id='active', item_id='D', content='Fresh synchronized active text',
                       posted_at=EARLY, is_deleted=False, file_attachment=None)
         steps[0] = sync('delta-token', delta(notes=[active]))
@@ -434,7 +434,11 @@ def phase(install, name):
     elif name in ('external', 'rebuild'):
         rows = [a(), item('D', 'A')]
         steps = [sync('*' if name == 'rebuild' else 'delta-token', full(rows, notes(True)[2:])),
-                 sync('full-token', delta()), completed(), own('B')]
+                 sync('full-token', delta()), completed(),
+                 rest('/activities', dict(object_type='item', object_id='B',
+                     date_from=CURSOR, date_to='2026-10-22T12:00:01Z', limit='200',
+                     object_event_types='["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]'),
+                     {'results': [], 'next_cursor': None}), own('B')]
         args = ['task', 'Alpha', '--refresh']
         if name == 'rebuild': args += ['--clear-cache']
         out = call(args, steps)

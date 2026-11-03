@@ -142,7 +142,8 @@ def affected_ids(result, known, current):
     return ids - {None}
 
 
-def _reconcile(current, known, history, adapter, start, end, cursor, hidden_names, *, affected=None):
+def _reconcile(current, known, history, adapter, start, end, cursor, hidden_names, *, affected=None,
+               deletion_events=(), discover_deletions=False):
     s = current.snapshot
     def owner_failure(reason, identity, fresh=None):
         from todo_lib.domain.reminder_context import context, failure
@@ -154,9 +155,26 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
                                     for r in reminders))
         return error
 
+    if isinstance(adapter, OperationEvidence):
+        deletion_events = (*deletion_events, *(event for evidence in adapter.reads
+            if evidence.endpoint == '/activities' for event in evidence.records))
     removed = set(current.deleted_ids | current.departed_ids)
-    # Explicit parent deletion/scope departure removes its known subtree too.
-    removed = d.descendant_ids({**known.items, **s.items}.values(), removed)
+    removed.update(e.object_id for e in deletion_events
+                   if e.object_type == 'item' and e.event_type == 'deleted')
+    if affected is not None:
+        # Deletion makes its known subtree directly relevant. Include supplied
+        # fresh surviving descendants rather than deferring their old parentage.
+        affected = set(affected) | d.descendant_ids(known.items.values(), removed)
+        # Ordinary writes use only their already available affected evidence.
+        authoritative = {}
+        if isinstance(adapter, OperationEvidence):
+            authoritative = {r.item.id: r.item for r in sorted(
+                (*adapter.lifecycle_records, *(r for e in adapter.reads
+                    if e.endpoint == '/tasks/completed/by_completion_date' for r in e.records)),
+                key=lambda r: d.instant_key(r.occurrence.completed_at))
+                if r.item.category_id in s.categories}
+        removed = d.descendant_ids({**known.items, **authoritative, **s.items}.values(), removed)
+    # Resolve parentage from completed evidence before expanding removed roots.
     missing = set(known.items) - s.items.keys() - removed
     deferred = set() if affected is None else {k for k in missing
         if known.items[k].completed and k not in affected}
@@ -200,30 +218,40 @@ def _reconcile(current, known, history, adapter, start, end, cursor, hidden_name
                 needed = expanded
             records = [r for r in records if r.item.id in needed]
             affected = needed
+        # All available completed parentage participates before owner eligibility
+        # checks. A known deleted ancestor can explain an otherwise unresolved
+        # archived descendant, including a recurring completion record.
         latest = {}
         for record in records:
             item = record.item
-            # Do not retain unrelated returned data, even from an overbroad server.
-            if item.category_id not in s.categories or item.id in removed:
+            if item.category_id not in s.categories or item.id in s.items:
                 continue
-            if item.id in s.items:
-                continue  # current truth always supersedes historical fields
-            if item.id not in missing:
-                if affected is not None and item.id not in affected:
-                    continue
-                if record.deleted or d.instant_key(record.occurrence.completed_at) <= d.instant_key(cursor):
-                    continue
-                if not item.completed:
-                    raise owner_failure('unresolved historical recurring owner ' + d.scalar_title(item.id), item.id, item)
-                # Eligible bounded observations join pending storage, with required
-                # ancestor resolution below; this is not an arbitrary archive scan.
-                missing.add(item.id)
             previous = latest.get(item.id)
             if previous is None or d.instant_key(record.occurrence.completed_at) > d.instant_key(previous.occurrence.completed_at):
                 latest[item.id] = record
         removed.update(k for k, record in latest.items() if record.deleted)
         evidence_items = {**known.items, **{k: r.item for k, r in latest.items()}, **s.items}
         removed = d.descendant_ids(evidence_items.values(), removed)
+        if discover_deletions:
+            for identity in sorted((set(known.items) & missing) - removed):
+                if identity in removed:
+                    continue
+                evidence = adapter.activities(start, end,
+                    {'object_type': 'item', 'object_id': identity})
+                removed.update(e.object_id for e in evidence.records
+                    if e.object_type == 'item' and e.event_type == 'deleted')
+                removed = d.descendant_ids(evidence_items.values(), removed)
+        for identity, record in latest.items():
+            if identity in removed or identity in missing:
+                continue
+            if affected is not None and identity not in affected:
+                continue
+            if d.instant_key(record.occurrence.completed_at) <= d.instant_key(cursor):
+                continue
+            if not record.item.completed:
+                raise owner_failure('unresolved historical recurring owner ' + d.scalar_title(identity), identity, record.item)
+            # Eligible bounded observations join pending storage; no archive scan.
+            missing.add(identity)
         for identity in sorted(missing - removed):
             record = latest.get(identity)
             if record is not None:
@@ -390,7 +418,8 @@ class Synchronizer:
                         start, upper = evidence.start, evidence.end
                         break
             snapshot, history = _reconcile(current, known, state.history, adapter,
-                                           start, upper, state.cursor, config.hidden_from_now, affected=affected)
+                                           start, upper, state.cursor, config.hidden_from_now, affected=affected,
+                                           discover_deletions=operation_result is None)
             if operation_result is not None and operation_result.operation.type == 'item_delete':
                 target = operation_result.target_id
                 ancestors = {i.id for i in d.ancestors(known, target)} if target in known.items else set()

@@ -93,7 +93,7 @@ class CommentEvidence:
 
 _CURSOR = re.compile(r'[0-9a-zA-Z_-]+\.[0-9a-zA-Z_-]+\Z')
 _COMPLETED = '/tasks/completed/by_completion_date'
-_EVENTS = ('item:completed', 'item:uncompleted', 'note:added', 'note:updated', 'note:deleted')
+_EVENTS = ('item:completed', 'item:uncompleted', 'item:deleted', 'note:added', 'note:updated', 'note:deleted')
 _FILTERS = {
     _COMPLETED: frozenset(('project_id', 'section_id', 'parent_id', 'filter_query', 'filter_lang')),
     '/activities': frozenset(('parent_project_id', 'parent_item_id', 'object_type', 'object_id')),

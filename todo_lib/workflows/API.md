@@ -42,3 +42,16 @@ comment query. `OperationEvidence.lifecycle_records` retains command-local
 `_reconcile` incorporates those occurrences without claiming historical coverage.
 Missing related owners still trigger supported retrieval. Each complete candidate
 is validated and published before the next command receives its saved token.
+
+`_reconcile` also accepts optional command-local `deletion_events=()` and
+`discover_deletions=False`. Reports pass their exhausted shared activity records;
+explicit refresh enables bounded item-scoped activity coverage for missing known
+owners, including saved completed owners. Ordinary accepted operations reuse
+supplied `OperationEvidence` activity facts without enabling these extra reads.
+A proved deleted root makes its known subtree directly affected; supplied fresh
+completed descendants can then replace saved parentage using the same scoped
+evidence reuse.
+Deletion roots and established descendants are removed before required owner or
+comment resolution. Available completed parentage supersedes saved relationships,
+and current parentage supersedes both. No deletion ledger or public result shape
+is added; unresolved required state and failed coverage still refuse publication.

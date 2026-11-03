@@ -17,7 +17,7 @@ from todo_lib.local import LocalError, StateStore, exclusive_lock
 from todo_lib.presentation import OriginalStreams, OutputError
 from todo_lib.workflows.report import Reporter
 from todo_lib.workflows.sync import Synchronizer, SyncError
-from tests.support.sync import NOW, CURSOR, CREATED, completed_b
+from tests.support.sync import SyncSupport, NOW, CURSOR, CREATED, completed_b
 from tests.support.current import full, delta, item, due, note
 from tests.support.history import Expected
 
@@ -42,6 +42,7 @@ class Reports(ReportSupport, unittest.TestCase):
                 [('project_id', 'cat'), ('since', '2026-10-20T00:00:00Z'),
                  ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]),
                 {'items': [completed_b()]}),
+            SyncSupport.deletion_activity(self),
             (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
                 {'results': [dict(id='own', content='Archived observed', posted_at=CREATED,
                                   is_deleted=False)], 'next_cursor': None})])
@@ -61,7 +62,7 @@ class Reports(ReportSupport, unittest.TestCase):
                 {'items': [completed_b(content='Current archived step')]}),
             (Expected('/activities', [('date_from', '2026-10-20T00:00:00Z'),
                 ('date_to', '2026-10-22T12:00:01Z'), ('limit', '200'),
-                ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+                ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]),
                 {'results': [event(1, LAST), event(2, LAST, owner='A', obj='active')], 'next_cursor': None}),
             (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
                 {'results': [dict(id='own', content='Fresh archived text', posted_at=CREATED,
@@ -265,7 +266,7 @@ class Reports(ReportSupport, unittest.TestCase):
                              ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]), {'items': []}),
                         (Expected('/activities', [('date_from', '2026-10-20T00:00:00Z'),
                             ('date_to', '2026-10-22T12:00:01Z'), ('limit', '200'),
-                            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+                            ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]),
                             {'results': [], 'next_cursor': None})]
                 self.run_report(steps)
                 self.assertIsNotNone(self.store.load_consistent_state().current_snapshot)
@@ -355,7 +356,7 @@ class Reports(ReportSupport, unittest.TestCase):
             (Expected('/activities', [('object_type', 'item'), ('object_id', 'B'),
                 ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
                 ('limit', '200'), ('object_event_types',
-                 '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+                 '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]),
                 {'results': [event(77, NEWER, 'completed', obj='B', typ='item')], 'next_cursor': None})])
         Synchronizer(transport, self.store, clock=lambda: d.instant_from_wire(NEWER)).refresh()
         self.store.write_cursor(d.instant_from_wire(START))
@@ -543,6 +544,93 @@ class Reports(ReportSupport, unittest.TestCase):
                 self.assertEqual(streams.stdout.getvalue(), '')
                 self.assertEqual((self.root / 'report-cursor').read_bytes(), before)
                 self.assertEqual((self.root / 'history.json').read_bytes(), history)
+
+    def test_unobserved_completed_then_deleted_owner_omitted_from_final_report(self):
+        # X was never observed in current/pending state; deletion is discovered
+        # only in the second actual activity page, with no annotations/metadata.
+        gone = dict(object_type='item', object_id='X', event_type='deleted', event_date=LAST)
+        events = [event(901, FIRST, 'completed', obj='X', typ='item'),
+                  event(902, FIRST, owner='X', obj='private-note'),
+                  event(903, LAST, 'completed', obj='U', typ='item'),
+                  event(904, LAST)]
+        steps = self.requests(events=events, rows=[item('U', content='Unrelated finished',
+            checked=True, completed_at=LAST)])
+        expected, page = steps[3]
+        steps[3:4] = [(expected, {**page, 'next_cursor': 'deletion.page'}),
+            (Expected('/activities', expected.query + [('cursor', 'deletion.page')]),
+             {'results': [gone], 'next_cursor': None})]
+        streams = self.streams()
+        result, _ = self.run_report(steps, ['--final'], streams)
+        self.assertTrue(result.finalized)
+        self.assertIn('Unrelated finished', streams.stdout.getvalue())
+        self.assertIn('Current post-boundary text', streams.stdout.getvalue())
+        self.assertNotIn('private-note', streams.stdout.getvalue())
+        self.assertEqual(d.instant_key(self.store.load_cursor()), d.instant_key(NOW))
+        state = self.store.load_consistent_state()
+        self.assertNotIn('X', state.snapshot.items)
+        self.assertNotIn('X', state.history.snapshot.items)
+        self.last_http.assert_done()
+
+    def test_report_deletion_removes_known_subtree_but_keeps_promoted_child(self):
+        # Known A owns B and C; current B survives with authoritative parent null.
+        transport, _ = self.boundary([self.sync('delta-token', full(items=[item('A'), item('B', parent_id='A'),
+            item('C', parent_id='A'), item('D', parent_id='A')])), self.sync('full-token', delta())])
+        Synchronizer(transport, self.store, clock=lambda: NOW).refresh()
+        deletion = dict(object_type='item', object_id='A', event_type='deleted', event_date=LAST)
+        steps = self.requests(events=[deletion, event(905, LAST)],
+            rows=[item('D', parent_id=None, checked=True, completed_at=LAST)],
+            current_items=[item('B', parent_id=None)])
+        # Only surviving D requires archived comments; A/C must not be requested.
+        steps = steps[:4] + [steps[-1]]
+        self.run_report(steps)
+        state = self.store.load_consistent_state()
+        for snapshot in (state.snapshot, state.history.snapshot):
+            self.assertEqual(set(snapshot.items), {'B', 'D'})
+            self.assertIsNone(snapshot.items['B'].parent_id)
+            self.assertIsNone(snapshot.items['D'].parent_id)
+            self.assertEqual(snapshot.comments['own'].item_id, 'B')
+        self.last_http.assert_done()
+
+    def test_report_activity_deletion_clears_pending_owner_and_reminder(self):
+        from tests.support.reminders import absolute
+        steps = self.requests(current_items=[item('A')], rows=[completed_b()],
+            events=[event(906, LAST, 'completed', obj='B', typ='item')])
+        steps[0][1]['user_plan_limits']['current']['reminders'] = True
+        steps[0][1]['reminders'] = [absolute('kept-until-deletion', item_id='B')]
+        self.run_report(steps)
+        saved = self.store.load_consistent_state()
+        self.assertIn('B', saved.history.snapshot.items)
+        self.assertTrue(saved.history.snapshot.occurrences)
+        self.assertTrue(saved.history.snapshot.reminders)
+        deletion = dict(object_type='item', object_id='B', event_type='deleted', event_date=LAST)
+        steps = self.requests(current_items=[item('A')], events=[deletion])[:4]
+        steps[0][1]['user_plan_limits']['current']['reminders'] = True
+        steps[0][1]['reminders'] = [absolute('kept-until-deletion', item_id='B')]
+        self.run_report(steps, ['--final'])
+        saved = self.store.load_consistent_state()
+        for snapshot in (saved.snapshot, saved.history.snapshot):
+            self.assertNotIn('B', snapshot.items)
+            self.assertFalse(snapshot.comments)
+            self.assertFalse(snapshot.reminders)
+            self.assertFalse(snapshot.occurrences)
+        self.assertNotIn('B', saved.history.observations)
+        self.last_http.assert_done()
+
+    def test_item_activity_annotation_cannot_invent_deleted_ancestor(self):
+        # parent_item_id establishes ownership for notes only. Neither it nor
+        # annotation text establishes an item-parent edge for unknown X.
+        completion = dict(object_type='item', object_id='X', event_type='completed',
+            event_date=LAST, parent_item_id='A', extra_data={'parent_id': 'A'})
+        deletion = dict(object_type='item', object_id='A', event_type='deleted', event_date=LAST)
+        steps = self.requests(current_items=[], events=[completion, deletion])[:4]
+        before = {name: (self.root / name).read_bytes() for name in
+                  ('cache.json', 'history.json', 'binding.json', 'report-cursor')}
+        streams = self.streams()
+        with self.assertRaisesRegex(SyncError, 'unresolved archived owner/parent X'):
+            self.run_report(steps, ['--final'], streams)
+        self.assertEqual(streams.stdout.getvalue(), '')
+        self.assertEqual(before, {name: (self.root / name).read_bytes() for name in before})
+        self.last_http.assert_done()
 
     def test_archived_owner_with_known_parent_requires_current_own_comments(self):
         # T08 reconciliation discovers B's completion, including its own comments.

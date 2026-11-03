@@ -65,6 +65,17 @@ class SyncSupport:
     def completed(self, rows):
         return (Expected('/tasks/completed/by_completion_date', COMPLETED_QUERY), {'items': rows})
 
+    def deletion_activity(self, owner='B', events=(), *, cursor=CURSOR, until='2026-10-22T12:00:01Z'):
+        lo = d.instant_text(d.instant_datetime(cursor).replace(microsecond=0))
+        query = [('object_type', 'item'), ('object_id', owner),
+                 ('date_from', lo), ('date_to', until),
+                 ('limit', '200'), ('object_event_types',
+                 '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]
+        return (Expected('/activities', query), {'results': list(events), 'next_cursor': None})
+
+    def lifecycle(self, rows, owners=('B',)):
+        return [self.completed(rows), *(self.deletion_activity(owner) for owner in owners)]
+
     def comments(self, body='Surviving own comment', **changes):
         raw = dict(id='own', content=body, posted_at=COMMENT,
                    is_deleted=False, file_attachment=None, **changes)
@@ -83,10 +94,10 @@ class SyncSupport:
 
     def external(self):
         return [self.sync('delta-token', full(items=[item('A', added_at=CREATED)])),
-                self.sync('full-token', delta()), self.completed([completed_b()]), self.comments()]
+                self.sync('full-token', delta()), *self.lifecycle([completed_b()]), self.comments()]
 
     def retained(self, *, c=False):
-        steps = [self.completed([]), self.comments()]
+        steps = [*self.lifecycle([], owners=('B', 'C') if c else ('B',)), self.comments()]
         if c:
             steps.append((Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
                           {'results': [], 'next_cursor': None}))
@@ -161,7 +172,7 @@ else:
                  self.sync('full-token', delta()),
                  self.completed([completed_b()] + ([item('C', checked=True,
                     completed_at=DONE, added_at=CREATED)] if resolved else [])),
-                 self.comments()]
+                 self.deletion_activity(), self.comments()]
         if resolved:
             steps.append((Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
                           {'results': [], 'next_cursor': None}))

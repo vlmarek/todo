@@ -60,7 +60,7 @@ class Boundary:
                     ('object_type', 'item'), ('object_id', expected_owner),
                     ('date_from', '2026-10-22T12:00:00Z'),
                     ('date_to', '2026-10-22T12:00:01Z'), ('limit', '200'),
-                    ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')])
+                    ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')])
             else:
                 self.case.assertEqual(dict(kwargs['query'])['project_id'], 'cat')
             self.case.assertEqual(dict(kwargs['query'])['limit'], '200')

@@ -333,7 +333,7 @@ class AdapterLifecycleTests(LifecycleSupport, unittest.TestCase):
             f.sync('delta-token', delta()),
             self.comments('B', rest),
             f.sync('delta-token', delta()),
-            f.completed([]),
+            f.completed([]), f.deletion_activity(),
             self.comments('B', rest)], setup=[f.sync('delta-token', delta())])
         result = wf.execute(['done', 'B', '--comment', 'first body', 'second body', 'third body'])
         self.assertEqual(result.status, 1)
@@ -428,6 +428,7 @@ class AdapterLifecycleTests(LifecycleSupport, unittest.TestCase):
         sync, http = f.workflow([f.sync('*', fixtures.open_tree()),
             f.sync('full-token', delta()),
             (Expected('/tasks/completed/by_completion_date', query), {'items': []}),
+            f.deletion_activity('end', cursor=CURSOR),
             self.comments('end', [own])], now=END)
         recovered = sync.refresh(clear_cache=True)
         http.assert_done()
