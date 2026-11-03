@@ -1,6 +1,8 @@
 # Report recovery and explicit incomplete finalization — revision 22
 
-Status: **Accepted**. Scoped agreement selected as the planning baseline.
+Status: **Accepted**
+
+Scoped agreement selected as the planning baseline.
 
 ## Agreement, purpose and precedence
 
