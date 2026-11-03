@@ -272,13 +272,15 @@ class MoveTests(MoveSupport, unittest.TestCase):
         steps = [self.sync('delta-token', delta())]
         for category in ('cat', 'hidden', 'other'):
             steps.append((Expected('/tasks/completed/by_completion_date', [('project_id', category)] + query), {'items': []}))
+        from tests.support.sync import SyncSupport
+        steps.append(SyncSupport.deletion_activity(self, 'E'))
         steps.append((Expected('/comments', [('task_id', 'E'), ('limit', '200')]),
             {'results': [dict(id='nE', content='own note', posted_at=STAMP, is_deleted=False)], 'next_cursor': None}))
         transport, http = self.boundary(steps)
         workflow = MoveWorkflow(Synchronizer(transport, self.store, clock=lambda: NOW))
         refreshed = workflow.synchronizer.refresh()
         self.assertEqual(refreshed.snapshot.items['E'], child)
-        self.assertEqual(len(http.requests), 5)
+        self.assertEqual(len(http.requests), 6)
 
     def test_category_replacement_keeps_explicit_completed_deletion_authoritative(self):
         after = [dict(id='E', is_deleted=True) if r['id'] == 'E' else r

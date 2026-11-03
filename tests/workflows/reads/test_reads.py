@@ -135,6 +135,9 @@ class ReadsTests(unittest.TestCase):
         self.http.steps.append((Expected('/tasks/completed/by_completion_date', query),
             Response(json.dumps({'items': [item('B', content='Finished branch', parent_id='A',
                 checked=True, completed_at=d.instant_text(NEW))]}).encode())))
+        from tests.support.sync import SyncSupport
+        expected, response = SyncSupport.deletion_activity(self)
+        self.http.steps.append((expected, Response(json.dumps(response).encode())))
         self.http.steps.append((Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
             Response(json.dumps({'results': [{'id': 'survivor', 'content': 'Retained owner comment',
                 'posted_at': d.instant_text(OLD), 'is_deleted': False, 'file_attachment': None}],
@@ -486,10 +489,13 @@ class ReadsTests(unittest.TestCase):
         self.discover_completed_branch()
         before = {name: (self.root / name).read_bytes() for name in ('history.json', 'binding.json', 'report-cursor')}
         self.wire('delta-token', delta(items=[item('A', content='Changed root')]))
+        from tests.support.sync import SyncSupport
+        expected, response = SyncSupport.deletion_activity(self)
         self.http.steps.extend([
             (Expected('/tasks/completed/by_completion_date', [('project_id', 'cat'),
                 ('since', '2026-10-20T00:00:00Z'), ('until', '2026-10-22T12:00:01Z'), ('limit', '200')]),
                 Response(b'{"items":[]}')),
+            (expected, Response(json.dumps(response).encode())),
             (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
                 Response(json.dumps({'results': [{'id': 'survivor', 'content': 'Retained owner comment',
                     'posted_at': d.instant_text(OLD), 'is_deleted': False}], 'next_cursor': None}).encode()))])

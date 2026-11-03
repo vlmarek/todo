@@ -43,7 +43,7 @@ class ReportSupport:
         cq = [('project_id', 'cat'), ('since', lo), ('until', hi), ('limit', '200')]
         aq = [('date_from', lo), ('date_to', hi),
               ('limit', '200')]
-        aq += [('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
+        aq += [('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]
         active = current_items if current_items is not None else [item('A'), item('B', parent_id='A')]
         own = comments if comments is not None else [dict(id='own', content='Current post-boundary text', posted_at=CREATED, is_deleted=False)]
         notes = current_notes if current_notes is not None else [dict(c, item_id='B') for c in own if any(i['id'] == 'B' for i in active)]

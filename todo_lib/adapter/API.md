@@ -82,3 +82,10 @@ existing keywords. Private `_merge` accepts the same optional provenance input.
 Early reminder diagnostics use only managed-scope current owners or retained
 managed owners; strict failures without established managed relevance expose
 identity context without unused type/schedule or outside owner/project payloads.
+
+`HistoryAdapter.activities` selects completion, undo, task deletion and all three
+existing note events using one six-element JSON-array query value on every page.
+`Retrieval` and `Activity` shapes are unchanged. Item deletion requires only the
+standard identity/type/time fields; note `parent_item_id` establishes note
+ownership and never an item-parent relationship. Exhausted pagination and exact
+product interval filtering remain required before evidence can be shared.

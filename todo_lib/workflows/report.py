@@ -262,9 +262,14 @@ class Reporter:
             self.activities = adapter.activities(lower, now)
             evidence = _Evidence(adapter, self.completed, self.activities, current.snapshot)
             snapshot, pending = _reconcile(current, known, state.history, evidence,
-                lower, now, state.cursor, config.hidden_from_now)
+                lower, now, state.cursor, config.hidden_from_now,
+                deletion_events=self.activities.records)
             removed = set(current.deleted_ids | current.departed_ids)
-            all_items = {**known.items, **{r.item.id: r.item for r in records}, **snapshot.items}
+            removed.update(e.object_id for e in self.activities.records
+                           if e.object_type == 'item' and e.event_type == 'deleted')
+            removed.update(r.item.id for r in records if r.deleted)
+            all_items = {**known.items, **{r.item.id: r.item for r in sorted(records,
+                key=lambda r: d.instant_key(r.occurrence.completed_at))}, **snapshot.items}
             removed = d.descendant_ids(all_items.values(), removed)
             records = tuple(r for r in records if r.item.id not in removed
                             and r.item.category_id in snapshot.categories and not r.deleted)
@@ -285,7 +290,9 @@ class Reporter:
                                      '; completed/current evidence is insufficient')
             qualifying = replace(activities, records=tuple(e for e in activities.records
                 if _within(e.event_date, start, end)))
-            comments = adapter.required_comments(current.snapshot.items, self.completed, qualifying,
+            self.activities = activities
+            comments = adapter.required_comments(
+                {k: i for k, i in current.snapshot.items.items() if k not in removed}, self.completed, qualifying,
                 complete_comments=evidence.comments)
             items = dict(comments.owners)
             # Required report history/comment-owner discovery may establish an
@@ -308,7 +315,7 @@ class Reporter:
             pending = replace(pending, snapshot=replace(pending.snapshot,
                 occurrences={k: o for k, o in occurrences.items() if o.item_id in pending.snapshot.items}))
             incoming = History(snapshot, {k: now for k in items})
-            pending = merge_history(pending, incoming,
+            pending = merge_history(pending, incoming, removed_item_ids=removed,
                 removed_comment_ids={k for k, c in pending.snapshot.comments.items()
                     if c.item_id in items and k not in snapshot.comments})
             # Current reminders can outlive an archived owner's report interval.

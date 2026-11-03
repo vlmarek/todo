@@ -80,6 +80,22 @@ class HistoryTests(HistorySupport, unittest.TestCase):
         self.assertIsNone(result.records[0].id)
         self.assertIsNone(result.records[0].annotation)
 
+    def test_item_deletion_without_annotations_across_fixed_pages(self):
+        deletion = dict(object_type='item', object_id='gone', event_type='deleted', event_date=END)
+        adapter, _ = self.boundary([
+            ('/activities', ACTIVITY_QUERY,
+             {'results': [event(None)], 'next_cursor': 'next.page'}),
+            ('/activities', ACTIVITY_QUERY + [('cursor', 'next.page')],
+             {'results': [deletion, event(None)], 'next_cursor': None})])
+        result = adapter.activities(stamp(START), stamp(END))
+        self.assertEqual([e.object_id for e in result.records], ['note', 'gone', 'note'])
+        self.assertEqual(result.records[1].owner_id, 'gone')
+        self.assertIsNone(result.records[1].annotation)
+        self.assertEqual((result.start, result.end, result.endpoint, result.scope),
+                         (stamp(START), stamp(END), '/activities', ()))
+        self.assertEqual(len(result.pages), 2)
+        self.assertTrue(result.pages[-1].terminal)
+
     def test_scoped_step_comments_all_pages_preserve_creation_and_null(self):
         query = comments_query('step')
         adapter, _ = self.boundary([

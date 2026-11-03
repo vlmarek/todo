@@ -2138,3 +2138,68 @@ rerun the unchanged final-delivery gate and combined review on the corrected
 integrated subject. Earlier integrated passes do not certify these corrected
 bytes; synthetic offline evidence makes no live-account claim. Temporary logs
 and script paths identify this invocation's observations, not durable artifacts.
+
+## T41 — supported deletion reconciliation (2026-11-03)
+
+Subject: task worktree `T41-1ff4ae8616ff4e82`, based on
+`d195e22f2559bd78fffa088063c3fd99837d170f`, with the retained uncommitted T41
+runtime, API and controlled-fixture changes. Revision-22 REQ-SYNC-040 only;
+no override/incomplete-report mode, persistent deletion ledger or archive endpoint.
+The external temporary patch was not applied. Retained upstream authority was
+inspected offline: GET `/api/v1/activities` parameters and `ActivityEvents`, plus
+the Sync tag's `item_delete` task/subtask semantics. These synthetic cases do not
+claim live provider observations or exhaustive archived-descendant enumeration.
+
+Final observed checks (all exit **0**; unittest discovery counts include borrowed
+existing test methods):
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/adapter/history -p 'test_*.py' -v > /tmp/t41-t06-final.log 2>&1
+# 35 tests, OK
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/sync -p 'test_*.py' -v > /tmp/t41-t08-final2.log 2>&1
+# 51 tests, OK
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest discover -s tests/workflows/report -p 'test_*.py' -v > /tmp/t41-t15-final3.log 2>&1
+# 56 tests, OK
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.workflows.init.test_init tests.workflows.lifecycle.test_lifecycle tests.workflows.moves.test_moves tests.workflows.capture.test_capture tests.workflows.comments.test_workflow tests.workflows.reads.test_reads tests.cli.test_composition tests.workflows.test_cached_selection -v > /tmp/t41-consumers-final2.log 2>&1
+# 232 tests, OK
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B -m unittest tests.adapter.commands.test_commands tests.cli.test_cli -v > /tmp/t41-boundary-consumers.log 2>&1
+# 59 tests, OK
+PYTHONDONTWRITEBYTECODE=1 python3.11 -B /tmp/t41-copy-check.py > /tmp/t41-copy.log 2>&1
+# All 17 copied probe phases passed, including both separate-process read phases.
+```
+
+The extra consumer checks address shared reconciliation, real operation evidence,
+init, explicit refreshed reads, publication failures and exact request fixtures;
+the three primary suites alone do not cover those callers. Earlier directed runs
+failed while the newly required exact activity expectations and new-case setup
+were being adapted (including an intermediate fixture syntax error). The final
+runs above pass after those corrections; prior passing subjects were not treated
+as certification of these changes. Ordinary writes still use affected/scoped
+reads and reuse actual operation evidence; an accepted delete with only activity
+evidence still fails its existing authoritative Sync verification.
+
+Distinguishing cases observe production Transport encoding on multiple pages:
+one six-event JSON-array value, fixed scopes/bounds and exhausted pagination;
+content-free item deletion needs no annotation. A never-observed completed then
+deleted owner has no current/completed metadata or fixture-supplied tombstone.
+Its deletion arrives on activity page two; final output retains unrelated
+completion and comment contributions and saves the exact final cursor. Known
+archived deletion avoids live task fields and archived comments, removes pending
+owners/comments/reminders/occurrences and observations, and remains removed in
+published cache/history. Known descendants disappear while both freshly promoted
+current children and reparented completed children survive, including supplied
+accepted-operation evidence. Item activity annotations/parent_item_id cannot
+invent item hierarchy. Empty completion/activity evidence and HTTP 404 failure
+still refuse required unresolved state with prior protected bytes preserved;
+existing comments-404 and strict unresolved-report probes remain passing.
+
+The copy check was necessary because the directly affected copied fixture's
+external/rebuild refresh phases now require exact item-scoped deletion coverage.
+It creates disposable HOME/bin/outside directories, copies `todo`, `todo_lib` and
+`copy_probe.py`, runs copied PATH help, then invokes the copied probe with
+`python3.11 -I -B` from outside the repository using an isolated environment and
+synthetic token. Every runtime source/copy file is compared byte-for-byte after
+the probe. No suite is nested. This worker did not run the full offline suite or
+real-less acceptance; unchanged runner gates remain responsible for those checks
+on the integrated subject. Temporary script/log paths identify local observations,
+not durable artifacts. `git diff --check` also passed.

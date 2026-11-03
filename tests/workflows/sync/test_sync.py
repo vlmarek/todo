@@ -74,7 +74,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         self.assertFalse(state.snapshot.reminders)
         self.assertEqual(state.current_reminder_ids, frozenset())
         self.assertEqual(state.sync_token, 'delta-token')
-        self.assertEqual(len(http.requests), 5)
+        self.assertEqual(len(http.requests), 6)
 
     def test_full_unrelated_owner_then_reminder_only_delta_saves_managed_baseline(self):
         from tests.support.reminders import absolute
@@ -108,7 +108,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         workflow, http = self.workflow([
             self.sync('delta-token', full(items=[item('A', added_at=CREATED)],
                 reminders=[absolute('known-reminder', item_id='B')])),
-            self.sync('full-token', delta()), self.completed([])])
+            self.sync('full-token', delta()), *self.lifecycle([])])
         with self.assertRaises(SyncError) as caught:
             workflow.refresh()
         for value in ('unresolved disappeared managed item B', 'supported lifecycle evidence required',
@@ -116,7 +116,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
             self.assertIn(value, str(caught.exception))
         self.assertNotIn('Read-only recovery:', str(caught.exception))
         self.assertEqual(self.bytes(), before)
-        self.assertEqual(len(http.requests), 3)
+        self.assertEqual(len(http.requests), 4)
 
     def test_cached_managed_reminder_failure_keeps_reason_context_and_files(self):
         from tests.support.reminders import absolute
@@ -133,7 +133,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
             self.assertIn(text, message)
         self.assertNotIn('do not dump', message)
         self.assertNotIn('Read-only recovery:', message)
-        self.assertEqual(len(http.requests), 4)
+        self.assertEqual(len(http.requests), 6)
         self.assertEqual(self.bytes(), before)
 
     def test_reminder_delta_update_delete_and_full_omission_after_history_resolution(self):
@@ -150,7 +150,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         # Full omission of the now-known completed owner's reminder is authoritative.
         steps = [self.sync('delta-token', full(items=[item('A', added_at=CREATED), item('entrant')])),
                  self.sync('full-token', delta()),
-                 self.completed([completed_b(), item('C', checked=True, completed_at=DONE, added_at=CREATED)]),
+                 *self.lifecycle([completed_b(), item('C', checked=True, completed_at=DONE, added_at=CREATED)], owners=('B', 'C')),
                  self.comments(), (Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
                                    {'results': [], 'next_cursor': None})]
         workflow, _ = self.workflow(steps)
@@ -213,7 +213,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         workflow.refresh()
         self.assert_precise()
         workflow, _ = self.workflow([self.sync('*', full(items=[item('A', added_at=CREATED)])),
-            self.sync('full-token', delta()), self.completed([completed_b()]), self.comments()])
+            self.sync('full-token', delta()), *self.lifecycle([completed_b()]), self.comments()])
         result = workflow.refresh(clear_cache=True)
         self.assertTrue(result.cache_cleared)
         self.assertEqual(result.warnings, ())
@@ -262,7 +262,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         cases = [([self.sync('delta-token', Response(b'{}', status=401))], 'current retrieval'),
             ([self.sync('delta-token', delta(items=[{'id': 'A', 'parent_id': 'B'}]))], 'current retrieval'),
             ([self.sync('delta-token', full(items=[item('A')])),
-              self.sync('full-token', delta()), self.completed([])], 'lifecycle reconciliation')]
+              self.sync('full-token', delta()), *self.lifecycle([])], 'lifecycle reconciliation')]
         for steps, phase in cases:
             with self.subTest(phase=phase, steps=len(steps)):
                 before = self.bytes()
@@ -337,7 +337,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
                 raise OSError('controlled binding failure')
             return real_replace(source, destination)
         workflow, _ = self.workflow([self.sync('*', full(items=[item('A', added_at=CREATED)])),
-            self.sync('full-token', delta()), self.completed([completed_b()]), self.comments()])
+            self.sync('full-token', delta()), *self.lifecycle([completed_b()]), self.comments()])
         with exclusive_lock('mutation', self.root):
             with patch('todo_lib.local.safety.os.replace', side_effect=fail_binding):
                 with self.assertRaises(SyncError) as caught:
@@ -455,7 +455,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         response = self.comments()
         response[1]['results'][0]['posted_at'] = None
         workflow, _ = self.workflow([self.sync('*', full(items=[item('A', added_at=CREATED)])),
-            self.sync('full-token', delta()), self.completed([unknown]), response])
+            self.sync('full-token', delta()), *self.lifecycle([unknown]), response])
         workflow.refresh(clear_cache=True)
         state = StateStore(self.root).load_consistent_state()
         for snapshot in (state.snapshot, state.history.snapshot):
@@ -473,7 +473,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
                 item('unmanaged', project_id='outside', content='private sentinel')],
                 projects=[project('root', None), project(), project('outside', None)],
                 notes=[note('unmanaged-note', 'unmanaged', content='private sentinel')])),
-            self.sync('full-token', delta()), self.completed([]), self.comments()])
+            self.sync('full-token', delta()), *self.lifecycle([]), self.comments()])
         workflow.refresh()
         self.assert_precise()
         for path in self.root.iterdir():
@@ -578,6 +578,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
             self.sync('full-token', delta()),
             # Completion predates this window: omission legitimately retains B.
             (Expected('/tasks/completed/by_completion_date', query), {'items': []}),
+            self.deletion_activity(cursor=NOW, until='2026-10-23T11:00:01Z'),
             self.comments()], now=later)
         workflow.refresh(clear_cache=clear_cache)
         state = self.assert_precise()  # Public store reload validates both files.
@@ -591,7 +592,8 @@ class SyncTests(SyncSupport, unittest.TestCase):
         self.child_process()  # Fresh interpreter, consistent saved state, zero HTTP.
         # A subsequent delta must seed from the preserved floating representation.
         workflow, _ = self.workflow([self.sync('delta-token', delta()),
-            (Expected('/tasks/completed/by_completion_date', query), {'items': []}), self.comments()], now=later)
+            (Expected('/tasks/completed/by_completion_date', query), {'items': []}),
+            self.deletion_activity(cursor=NOW, until='2026-10-23T11:00:01Z'), self.comments()], now=later)
         workflow.refresh()
         self.assertEqual(d.instant_text(self.store.load_history().snapshot.items['B'].attention.instant),
                          expected)
@@ -651,7 +653,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         activity_query = [('object_type', 'item'), ('object_id', 'B'),
             ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
             ('limit', '200'),
-            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
+            ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]
         for undone in (False, True):
             with self.subTest(undone=undone):
                 event = dict(id=None, object_type='item', object_id='B', event_type='uncompleted',
@@ -681,7 +683,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         query = [('object_type', 'item'), ('object_id', 'B'),
             ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
             ('limit', '200'),
-            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
+            ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]
         counterpart = {**completed_b(), 'checked': False, 'due': recurrence,
                        'completed_at': '2026-10-21T18:11:14.704186Z'}
         for count in (0, 1, 2, 2):
@@ -713,7 +715,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         query = [('object_type', 'item'), ('object_id', 'B'),
             ('date_from', '2026-10-20T00:00:00Z'), ('date_to', '2026-10-22T12:00:01Z'),
             ('limit', '200'),
-            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
+            ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]
         before = self.bytes()
         workflow, http = self.workflow([self.sync('delta-token', delta(items=[recurring])),
             self.completed([]), (Expected('/activities', query),
@@ -726,7 +728,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
     def test_new_bounded_historical_observation_joins_pending_context(self):
         other = item('C', parent_id='A', checked=True, completed_at=DONE, added_at=CREATED)
         workflow, _ = self.workflow([self.sync('delta-token', full(items=[item('A', added_at=CREATED)])),
-            self.sync('full-token', delta()), self.completed([completed_b(), other]), self.comments(),
+            self.sync('full-token', delta()), *self.lifecycle([completed_b(), other]), self.comments(),
             (Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
              {'results': [], 'next_cursor': None})])
         workflow.refresh()
@@ -752,7 +754,7 @@ class SyncTests(SyncSupport, unittest.TestCase):
         workflow.refresh()
         before = self.bytes()
         workflow, _ = self.workflow([self.sync('delta-token', full(items=[item('A')])),
-            self.sync('full-token', delta()), self.completed([completed_b()]),
+            self.sync('full-token', delta()), *self.lifecycle([completed_b()]),
             (Expected('/comments', [('task_id', 'B'), ('limit', '200')]),
              {'results': [], 'next_cursor': 'malformed'})])
         with self.assertRaises(SyncError) as caught:
@@ -772,6 +774,109 @@ class SyncTests(SyncSupport, unittest.TestCase):
             self.assertIsNone(snapshot.items['B'].parent_id)
             self.assertIsNone(snapshot.items['B'].added_at)
             self.assertEqual(snapshot.comments['own'].item_id, 'B')
+
+    def test_activity_deletion_removes_known_owner_without_live_fields(self):
+        # B is established completed, then disappears from both endpoint results.
+        workflow, _ = self.workflow(self.external())
+        workflow.refresh()
+        deletion = dict(object_type='item', object_id='B', event_type='deleted', event_date=DONE)
+        workflow, http = self.workflow([self.sync('delta-token', delta()),
+            self.completed([]), self.deletion_activity(events=[deletion])])
+        workflow.refresh()
+        http.assert_done()  # No task fields or archived comments requested.
+        state = self.store.load_consistent_state()
+        for snapshot in (state.snapshot, state.history.snapshot):
+            self.assertEqual(set(snapshot.items), {'A'})
+            self.assertFalse(snapshot.comments)
+            self.assertFalse(snapshot.reminders)
+            self.assertFalse(snapshot.occurrences)
+        self.assertNotIn('B', state.history.observations)
+
+    def test_activity_parent_deletion_uses_fresh_current_and_completed_parentage(self):
+        # Establish two more children through the real current adapter.
+        workflow, _ = self.workflow([self.sync('delta-token', full(items=[item('A'), item('B', parent_id='A'),
+            item('C', parent_id='A'), item('D', parent_id='A')])), self.sync('full-token', delta())])
+        workflow.refresh()
+        deletion = dict(object_type='item', object_id='A', event_type='deleted', event_date=DONE)
+        survivor = item('D', parent_id=None, checked=True, completed_at=DONE)
+        workflow, http = self.workflow([
+            self.sync('delta-token', full(items=[item('B', parent_id=None)])),
+            self.sync('full-token', delta()), self.completed([survivor]),
+            self.deletion_activity('A', [deletion]), self.deletion_activity('D'),
+            (Expected('/comments', [('task_id', 'D'), ('limit', '200')]),
+             {'results': [], 'next_cursor': None})])
+        workflow.refresh()
+        http.assert_done()
+        state = self.store.load_consistent_state()
+        for snapshot in (state.snapshot, state.history.snapshot):
+            self.assertEqual(set(snapshot.items), {'B', 'D'})
+            self.assertIsNone(snapshot.items['B'].parent_id)
+            self.assertIsNone(snapshot.items['D'].parent_id)
+            self.assertTrue(snapshot.items['D'].completed)
+        self.assertNotIn('C', state.history.observations)
+
+    def test_missing_owner_and_failed_deletion_coverage_preserve_state(self):
+        # Neither empty completed history nor a failed supported read proves deletion.
+        for response in ({'results': [], 'next_cursor': None}, Response(b'{}', status=404)):
+            with self.subTest(response=response):
+                before = self.bytes()
+                expected, _ = self.deletion_activity()
+                workflow, _ = self.workflow([
+                    self.sync('delta-token', full(items=[item('A')])),
+                    self.sync('full-token', delta()), self.completed([]), (expected, response)])
+                with self.assertRaises(SyncError) as caught:
+                    workflow.refresh()
+                self.assertFalse(caught.exception.publication_started)
+                self.assertEqual(self.bytes(), before)
+
+    def test_operation_deletion_evidence_reused_without_weakening_delete_verification(self):
+        from todo_lib.adapter.commands import Operation, Result, Outcome
+        from todo_lib.adapter.current import retrieve
+        from todo_lib.adapter.history import HistoryAdapter
+        setup, _ = self.workflow([self.sync('delta-token', full(items=[item('A'),
+            item('B', parent_id='A'), item('C', parent_id='A', checked=True, completed_at=DONE)])),
+            self.sync('full-token', delta())])
+        setup.refresh()
+        state = self.store.load_consistent_state()
+        deletion = dict(object_type='item', object_id='A', event_type='deleted', event_date=DONE)
+        transport, http = self.boundary([
+            self.sync('delta-token', full(items=[item('B', parent_id=None, content='Renamed')])),
+            self.sync('full-token', delta()), self.deletion_activity('A', [deletion]),
+            self.completed([item('C', parent_id=None, checked=True, completed_at=DONE)]),
+            (Expected('/comments', [('task_id', 'C'), ('limit', '200')]),
+             {'results': [], 'next_cursor': None})])
+        current = retrieve(transport, state.snapshot.binding, prior=state.current_snapshot,
+            sync_token=state.sync_token, known=state.snapshot,
+            waiting_label_ids=state.waiting_label_ids, reminder_ids=state.current_reminder_ids)
+        activity = HistoryAdapter(transport).activities(CURSOR, NOW,
+            {'object_type': 'item', 'object_id': 'A'})
+        adapter = HistoryAdapter(transport)
+        completed = adapter.completed(CURSOR, NOW, {'project_id': 'cat'})
+        comments = adapter.comments('C')
+        evidence = (activity, completed, comments)
+        http.assert_done()
+        workflow = Synchronizer(transport, self.store, clock=lambda: NOW)
+        before = self.bytes()
+        # Accepted delete still requires its existing authoritative Sync proof.
+        result = Result(Outcome.ACCEPTED, Operation('item_delete', {'id': 'A'}),
+            target_id='A', after=current, evidence=evidence, before_token=state.sync_token)
+        with exclusive_lock('operation proof', self.root):
+            with self.assertRaisesRegex(SyncError, 'lacks authoritative deletion evidence'):
+                workflow.reconcile_accepted_locked(result)
+        self.assertEqual(self.bytes(), before)
+        # Another operation can reuse complete command-local deletion facts for
+        # unrelated disappearance without fetching history or weakening its receipt.
+        result = Result(Outcome.ACCEPTED, Operation('item_update', {'id': 'B', 'content': 'Renamed'}),
+            target_id='B', after=current, actual=current.snapshot.items['B'],
+            evidence=evidence, before_token=state.sync_token)
+        with exclusive_lock('operation reuse', self.root):
+            workflow.reconcile_accepted_locked(result)
+        saved = self.store.load_consistent_state()
+        self.assertEqual(set(saved.snapshot.items), {'B', 'C'})
+        self.assertEqual(set(saved.history.snapshot.items), {'B', 'C'})
+        self.assertEqual(saved.snapshot.items['B'].title, 'Renamed')
+        self.assertIsNone(saved.snapshot.items['C'].parent_id)
+        http.assert_done()
 
     def test_explicit_clear_of_already_missing_cache_does_not_claim_deletion(self):
         (self.root / 'cache.json').unlink()
@@ -817,7 +922,7 @@ class MutationReuseTests(unittest.TestCase):
         return (Expected('/activities', scope + [
             ('date_from', '2026-10-20T00:00:00Z'),
             ('date_to', upper), ('limit', '200'),
-            ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]),
+            ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]),
                 {'results': rows, 'next_cursor': None})
 
     def establish_pending(self, *, second=False):

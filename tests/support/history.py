@@ -20,7 +20,7 @@ COMPLETED_QUERY = [('since', '2026-10-20T12:00:00Z'),
 ACTIVITY_QUERY = [('date_from', '2026-10-20T12:00:00Z'),
                   ('date_to', '2026-10-20T12:00:01Z'),
                   ('limit', '200'),
-                  ('object_event_types', '["item:completed", "item:uncompleted", "note:added", "note:updated", "note:deleted"]')]
+                  ('object_event_types', '["item:completed", "item:uncompleted", "item:deleted", "note:added", "note:updated", "note:deleted"]')]
 
 
 def item(identity='task', at=END, **kw):
@@ -71,7 +71,7 @@ class Expected:
             values = [v for k, v in actual if k == 'object_event_types']
             assert len(values) == 1, 'activity filter must have exactly one value'
             assert json.loads(values[0]) == [
-                'item:completed', 'item:uncompleted', 'note:added', 'note:updated', 'note:deleted']
+                'item:completed', 'item:uncompleted', 'item:deleted', 'note:added', 'note:updated', 'note:deleted']
             actual = [(k, v) for k, v in actual if k != 'object_event_types']
             expected = [(k, v) for k, v in self.query if k != 'object_event_types']
         else:
